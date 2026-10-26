@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <title>BTC 期权行情看板</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23181a20'/%3E%3Cpath d='M32 8 47 23 32 38 17 23ZM32 34 44 46 32 58 20 46Z' fill='%23f0b90b'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/anthropic.css">
+  <link rel="stylesheet" href="/payoff.css">
+  <link rel="stylesheet" href="/portfolio.css">
+  <link rel="stylesheet" href="/combo.css">
+  <link rel="stylesheet" href="/risk.css">
+  <link rel="stylesheet" href="/option-ai.css">
+  <script src="/payoff.js" defer></script>
+  <script src="/portfolio.js" defer></script>
+  <script src="/payoff-ui.js" defer></script>
+  <script src="/portfolio-ui.js" defer></script>
+  <script src="/risk-metrics.js" defer></script>
+  <script src="/risk-ui.js" defer></script>
+  <script src="/option-ai-ui.js" defer></script>
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="BTC 期权看板首页"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span><strong>BTC</strong></a>
+    <span class="nav-active">期权行情<span></span></span>
+    <div class="topbar-right"><button class="icon-button" id="themeButton" aria-label="切换深色主题">☾</button><button class="help-button" id="helpButton">帮助 <span>?</span></button></div>
+  </header>
+
+  <section class="market-header" aria-label="BTC 市场概览">
+    <div class="asset-name"><span class="bitcoin">₿</span><h1>BTCUSDT</h1></div>
+    <div class="index-stat"><label>BTC 指数价格</label><strong id="indexPrice">—</strong><small>USDT</small></div>
+    <div class="market-stat"><label>24h 期权成交量</label><strong id="marketVolume">—</strong><small>张</small></div>
+    <div class="market-stat"><label>24h 期权成交额</label><strong id="marketAmount">—</strong><small>USDT</small></div>
+    <div class="market-stat"><label>有效合约 / 到期日</label><strong id="marketContracts">— / —</strong></div>
+    <div class="connection-summary"><span id="connectionBadge" class="connection-badge loading"><i></i><span>正在连接</span></span><div id="lastUpdate">等待首次行情</div><div id="statisticsStatus" class="statistics-status" role="status">24h 统计：等待数据</div></div>
+  </section>
+
+  <section class="expiry-bar" aria-label="选择到期日"><span class="expiry-label">到期日</span><div class="expiry-tabs" id="expiryTabs"><span class="loading-label">正在加载合约…</span></div><span class="timezone-label">UTC+8</span></section>
+
+  <section class="filter-bar" aria-label="行情筛选">
+    <div class="segmented" id="sideButtons" aria-label="期权类型"><button data-side="ALL" class="active" aria-pressed="true">全部</button><button data-side="CALL" aria-pressed="false">Call</button><button data-side="PUT" aria-pressed="false">Put</button></div>
+    <label class="search-box"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input id="searchInput" type="search" placeholder="搜索行权价 / 合约" aria-label="搜索行权价或合约" autocomplete="off"></label>
+    <button class="filter-button" id="atmButton" aria-pressed="false"><span class="filter-icon">⌖</span>平值附近</button>
+    <button class="filter-button" id="favoritesButton" aria-pressed="false"><span>☆</span>自选 <b id="favoriteCount">0</b></button>
+    <div class="filter-spacer"></div>
+    <button class="filter-button" id="greeksButton" aria-pressed="false"><span>⚙</span>Greeks</button>
+    <button class="filter-button" id="comboButton" aria-pressed="false">组合多选</button>
+    <button class="filter-button" id="riskButton">收益风险</button>
+    <button class="filter-button" id="aiButton">AI 选期权</button>
+    <button class="filter-button" id="focusButton" aria-pressed="false"><span>⛶</span>专注报价</button>
+    <button class="refresh-button" id="refreshButton"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5M18.5 6A8 8 0 0 0 5 8M5.5 18A8 8 0 0 0 19 16"/></svg><span>刷新</span></button>
+  </section>
+
+  <div class="notice-bar" id="noticeBar" hidden role="status"></div>
+  <main class="chain-area" id="chainArea" aria-label="BTC 期权链">
+    <div class="chain-scroll" id="chainScroll">
+      <div class="table-loading" id="tableLoading"><div class="loader"></div><strong>正在加载行情</strong></div>
+      <table class="option-chain" id="optionChain" hidden><caption class="visually-hidden">BTC 期权行情，Call 在左，行权价居中，Put 在右。点击卖价模拟买入，点击买价模拟卖出，点击标记价查看详情。</caption><thead id="chainHead"></thead><tbody id="chainBody"></tbody></table>
+      <div class="empty-state" id="emptyState" hidden><span>⌕</span><strong>暂无匹配合约</strong><button id="resetButton">清除筛选</button></div>
+    </div>
+    <footer class="chain-footer"><div><span class="live-dot" id="footerDot"></span><span id="footerCount">等待行情</span><span class="footer-divider">|</span><span id="filterDescription">全部合约</span></div><div><span class="legend-itm"></span>实值</div></footer>
+  </main>
+  <div class="focus-controls" id="focusControls" hidden><span id="focusStatus" role="status">等待行情</span><button id="focusComboButton" aria-pressed="false">组合多选</button><button id="focusRiskButton">收益风险</button><button id="focusAIButton">AI 选期权</button><button id="exitFocus">退出 <kbd>Esc</kbd></button></div>
+  <section class="combo-tray" id="comboTray" hidden aria-label="组合多选模拟的已选期权">
+    <div class="combo-tray-top"><strong id="comboSummary">组合多选</strong><span id="comboFeedback" role="status">卖价选买入，买价选卖出。</span><div class="combo-tray-actions"><button id="clearCombo">清空</button><button id="endCombo">结束多选</button><button id="simulateCombo" class="combo-primary" disabled>模拟组合</button></div></div>
+    <div id="comboLegs" class="combo-legs"><span class="combo-empty">选择至少 2 个报价</span></div>
+  </section>
+
+  <section class="bottom-panel">
+    <div class="bottom-heading"><h2>市场概况</h2><span id="overviewExpiry">—</span><div class="small-legend"><span class="call-color">● Call</span><span class="put-color">● Put</span></div><button class="overview-toggle" id="toggleOverview" aria-expanded="true" aria-controls="overviewContent">收起市场概况</button></div>
+    <div class="bottom-grid" id="overviewContent">
+      <div class="overview-card"><div class="overview-card-top"><h3>隐含波动率曲线</h3><span>平值附近 ±35%</span></div><div id="ivChart" class="iv-chart"><span>等待行情</span></div></div>
+      <div class="overview-card volume-card"><div class="overview-card-top"><h3>当前到期日成交量</h3><span>24h · 张</span></div><div class="volume-comparison"><div><span class="call-color">Call</span><strong id="callVolume">—</strong></div><div><span class="put-color">Put</span><strong id="putVolume">—</strong></div></div><div class="volume-bar"><span id="callVolumeBar"></span><span id="putVolumeBar"></span></div><p id="putCallRatio">Put / Call —</p></div>
+    </div>
+  </section>
+  <footer class="page-footer"><span id="feedDescription">币安 · 北京时间</span></footer>
+
+  <div class="drawer-backdrop" id="drawerBackdrop" hidden></div>
+  <aside class="detail-drawer" id="detailDrawer" hidden aria-label="期权合约详情"><div class="drawer-top"><h2>合约详情</h2><button class="icon-button" id="closeDrawer" aria-label="关闭合约详情">×</button></div><div id="detailContent"></div></aside>
+  <dialog id="payoffDialog" class="payoff-dialog" aria-labelledby="payoffHeading" aria-describedby="payoffAssumptions">
+    <div class="payoff-top"><div><h2 id="payoffHeading">期权盈亏</h2><p id="payoffContract"></p></div><button class="icon-button" id="closePayoff" aria-label="关闭盈亏模拟">×</button></div>
+    <div class="payoff-context"><span>行权价 <b id="payoffStrike">—</b></span><span>参考 BTC 指数 <b id="payoffIndex">—</b></span><div class="payoff-directions" id="payoffDirections" aria-label="模拟方向"><button data-direction="BUY" aria-pressed="true">买入模拟</button><button data-direction="SELL" aria-pressed="false">卖出模拟</button></div></div>
+    <div class="payoff-inputs">
+      <label>权利金单价（USDT）<input id="payoffPremium" type="number" min="0" step="any" inputmode="decimal"><small id="payoffQuoteNote"></small></label>
+      <label>模拟数量（张）<input id="payoffQuantity" type="number" min="0" step="any" inputmode="decimal"><small id="payoffUnitNote"></small></label>
+      <label>到期 BTC 结算价（USDT）<input id="payoffSettlement" type="number" min="0" step="any" inputmode="decimal"></label>
+      <label>总费用估算（USDT）<input id="payoffFees" type="number" min="0" step="any" inputmode="decimal" value="0"><small>默认未计费用</small></label>
+    </div>
+    <div class="payoff-quote-line"><span id="payoffQuoteTime"></span><button id="payoffRefresh">使用最新报价</button></div>
+    <p class="payoff-error" id="payoffError" role="status" hidden></p>
+    <div id="payoffResults">
+      <div class="payoff-stats"><div><span id="payoffPremiumLabel">支付权利金</span><strong id="payoffPremiumTotal">—</strong><small>USDT · 未扣费用</small></div><div id="payoffDailyPremiumCard" hidden><span>平均每日权利金</span><strong id="payoffDailyPremium">—</strong><small id="payoffDailyPremiumNote">USDT / 日 · 未扣费用</small></div><div><span>到期盈亏平衡价</span><strong id="payoffBreakEven">—</strong><small id="payoffBreakEvenNote">USDT</small></div><div><span>最大净盈利</span><strong id="payoffMaxProfit" class="pnl-positive">—</strong><small id="payoffProfitNote">USDT</small></div><div><span>最大净亏损</span><strong id="payoffMaxLoss" class="pnl-negative">—</strong><small id="payoffLossNote">USDT</small></div></div>
+      <div class="payoff-chart-heading"><div><h3>到期盈亏曲线</h3></div><div class="payoff-scenario"><span>情景净盈亏</span><strong id="payoffScenarioPnl">—</strong><small>USDT</small></div></div>
+      <div id="payoffChart" class="payoff-chart"></div>
+      <div class="payoff-price-control"><span>0</span><input id="payoffSlider" type="range" min="0" max="100000" step="any" aria-label="调整到期 BTC 结算价"><span id="payoffSliderMax">—</span></div>
+      <div class="payoff-presets" id="payoffPresets"><span>试算</span><button data-scenario="down">指数 −20%</button><button data-scenario="index">当前指数</button><button data-scenario="up">指数 +20%</button><button data-scenario="strike">行权价</button><button data-scenario="breakeven">盈亏平衡</button></div>
+      <p id="payoffOutcome" class="payoff-outcome"></p>
+    </div>
+    <p class="payoff-assumptions" id="payoffAssumptions">到期试算；未模拟提前平仓、保证金或强平。</p>
+  </dialog>
+  <dialog id="helpDialog"><div class="dialog-top"><h2>快捷操作</h2><button class="icon-button" id="closeHelp" aria-label="关闭帮助">×</button></div><dl><dt>报价</dt><dd>卖价 → 买入模拟；买价 → 卖出模拟；标记价 → 合约详情。</dd><dt>组合</dt><dd>同一到期日至少选 2 腿，再点“模拟组合”；重复点击取消选择。</dd></dl><button class="dialog-primary" id="helpDone">关闭</button></dialog>
+  <dialog id="riskDialog" class="risk-dialog" aria-labelledby="riskHeading" aria-describedby="riskAssumptions">
+    <div class="risk-top"><h2 id="riskHeading">收益风险 <small>USDT</small></h2><button id="riskClose" class="icon-button" aria-label="关闭收益风险比较">×</button></div>
+    <div class="risk-controls">
+      <label>到期日<select id="riskExpiry"><option value="ALL">全部到期日</option></select></label>
+      <label>模拟方向<select id="riskDirection"><option value="SELL">卖出 · 买一价</option><option value="BUY">买入 · 卖一价</option></select></label>
+      <label>期权类型<select id="riskType"><option value="PUT">Put 看跌</option><option value="CALL">Call 看涨</option><option value="ALL">Call 与 Put</option></select></label>
+      <label>数量（张）<input id="riskQuantity" type="number" min="0.01" step="0.01" inputmode="decimal" value="0.01"></label>
+        <label>年化波动率（%）<input id="riskVol" type="number" min="0" max="500" step="1" inputmode="decimal" value="60"></label>
+        <label>年化漂移 μ（%）<input id="riskDrift" type="number" min="-500" max="500" step="1" inputmode="decimal" value="0"></label>
+      <label>风险预算（USDT）<input id="riskBudget" type="number" min="0" step="100" inputmode="decimal" value="1000"></label>
+      <label>排序<select id="riskSort"><option value="strike">行权价 · 从低到高</option><option value="expected">模型期望净盈亏 · 从高到低</option><option value="lossProbability">模型亏损概率 · 从低到高</option><option value="tail">模型最差 1% 平均亏损 · 从低到高</option><option value="rewardRisk">最大盈利 / 最大亏损 · 从高到低</option><option value="dailyReturn">最高平均日收益率 · 从高到低</option><option value="maxLoss">最大亏损 · 从低到高</option></select></label>
+    </div>
+      <div class="risk-toolbar"><div class="risk-feed"><span id="riskMode" class="risk-mode" role="status">实时</span><span id="riskSnapshot">等待行情</span></div><div class="risk-actions"><label class="risk-filter"><input id="riskHideUnavailable" type="checkbox" checked>仅显示可算</label><button id="riskLive" aria-pressed="false">暂停更新</button><button id="riskRefresh">刷新</button><button id="riskExport" disabled>导出 CSV</button></div></div>
+    <p class="risk-caption" id="riskModelCaption"></p>
+    <p class="risk-error" id="riskFreshness" role="status" hidden></p>
+    <p class="risk-error" id="riskError" role="status" hidden></p>
+    <div id="riskTableScroll" class="risk-table-scroll"><table class="risk-table"><caption class="visually-hidden">每个期权的净到期盈亏、盈亏比及共同模型假设下的期望净盈亏和尾部风险；金额单位 USDT。</caption><thead><tr><th scope="col">合约 / 到期日 / 行权价</th><th scope="col">买一 / 卖一</th><th scope="col">标记 IV / Delta</th><th scope="col">Gamma / Vega / Theta</th><th scope="col">开仓费</th><th scope="col">最大净盈利</th><th scope="col">最大净亏损</th><th scope="col">最大盈利 ÷ 最大亏损</th><th scope="col">到期盈亏平衡价</th><th scope="col">现金覆盖收益率</th><th scope="col">最高平均日收益</th><th scope="col">最高平均日收益率</th><th scope="col">模型期望净盈亏</th><th scope="col">模型亏损概率</th><th scope="col">模型最差 1% 平均亏损</th><th scope="col">到期跌 20% 净盈亏</th><th scope="col">到期跌 30% 净盈亏</th><th scope="col">到期涨 20% 净盈亏</th><th scope="col">到期涨 30% 净盈亏</th><th scope="col">状态</th></tr></thead><tbody id="riskRows"></tbody></table><p id="riskEmpty" class="risk-empty" hidden>该到期日和类型暂无合约。</p></div>
+    <p id="riskCount" class="risk-bottom" role="status"></p>
+    <details class="risk-notes"><summary>计算口径</summary><p>盈亏比 = 最大净盈利 ÷ 最大净亏损；买 Call 盈利、卖 Call 亏损无上限，不按该比值排名。</p><p>模型使用共同波动率和连续漂移 μ，不代表预测；Delta 不作真实概率。最差 1% 平均亏损为 ES99。现金覆盖收益率仅用于卖 Put，非年化或保证金收益率。</p><p>最高平均日收益 = 最大净盈利 ÷ 剩余天数；日收益率再除以资金基数 × 100%。卖 Put 用行权价 × 数量 × 合约乘数，买 Put 用权利金加开仓及附加费用；卖 Call 未设资金口径，买 Call 盈利无上限。按实际剩余时间简单平均，不是每日到账、复利或保证收益。</p><p>按标的金额计基础开仓费 0.024%、行权费 0.015%，分别封顶权利金与内在价值的 10%；实际费率可能不同。</p><p class="risk-bottom" id="riskAssumptions">持有到期模拟 · 未计强平、提前平仓与滑点</p></details>
+  </dialog>
+  <dialog id="aiDialog" class="ai-dialog" aria-labelledby="aiHeading">
+    <div class="ai-top"><div><h2 id="aiHeading">AI 选期权</h2><p id="aiConnection" role="status">检查连接设置…</p></div><button id="aiClose" class="icon-button" aria-label="关闭 AI 选期权" type="button">×</button></div>
+    <section class="ai-risk-shortcuts" aria-label="按风险筛选期权"><div class="ai-risk-row"><span>足额现金卖 Put · 相对风险分档 · 剩余 2–60 天</span><div class="ai-risk-buttons" role="group" aria-label="风险档位"><button id="aiRiskLow" type="button" disabled>低风险</button><button id="aiRiskMedium" type="button" disabled>中风险</button><button id="aiRiskHigh" type="button" disabled>高风险</button></div></div><div class="ai-risk-scope"><label>到期日<select id="aiRiskExpiry" aria-label="风险筛选到期日"><option value="ALL">全部到期日</option></select></label><label>模拟数量（BTC）<input id="aiRiskQuantity" type="number" inputmode="decimal" value="0.01" min="0.01" step="0.01" aria-label="风险筛选模拟数量"></label><details class="ai-risk-rules"><summary>分档标准</summary><p>低：0 &lt; |Delta| ≤ 0.15；中：0.15 &lt; |Delta| ≤ 0.30；高：0.30 &lt; |Delta| ≤ 0.60。均筛选剩余 2–60 天、买卖价差不超过中间价 20% 的卖 Put。</p><p>这是本看板的相对分档，并非保本；Delta 不是真实胜率。不适用于买方或裸卖 Call。</p></details></div></section>
+    <form id="aiForm" class="ai-form" novalidate><details id="aiCustomCriteria" class="ai-custom-criteria" open><summary>自定义筛选</summary><label for="aiQuestion">描述你想找的期权</label><textarea id="aiQuestion" maxlength="3000" placeholder="例如：找 10–20 天到期、价外 15%–25% 的卖 Put，数量 0.01 张，按每日权利金排序。" required></textarea></details><div class="ai-compose-actions"><select id="aiModel" aria-label="DeepSeek 模型"></select><button id="aiSend" class="ai-primary" type="submit" disabled>筛选</button><button id="aiCancel" type="button" hidden>停止</button><span id="aiProgress" class="ai-progress" role="status"></span></div></form>
+    <p id="aiError" class="ai-error" role="alert" hidden></p>
+    <details id="aiSettings" class="ai-settings"><summary>连接设置</summary><form id="aiKeyForm" class="ai-key-form"><label>DeepSeek API Key<input id="aiKey" type="password" autocomplete="off" spellcheck="false" maxlength="512"></label><button id="aiSaveKey" type="submit">保存到本机</button></form><p class="ai-key-note">密钥仅交给本机后端保存，不进入对话或浏览器存储。</p></details>
+    <section id="aiResult" class="ai-result" hidden><p id="aiRiskResult" class="ai-risk-result" hidden></p><p id="aiAnswer" class="ai-answer"></p><div class="ai-result-toolbar"><span id="aiSnapshot" class="ai-snapshot"></span><button id="aiRevalidate" type="button" disabled>更新报价</button></div><p id="aiWarnings" class="ai-warnings" hidden></p><section id="aiExplanation" class="ai-explanation" aria-label="AI 风险解读" hidden><h3>AI 解读</h3><p id="aiExplanationText"></p></section><div id="aiCandidates" class="ai-candidates"></div><p id="aiEmpty" class="ai-empty" hidden></p><details id="aiCriteriaDetails" class="ai-criteria" hidden><summary>识别的条件</summary><pre id="aiCriteria"></pre></details></section>
+    <section id="aiHistory" class="ai-history" aria-label="本次对话的较早筛选" hidden></section>
+  </dialog>
+</body>
+</html>

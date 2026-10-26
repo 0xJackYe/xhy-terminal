@@ -1,0 +1,59 @@
+.payoff-dialog {width:min(850px,calc(100vw - 40px));max-width:none;max-height:calc(100dvh - 36px);margin:auto;padding:18px 24px 16px;border:1px solid var(--line);background:var(--bg);color:var(--text);overflow-y:auto;}
+.payoff-dialog::backdrop {background:#14141366;backdrop-filter:blur(3px);}
+.payoff-top {display:flex;justify-content:space-between;align-items:flex-start;gap:14px;}
+.payoff-eyebrow {display:block;color:var(--muted);font-size:10px;line-height:14px;letter-spacing:.5px;}
+.payoff-top h2 {font-family:Georgia,"Times New Roman","Microsoft YaHei",serif;font-size:25px;font-weight:400;line-height:1.2;margin:3px 0;}
+.payoff-top p {color:var(--muted);font-size:10px;margin:0;line-height:1.4;}
+.payoff-top .icon-button {font-size:22px;flex-shrink:0;}
+.payoff-context {display:flex;align-items:center;gap:20px;padding:6px 0;border-bottom:1px solid var(--line);font-size:10px;color:var(--muted);flex-wrap:wrap;}
+.payoff-context b {font-weight:400;color:var(--text);margin-left:6px;font-variant-numeric:tabular-nums;}
+.payoff-directions {margin-left:auto;display:flex;border:1px solid var(--line);border-radius:4px;padding:2px;gap:2px;}
+.payoff-directions button {color:var(--muted);font-size:10px;padding:5px 10px;border-radius:3px;}
+.payoff-directions button.active {color:var(--bg);background:var(--text);}
+.payoff-inputs {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:13px;padding-top:12px;}
+.payoff-inputs label {display:flex;flex-direction:column;gap:5px;color:var(--muted);font-size:10px;}
+.payoff-inputs input {font:14px Arial,"Microsoft YaHei",sans-serif;min-width:0;width:100%;height:34px;padding:6px 9px;border:1px solid var(--line);border-radius:4px;background:var(--panel);color:var(--text);font-variant-numeric:tabular-nums;}
+.payoff-inputs input:focus {outline:2px solid var(--text);outline-offset:2px;}
+.payoff-inputs small {font-size:9px;line-height:1.5;min-height:14px;}
+.payoff-quote-line {display:flex;justify-content:space-between;align-items:center;gap:12px;margin:7px 0 10px;color:var(--muted);font-size:9px;}
+.payoff-quote-line button {white-space:nowrap;text-decoration:underline;text-underline-offset:3px;font-size:10px;color:var(--text);}
+.payoff-error {padding:12px 14px;background:var(--amber-bg);border:1px solid var(--line);border-radius:4px;color:var(--red);font-size:12px;line-height:1.7;}
+.payoff-stats {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:12px 0;}
+.payoff-dialog[data-direction="SELL"] .payoff-stats {grid-template-columns:minmax(0,1fr) minmax(0,1.3fr) repeat(3,minmax(0,1fr));}
+.payoff-stats>div[hidden] {display:none;}
+#payoffDailyPremium {color:var(--green);}
+.payoff-stats>div {display:flex;flex-direction:column;gap:5px;min-width:0;}
+.payoff-stats span {color:var(--muted);font-size:10px;line-height:1.2;}
+.payoff-stats strong {font-family:Georgia,"Times New Roman","Microsoft YaHei",serif;font-size:21px;font-weight:400;line-height:1.2;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;}
+.payoff-stats small {color:var(--muted);font-size:9px;line-height:1.3;}
+.pnl-positive {color:var(--green);}
+.pnl-negative {color:var(--red);}
+.payoff-chart-heading {display:flex;justify-content:space-between;align-items:center;margin-top:12px;gap:12px;line-height:14px;}
+.payoff-chart-heading h3 {font-size:12px;line-height:14px;font-weight:500;margin:0 0 4px;}
+.payoff-chart-heading span {font-size:9px;color:var(--muted);}
+.payoff-scenario {display:flex;align-items:baseline;gap:9px;}
+.payoff-scenario strong {font-family:Georgia,"Times New Roman",serif;font-weight:400;font-size:22px;line-height:1.2;font-variant-numeric:tabular-nums;}
+.payoff-scenario small {font-size:9px;color:var(--muted);}
+.payoff-chart {margin-top:6px;width:100%;}
+.payoff-chart svg {display:block;width:100%;height:auto;overflow:visible;}
+.payoff-axis {font:10px Arial,"Microsoft YaHei",sans-serif;fill:var(--muted);}
+.payoff-grid {stroke:var(--line);stroke-width:1;stroke-dasharray:3 4;}
+.payoff-zero {stroke:var(--muted);stroke-dasharray:none;}
+.payoff-line {fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;}
+.payoff-line.positive {stroke:var(--green);}
+.payoff-line.negative {stroke:var(--red);}
+.payoff-area.positive {fill:var(--green);fill-opacity:.085;}
+.payoff-area.negative {fill:var(--red);fill-opacity:.085;}
+.payoff-strike {stroke:var(--muted);stroke-dasharray:2 5;opacity:.55;}
+.payoff-break {fill:var(--bg);stroke:var(--muted);stroke-width:1.7;}
+.payoff-point {fill:var(--text);stroke:var(--bg);stroke-width:2;}
+.payoff-price-control {display:flex;align-items:center;gap:14px;font-size:9px;color:var(--muted);padding-left:9px;}
+.payoff-price-control input {min-width:0;flex:1;accent-color:var(--text);height:13px;cursor:pointer;}
+.payoff-presets {display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:8px;}
+.payoff-presets>span {font-size:10px;color:var(--muted);margin-right:4px;}
+.payoff-presets button {padding:5px 9px;font-size:10px;border:1px solid var(--line);border-radius:3px;color:var(--text);}
+.payoff-presets button:hover {background:var(--panel);}
+.payoff-presets button:disabled {opacity:.4;cursor:default;}
+.payoff-outcome {font-size:10px;line-height:1.8;color:var(--text);margin:8px 0;}
+.payoff-assumptions {color:var(--muted);font-size:9px;line-height:1.9;margin:9px 0 0;padding-top:10px;border-top:1px solid var(--line);}
+@media(max-width:700px) {.payoff-dialog{padding:20px;width:calc(100vw - 24px);max-height:calc(100dvh - 24px)}.payoff-inputs{grid-template-columns:repeat(2,minmax(0,1fr));row-gap:8px}.payoff-context{gap:10px}.payoff-directions{margin-left:0}.payoff-stats,.payoff-dialog[data-direction="SELL"] .payoff-stats{grid-template-columns:repeat(2,minmax(0,1fr));row-gap:17px}.payoff-chart-heading{align-items:flex-start}.payoff-scenario{flex-wrap:wrap;gap:5px;justify-content:flex-end;max-width:48%}.payoff-scenario>span{width:100%;text-align:right}.payoff-scenario strong{font-size:19px}.payoff-quote-line{align-items:flex-start}.payoff-chart svg{min-height:150px}.payoff-chart .payoff-axis{font-size:12px}}

@@ -1,0 +1,827 @@
+/* Unified compact light/dark palette for the local Diet and Bitcoin apps.
+   This is deliberately scoped to embedded/project documents, never the shell. */
+html[data-xhy-theme] {
+  --xhy-bg: #f5f5f7;
+  --xhy-panel: #ffffff;
+  --xhy-soft: #e9e9ed;
+  --xhy-text: #1d1d1f;
+  --xhy-muted: #5f5f67;
+  --xhy-line: #d9d9df;
+  --xhy-accent: #1d1d1f;
+  --xhy-accent-soft: #e9e9ed;
+  --xhy-button: #1d1d1f;
+  --xhy-on-button: #ffffff;
+  --xhy-positive: #256443;
+  --xhy-negative: #a03536;
+  --xhy-shadow: #24232120;
+  --bg: var(--xhy-bg) !important;
+  --paper: var(--xhy-bg) !important;
+  --white: var(--xhy-panel) !important;
+  --card: var(--xhy-panel) !important;
+  --panel: var(--xhy-panel) !important;
+  --soft: var(--xhy-soft) !important;
+  --text: var(--xhy-text) !important;
+  --ink: var(--xhy-text) !important;
+  --muted: var(--xhy-muted) !important;
+  --line: var(--xhy-line) !important;
+  --accent: var(--xhy-accent) !important;
+  --orange: var(--xhy-accent) !important;
+  --green: var(--xhy-positive) !important;
+  --green-light: var(--xhy-soft) !important;
+  --green-mid: var(--xhy-positive) !important;
+  --red: var(--xhy-negative) !important;
+  color-scheme: light;
+  background: var(--xhy-bg) !important;
+}
+html[data-xhy-theme="dark"] {
+  --xhy-bg: #161617;
+  --xhy-panel: #1c1c1e;
+  --xhy-soft: #2c2c2e;
+  --xhy-text: #f5f5f7;
+  --xhy-muted: #b6b6bf;
+  --xhy-line: #44444b;
+  --xhy-accent: #f5f5f7;
+  --xhy-accent-soft: #2c2c2e;
+  --xhy-button: #f5f5f7;
+  --xhy-on-button: #1d1d1f;
+  --xhy-positive: #9bd6b0;
+  --xhy-negative: #ffa5a5;
+  --xhy-shadow: #00000055;
+  color-scheme: dark;
+}
+/* The original BTC stylesheet declares tokens on body.dark as well as :root. */
+html[data-xhy-theme] body {
+  --bg: var(--xhy-bg); --paper: var(--xhy-bg); --white: var(--xhy-panel);
+  --card: var(--xhy-panel); --panel: var(--xhy-panel); --soft: var(--xhy-soft);
+  --text: var(--xhy-text); --ink: var(--xhy-text); --muted: var(--xhy-muted);
+  --line: var(--xhy-line); --accent: var(--xhy-accent); --orange: var(--xhy-accent);
+  --green: var(--xhy-positive); --green-mid: var(--xhy-positive); --red: var(--xhy-negative);
+  background: var(--xhy-bg) !important;
+  color: var(--xhy-text) !important;
+  font-family: "Segoe UI", "Microsoft YaHei", Arial, sans-serif;
+}
+/* Embedded documents size to their natural content. The shell owns scrolling;
+   viewport-sized minimum heights would feed back into ResizeObserver. */
+html[data-xhy-theme][data-xhy-embedded="true"] {
+  height: auto !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+  overscroll-behavior: auto !important;
+}
+html[data-xhy-theme][data-xhy-embedded="true"] body {
+  height: auto !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+  overscroll-behavior: auto !important;
+}
+html[data-xhy-theme][data-xhy-embedded="true"] body .diary-chat-log { overscroll-behavior: auto; }
+html[data-xhy-theme] iframe[data-xhy-auto-height="true"] {
+  height: var(--xhy-frame-height, 1100px) !important;
+  min-height: 0 !important;
+}
+/* Reset hard-coded text colors across every old view, including dynamic cards.
+   Specific semantic/selected states below restore their intentional contrast. */
+html[data-xhy-theme] body * {
+  color: var(--xhy-text) !important;
+  border-color: var(--xhy-line) !important;
+  text-decoration-color: currentColor;
+  /* A palette switch must be atomic, including old app hover transitions. */
+  transition: none !important;
+}
+html[data-xhy-theme] body :is(small, .muted, .eyebrow, .section-eyebrow, .nav-caption,
+  .topbar-kicker, .hero-description, .hero-small-note, .art-caption, .brand small,
+  .sidebar-quote p, .sidebar-quote>span:last-child, .sidebar-footer, .sidebar-tools button,
+  .sidebar-tools label, .stat-label, .stat-detail, .stat-unit, .stat-sub, .stat-hint,
+  .stat-note, .stat-top, .stat-heading, .subtle-label, .meal-type, .meal-meta,
+  .meal-subtitle, .meal-time, .meal-description, .meal-note, .meal-footer,
+  .food-amount, .food-kcal, .food-item-note, .weight-basis, .day-note, .note-label,
+  .coverage-note, .card-footnote, .chart-unit, .chart-value, .chart-day,
+  .source-note, .nutrition-method-note, .nutrition-note, .reference-note, .reference-meta,
+  .quick-entry-intro, .quick-count, .quick-examples>span, .quick-voice-hint,
+  .quick-privacy-note, .chat-storage, .chat-privacy, .chat-date-label,
+  .chat-composer-actions>span, .load-status, .month-weekday, .month-day-meta,
+  .calendar-legend, .selected-date-row p, .estimate-label, .page-footer,
+  .form-hint, .row-estimate, .view-intro, .label, .subtitle, .address-label,
+  .address-row a, .wallet-sync, .notes, .wallet-notes, .tt-date, .tt-row,
+  .pnl-dates, .fx-caption, .milestone-state, .milestone-next,
+  .metric-label, .price-caption, .small-label, .source, .rule-note,
+  .chart-footer, .form-status, .latest-alert, .empty-row, .test-tag,
+  .email-description, .email-delivery, .email-help, .valuation-note,
+  .combined-source-state time, .combined-footer, .combined-readout,
+  .combined-total>span, .combined-total>p, .combined-source>div>span,
+  .combined-pnl>label, .combined-goal-note, .combined-empty, .combined-day-pnl>span,
+  .btc-cost-total>span, .btc-cost-quantity>span, .btc-cost-daily-head>span,
+  .btc-cost-footer, .portfolio-footer, .portfolio-source small, .portfolio-message,
+  .portfolio-chart-head>div>span, .portfolio-total-unit>span, .portfolio-empty,
+  .portfolio-help, .portfolio-config-actions small, .okx-message, .okx-help,
+  .okx-config-actions>span) { color: var(--xhy-muted) !important; }
+
+html[data-xhy-theme] body :is(.sidebar, .card, .panel, .stat-card, .stats-card,
+  .daily-stats>article, .daily-stats>.stat, .trend-card, .reference-card,
+  .food-reference-card, .history-day, .month-calendar, .record-form,
+  .record-page .quick-entry, .diary-chat, .record-method, dialog,
+  .trend-table, .food-table, .wallet-frame-wrap, .tooltip) {
+  background: var(--xhy-panel) !important;
+  box-shadow: none;
+}
+html[data-xhy-theme] body :is(.sidebar-quote, .profile-avatar, .stat-icon, .meal-icon,
+  .food-chip, .tag, .badge, .meal-status, .status-badge, .day-note-panel,
+  .reference-nutrients, .food-row, .quick-entry, .quick-entry-tag, .nutrition-details,
+  .draft-recovery, .chat-assistant, .chat-examples button, .quick-dictate-button,
+  .record-method .method-icon, .portion-estimate, .calendar-arrow,
+  .week-strip>button, .day-chip, .month-day, .calendar-grid button,
+  .secondary-button, .button-outline, .meal-actions button, .bottom,
+  .goal, .milestone, .pnl-select, .notice, .test-tag, .monitor-pill,
+  .combined-goal, .combined-milestones li, .combined-state, .btc-cost-state,
+  .portfolio-state, .portfolio-settings, .okx-state, .history-count,
+  .portfolio-tabs, .notification-actions select) {
+  background: var(--xhy-soft) !important;
+}
+html[data-xhy-theme] body :is(.chat-user, .record-method[aria-selected="true"],
+  .record-method[aria-selected="true"] .method-icon, .month-day.has-record,
+  .milestone[data-state="next"], .combined-milestones li[data-state="next"], .coin, .brand-mark,
+  .quick-dictate-button.is-listening) { background: var(--xhy-accent-soft) !important; }
+html[data-xhy-theme] body :is(input, textarea, select, option, .threshold-field,
+  .quick-count, .chat-date-label input) {
+  background: var(--xhy-panel) !important;
+  color: var(--xhy-text) !important;
+  caret-color: var(--xhy-accent);
+  accent-color: var(--xhy-accent);
+}
+html[data-xhy-theme] body :is(input, textarea)::placeholder {
+  color: var(--xhy-muted) !important;
+  opacity: 1;
+}
+html[data-xhy-theme] body :is(th, .meal-card .food-table th) {
+  background: var(--xhy-soft) !important;
+  color: var(--xhy-muted) !important;
+}
+html[data-xhy-theme] body :is(td, .food-table td, .trend-table td) { color: var(--xhy-text) !important; }
+html[data-xhy-theme] body :is(.nav-button, .nav-link, .text-button, .copy,
+  .details-button, .segmented button, .combined-controls button, .portfolio-tabs button) {
+  color: var(--xhy-muted) !important;
+}
+html[data-xhy-theme] body :is(.nav-button:hover, .history-day:hover, .calendar-arrow:hover,
+  .record-method:hover, .month-day:hover, .calendar-grid button:hover, .button-outline:hover,
+  .secondary-button:hover, .chat-examples button:hover, .quick-dictate-button:hover) {
+  background: var(--xhy-soft) !important;
+  color: var(--xhy-text) !important;
+}
+html[data-xhy-theme] body :is(.nav-button.active, .nav-button[aria-current="page"],
+  .nav-link[aria-current="page"]) {
+  background: transparent !important;
+  color: var(--xhy-text) !important;
+  border-color: var(--xhy-text) !important;
+  box-shadow: none !important;
+}
+html[data-xhy-theme] body :is(.button-primary, .primary-button, .button.primary,
+  .skip-link, .day-chip.is-selected, .calendar-day.is-selected,
+  .calendar-grid button.selected, .calendar-grid button[aria-pressed="true"],
+  .week-day.active, .week-day.selected, .day-button.active, .day-button.selected,
+  .week-strip>button[aria-pressed="true"], .week-strip>button[aria-selected="true"],
+  .segmented button[aria-pressed="true"], .combined-controls button[aria-pressed="true"],
+  .portfolio-tabs button[aria-pressed="true"], .toast) {
+  background: var(--xhy-button) !important;
+  color: var(--xhy-on-button) !important;
+  border-color: var(--xhy-button) !important;
+  box-shadow: none !important;
+}
+html[data-xhy-theme] body :is(.button-primary, .primary-button, .button.primary,
+  .day-chip.is-selected, .calendar-day.is-selected,
+  .calendar-grid button[aria-pressed="true"], .week-day.active,
+  .week-strip>button[aria-pressed="true"], .toast) * {
+  color: var(--xhy-on-button) !important;
+  opacity: 1;
+}
+html[data-xhy-theme] body :is(.button-primary:hover, .primary-button:hover,
+  .button.primary:hover) { filter: brightness(.92); }
+html[data-xhy-theme] body .day-chip.is-selected>span {
+  color: var(--xhy-on-button) !important;
+}
+/* Calendar days can carry both has-record and is-selected. Keep the entire
+   selected day on a single light/dark accent surface with matching text. */
+html[data-xhy-theme][data-xhy-surface] body .month-day.is-selected {
+  background: var(--xhy-accent-soft) !important;
+  color: var(--xhy-accent) !important;
+  border-color: var(--xhy-accent) !important;
+}
+html[data-xhy-theme] body .month-day.is-selected :is(.month-day-meta, .month-day-number) {
+  color: var(--xhy-accent) !important;
+  opacity: 1;
+}
+html[data-xhy-theme] body :is(.positive, .up, .fresh, .live, .connected small,
+  .portfolio-source.connected small, .monitor-pill.enabled, .combined-state.fresh,
+  .combined-source-state.fresh, .btc-cost-state.fresh, .okx-state.live,
+  .milestone[data-state="achieved"] .milestone-value,
+  .milestone[data-state="achieved"] .milestone-state,
+  .combined-milestones li[data-state="achieved"]) { color: var(--xhy-positive) !important; }
+html[data-xhy-theme] body :is(.negative, .down, .error, .stale, .unavailable,
+  .combined-message, .btc-cost-message, .portfolio-message.error,
+  .portfolio-source.error small, .portfolio-source.stale small,
+  .quick-status[data-state="error"], .wallet-sync[data-state="error"]) {
+  color: var(--xhy-negative) !important;
+}
+html[data-xhy-theme] body :is(.brand-dot, .coin, .brand-mark, .tt-kind, .goal-percent,
+  .goal-remaining strong, .milestone-next strong,
+  .combined-goal-head>span, .combined-milestones li[data-state="next"],
+  .milestone[data-state="next"] .milestone-value,
+  .milestone[data-state="next"] .milestone-state, .portfolio-state.partial) {
+  color: var(--xhy-accent) !important;
+}
+html[data-xhy-theme] body :is(.macro-track, .progress-track, .macro-bar,
+  .goal-track, .combined-goal-track, .btc-cost-track) { background: var(--xhy-line) !important; }
+html[data-xhy-theme] body :is(.chart-bar, .bar, .macro-track>.protein,
+  .macro-track>.carbs, .macro-track>.fat, .goal-fill, .combined-goal-track>i,
+  .btc-cost-track>i) { background: var(--xhy-accent) !important; }
+html[data-xhy-theme] body :is(.chart-bar.is-missing, .chart-day.empty .chart-bar) {
+  background: var(--xhy-line) !important;
+}
+html[data-xhy-theme] body .day-chip.is-selected .day-dot::after { background: var(--xhy-on-button) !important; }
+html[data-xhy-theme] body .month-day.is-selected .month-day-number::after { background: var(--xhy-accent) !important; }
+html[data-xhy-theme] body :is(button:disabled, input:disabled, select:disabled) {
+  opacity: 1;
+  color: var(--xhy-muted) !important;
+  background: var(--xhy-soft) !important;
+}
+html[data-xhy-theme] body :is(button:disabled, input:disabled, select:disabled) * {
+  color: var(--xhy-muted) !important;
+}
+html[data-xhy-theme] body :focus-visible { outline-color: var(--xhy-accent) !important; }
+html[data-xhy-theme] dialog::backdrop { background: #00000099 !important; }
+html[data-xhy-theme] .tooltip { box-shadow: 0 5px 24px var(--xhy-shadow) !important; }
+html[data-xhy-theme] .tooltip .tt-value,
+html[data-xhy-theme] .tooltip .tt-row b { color: var(--xhy-text) !important; }
+
+/* All charts are SVG. Attribute colors in the standalone wallet need explicit
+   overrides; CSS-token charts follow the same palette without re-fetching data. */
+html[data-xhy-theme] body svg text { fill: var(--xhy-muted) !important; }
+html[data-xhy-theme] body :is(.plot, .price-chart, .combined-chart) svg line {
+  stroke: var(--xhy-line) !important;
+}
+html[data-xhy-theme] body :is(.plot, .price-chart, .combined-chart) svg path[stroke],
+html[data-xhy-theme] body :is(.chart-line, .combined-chart-line) {
+  stroke: var(--xhy-accent) !important;
+}
+html[data-xhy-theme] body .plot svg circle {
+  fill: var(--xhy-accent) !important;
+  stroke: var(--xhy-panel) !important;
+}
+html[data-xhy-theme] body :is(.plot, .price-chart) svg stop {
+  stop-color: var(--xhy-accent) !important;
+}
+html[data-xhy-theme] body .portfolio-donut-base { stroke: var(--xhy-line) !important; }
+html[data-xhy-theme] [data-page="options"],
+html[data-xhy-theme] a[href="#options"],
+html[data-xhy-theme] .options-link,
+html[data-xhy-theme] #optionsPage { display: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  html[data-xhy-theme] *, html[data-xhy-theme] *::before, html[data-xhy-theme] *::after {
+    transition: none !important;
+  }
+}
+
+/* Editorial layout: quieter document surfaces, useful controls, clear numbers.
+   Keep the palette and selected-state rules above as the contrast baseline. */
+html[data-xhy-theme] body {
+  font-size: 15px;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+}
+html[data-xhy-theme] body :is(h1, h2, h3) {
+  font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC", Arial, sans-serif;
+  font-weight: 500;
+  letter-spacing: -.025em;
+}
+html[data-xhy-theme] body :is(button, input, textarea, select, p, li, label) { font-size: 14px; }
+html[data-xhy-theme] body :is(input, textarea, select, .threshold-field) { border-radius: 3px; }
+html[data-xhy-theme] body :is(.button, .primary-button, .secondary-button,
+  .button-primary, .button-outline, .record-method, .chat-examples button,
+  .combined-controls button, .portfolio-tabs, .portfolio-tabs button,
+  .segmented button, .pnl-select) {
+  border-radius: 3px;
+  box-shadow: none !important;
+}
+html[data-xhy-theme] body :is(.button, .primary-button, .secondary-button) { min-height: 38px; }
+html[data-xhy-theme] body :is(.eyebrow, .section-eyebrow, .nav-caption,
+  .section-symbol, .tiny-mark, .note-flower, .stat-icon, .meal-icon,
+  .method-icon, .profile-avatar, .heading-dot, .hero-art,
+  .hero-illustration, .hero-small-note, .art-caption) { display: none !important; }
+html[data-xhy-theme] body :is(.stat-label, .stat-detail, .stat-unit, .stat-sub,
+  .stat-hint, .stat-note, .subtle-label, .meal-type, .meal-meta, .meal-time,
+  .meal-description, .meal-note, .meal-footer, .food-amount, .food-kcal,
+  .weight-basis, .day-note, .coverage-note, .card-footnote, .source-note,
+  .nutrition-method-note, .view-intro, .chat-storage, .chat-privacy,
+  .chat-composer-actions>span, .chat-message strong, .chat-date-label,
+  .reference-note, .reference-meta, .calendar-legend, .selected-date-row p,
+  .metric-label, .price-caption, .metric small, .daily-prices span, .small-label,
+  .rule-note, .form-status, .latest-alert, .email-description, .email-help,
+  .email-delivery, .email-field label, .email-field small, .valuation-note,
+  .monitor-pill, .status-badge, .combined-state, .combined-source-state,
+  .combined-total>span, .combined-total>p, .combined-source>div>span,
+  .combined-source small, .combined-source-state time, .combined-pnl>label,
+  .combined-pnl>small, .combined-goal-note, .combined-footer, .combined-readout,
+  .combined-day-pnl>span, .combined-day-pnl>small, .combined-milestones span,
+  .btc-cost-state, .btc-cost-total>span, .btc-cost-quantity>span,
+  .btc-cost-total>small, .btc-cost-quantity>small, .btc-cost-daily>small,
+  .btc-cost-daily-head>span, .btc-cost-daily-head>small, .btc-cost-footer,
+  .portfolio-state, .portfolio-source, .portfolio-source small, .portfolio-total-unit>span,
+  .portfolio-footer, .portfolio-help, .portfolio-config-actions small,
+  .okx-state, .okx-help, .okx-fields label, .okx-fields small,
+  .okx-config-actions>span, .subtitle, .label,
+  .quote-box small, .pnl-box small, .pnl-dates, .wallet-sync,
+  .wallet-notes, .chart-sub, .chart-bottom, .fact .label, .bottom,
+  .details-note, .notes, .milestone-state, .goal-detail, .milestone-next) {
+  font-size: 14px !important;
+  line-height: 1.7;
+  letter-spacing: 0;
+}
+html[data-xhy-theme] body :is(th, td, .food-table th, .food-table td,
+  .trend-table th, .trend-table td, .portfolio-legend table) {
+  font-size: 14px;
+  line-height: 1.65;
+}
+html[data-xhy-theme] body th { font-weight: 500; }
+html[data-xhy-theme] body :is(.brand-mark, .coin, .brand-icon,
+  .asset-mark, .milestone-icon) { display: none !important; }
+
+/* The Diet document already has navigation; present it as a simple index. */
+html[data-xhy-theme][data-xhy-surface="diet"] body .sidebar {
+  position: static;
+  inset: auto;
+  width: 100%;
+  padding: 0;
+  min-height: 64px;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 30px;
+  border: 0;
+  border-bottom: 1px solid var(--xhy-line);
+  background: var(--xhy-bg) !important;
+  backdrop-filter: none;
+}
+html[data-xhy-theme][data-xhy-surface="diet"] body :is(.brand,
+  .sidebar-footer, .topbar-kicker, .page-footer) { display: none !important; }
+html[data-xhy-theme][data-xhy-surface="diet"] body .main-nav {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  order: 0;
+  flex-basis: auto;
+  flex-wrap: wrap;
+  gap: 26px;
+  margin: 0;
+}
+html[data-xhy-theme][data-xhy-surface="diet"] body .nav-button {
+  width: auto;
+  flex: none;
+  min-height: 64px;
+  padding: 12px 0;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  font-size: 14px;
+  background: transparent !important;
+}
+html[data-xhy-theme][data-xhy-surface="diet"] body .nav-button svg { display: none; }
+html[data-xhy-theme][data-xhy-surface="diet"] body .nav-button.active {
+  border-bottom-color: var(--xhy-text) !important;
+}
+html[data-xhy-theme][data-xhy-surface="diet"] body .sidebar-bottom {
+  margin: 0 0 0 auto;
+  padding: 0;
+}
+html[data-xhy-theme][data-xhy-surface="diet"] body .sidebar-tools {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+html[data-xhy-theme][data-xhy-surface="diet"] body .sidebar-tools :is(button, label) {
+  font-size: 14px;
+  min-height: 40px;
+  padding: 8px 0;
+}
+html[data-xhy-theme][data-xhy-surface="diet"] body .main-content {
+  width: 100%;
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: 20px 0 32px;
+  position: relative;
+}
+html[data-xhy-theme][data-xhy-surface="diet"] body .topbar { justify-content: flex-start; min-height: 40px; padding-right: 150px; }
+html[data-xhy-theme][data-xhy-surface="diet"] body .search-box input { font-size: 14px; width: 210px; }
+html[data-xhy-theme][data-xhy-surface="diet"] body .hero {
+  min-height: 0;
+  position: absolute;
+  inset: 20px 0 auto auto;
+  padding: 0;
+  gap: 0;
+}
+html[data-xhy-theme][data-xhy-surface="diet"] body .hero-copy { display: none; }
+html[data-xhy-theme][data-xhy-surface="diet"] body .hero .button { min-height: 40px; font-size: 14px; padding: 8px 17px; }
+html[data-xhy-theme][data-xhy-surface="diet"] body .hero h1 {
+  font-size: clamp(26px, 3vw, 36px);
+  line-height: 1.35;
+  font-weight: 500;
+}
+html[data-xhy-theme][data-xhy-surface="diet"] body .hero h1>span { display: none; }
+html[data-xhy-theme][data-xhy-surface="diet"] body .hero-description {
+  font-size: 14px;
+  line-height: 1.8;
+  margin-top: 10px;
+}
+html[data-xhy-theme][data-xhy-surface="diet"] body :is(.month-calendar,
+  .meals-panel, .macro-panel, .week-panel, .trend-card, .reference-card,
+  .food-reference-card, .record-form, .diary-chat) {
+  border: 0;
+  border-radius: 0;
+  border-top: 1px solid var(--xhy-line);
+  background: var(--xhy-bg) !important;
+  box-shadow: none !important;
+}
+html[data-xhy-theme][data-xhy-surface="diet"] body .month-calendar { padding: 24px 0 20px; }
+html[data-xhy-theme][data-xhy-surface="diet"] body :is(.month-day, .calendar-arrow,
+  .history-day, .day-chip, .nutrition-details, .day-note-panel,
+  .chat-message, .food-row, .portion-estimate) { border-radius: 3px; box-shadow: none; }
+html[data-xhy-theme][data-xhy-surface="diet"] body .daily-stats { gap: 0; }
+html[data-xhy-theme][data-xhy-surface="diet"] body :is(.stat-card,
+  .stats-card, .daily-stats>article, .daily-stats>.stat) {
+  min-height: 112px;
+  border: 0;
+  border-top: 1px solid var(--xhy-line);
+  border-bottom: 1px solid var(--xhy-line);
+  border-radius: 0;
+  padding: 20px;
+  background: var(--xhy-bg) !important;
+}
+html[data-xhy-theme][data-xhy-surface="diet"] body .stat-value {
+  font-family: "Segoe UI", Arial, sans-serif;
+  font-size: 30px;
+  font-weight: 400;
+}
+html[data-xhy-theme][data-xhy-surface="diet"] body :is(.record-form, .diary-chat) { padding: 26px 0; }
+html[data-xhy-theme][data-xhy-surface="diet"] body .record-method { min-height: 78px; }
+html[data-xhy-theme][data-xhy-surface="diet"] body .diary-chat-log { gap: 18px; }
+html[data-xhy-theme][data-xhy-surface="diet"] body .day-ai-hint { color: var(--xhy-muted) !important; font-size: 14px; }
+html[data-xhy-theme][data-xhy-surface="diet"] body .day-ai-toggle { background: transparent !important; border: 1px solid var(--xhy-line); border-radius: 2px; font-size: 14px; }
+html[data-xhy-theme][data-xhy-surface="diet"] body .day-ai-toggle:hover { background: var(--xhy-soft) !important; }
+html[data-xhy-theme][data-xhy-surface="diet"] body .day-ai-panel .diary-chat { border-top: 1px solid var(--xhy-line); }
+html[data-xhy-theme][data-xhy-surface="diet"] body .chat-message { line-height: 1.9; }
+html[data-xhy-theme][data-xhy-surface="diet"] body :is(.card-heading h3,
+  .record-form .dialog-header h3, .diary-chat-heading h3) { font-size: 18px; }
+html[data-xhy-theme][data-xhy-surface="diet"] body .record-page-heading h2 { font-size: 30px; }
+
+/* Bitcoin pages use full-width sections and rules instead of nested cards. */
+html[data-xhy-theme][data-xhy-surface="btc"] body .topbar {
+  position: static;
+  height: 64px;
+  padding: 0;
+  gap: 32px;
+  border-bottom-color: var(--xhy-line) !important;
+}
+html[data-xhy-theme][data-xhy-surface="btc"] body .topbar .brand { display: none; }
+html[data-xhy-theme][data-xhy-surface="btc"] body .topbar nav { gap: 34px; }
+/* Navigation is always typography and a rule, including pointer and keyboard
+   states. This scope intentionally outranks every legacy selected-tab rule. */
+html[data-xhy-theme][data-xhy-surface="btc"] body .topbar .nav-link,
+html[data-xhy-theme][data-xhy-surface="btc"] body .topbar .nav-link:is(:hover, :focus, :focus-visible, :active, [aria-current="page"]) {
+  padding: 0 0 1px;
+  font-size: 14px;
+  font-weight: 400;
+  border: 0;
+  border-bottom: 1px solid transparent !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  background-image: none !important;
+  color: var(--xhy-muted) !important;
+  box-shadow: none !important;
+  text-decoration: none;
+}
+html[data-xhy-theme][data-xhy-surface="btc"] body .topbar .nav-link:is(:hover, :focus, :focus-visible, [aria-current="page"]) {
+  color: var(--xhy-text) !important;
+}
+html[data-xhy-theme][data-xhy-surface="btc"] body .topbar .nav-link[aria-current="page"] {
+  border-bottom-color: var(--xhy-text) !important;
+}
+html[data-xhy-theme][data-xhy-surface="btc"] body .topbar .nav-link:focus-visible {
+  outline: 1px solid var(--xhy-text) !important;
+  outline-offset: 6px;
+}
+html[data-xhy-theme][data-xhy-surface="btc"] body .page {
+  width: 100%;
+  max-width: 1320px;
+  padding: 0;
+}
+html[data-xhy-theme][data-xhy-surface="btc"] body :is(.chart-panel,
+  .alarm-panel, .email-panel, .alert-history, .combined-wallet, .btc-cost,
+  .crypto-portfolio, .okx-wallet) {
+  border: 0;
+  border-top: 1px solid var(--xhy-line);
+  border-radius: 0;
+  padding: 26px 0;
+  background: var(--xhy-bg) !important;
+  box-shadow: none !important;
+}
+html[data-xhy-theme][data-xhy-surface="btc"] body .monitor-grid { gap: 32px; }
+html[data-xhy-theme][data-xhy-surface="btc"] body :is(.combined-goal,
+  .portfolio-settings) {
+  background: var(--xhy-bg) !important;
+  border-width: 1px 0;
+  border-radius: 0;
+  padding: 20px 0;
+}
+html[data-xhy-theme][data-xhy-surface="btc"] body :is(.combined-milestones li,
+  .portfolio-state, .combined-state, .btc-cost-state, .okx-state,
+  .monitor-pill, .status-badge, .history-count) { border-radius: 2px; }
+html[data-xhy-theme][data-xhy-surface="btc"] body :is(h2, .wallet-heading h2) { font-size: 20px; }
+html[data-xhy-theme][data-xhy-surface="btc"] body :is(.price-value,
+  .combined-total>strong, .combined-pnl>strong, .combined-day-pnl>strong,
+  .btc-cost-total>strong, .btc-cost-daily>strong, .portfolio-total-unit strong,
+  .combined-goal-head>span, .combined-milestones strong) {
+  font-family: "Segoe UI", Arial, sans-serif;
+  font-variant-numeric: tabular-nums;
+  font-weight: 400;
+  letter-spacing: -.03em;
+}
+html[data-xhy-theme][data-xhy-surface="btc"] body .wallet-frame-wrap { border-radius: 0; border-width: 1px 0; }
+html[data-xhy-theme][data-xhy-surface="btc"] body .notification-actions .text-button { min-height: 34px; font-size: 14px; }
+
+/* Nested wallet keeps chart interaction and tooltips on their own solid surface. */
+html[data-xhy-theme][data-xhy-surface="wallet"] body .panel {
+  border: 0;
+  border-radius: 0;
+  background: var(--xhy-bg) !important;
+  box-shadow: none !important;
+}
+html[data-xhy-theme][data-xhy-surface="wallet"] body :is(.topbar, .hero,
+  .chart-section, .bottom, .details, .wallet-notes) { padding-inline: 24px; }
+html[data-xhy-theme][data-xhy-surface="wallet"] body :is(.goal, .milestone) { border-radius: 2px; }
+html[data-xhy-theme][data-xhy-surface="wallet"] body .goal {
+  padding-inline: 0;
+  border-width: 1px 0;
+  background: var(--xhy-bg) !important;
+}
+html[data-xhy-theme][data-xhy-surface="wallet"] body :is(.hero h2,
+  .quote-box strong, .pnl-box strong, .goal-heading .goal-percent,
+  .milestone-value) {
+  font-family: "Segoe UI", Arial, sans-serif;
+  font-variant-numeric: tabular-nums;
+  font-weight: 400;
+}
+html[data-xhy-theme][data-xhy-surface="wallet"] body .chart-heading h3 { font-size: 18px; }
+html[data-xhy-theme][data-xhy-surface="wallet"] body .tooltip { border-radius: 3px; }
+@media (max-width: 760px) {
+  html[data-xhy-theme][data-xhy-surface="diet"] body .sidebar { padding-inline: 0; gap: 0 20px; }
+  html[data-xhy-theme][data-xhy-surface="diet"] body .main-nav { gap: 20px; }
+  html[data-xhy-theme][data-xhy-surface="diet"] body .sidebar-bottom { margin-left: 0; }
+  html[data-xhy-theme][data-xhy-surface="diet"] body .main-content { padding: 20px 0; }
+  html[data-xhy-theme][data-xhy-surface="diet"] body .hero { padding: 0; }
+  html[data-xhy-theme][data-xhy-surface="diet"] body .search-box input { width: 150px; }
+  html[data-xhy-theme][data-xhy-surface="diet"] body :is(.stat-card,
+    .stats-card, .daily-stats>article, .daily-stats>.stat) { padding: 16px 12px; }
+  html[data-xhy-theme][data-xhy-surface="btc"] body :is(.topbar, .page) { padding-inline: 0; }
+  html[data-xhy-theme][data-xhy-surface="btc"] body .monitor-grid { gap: 16px; }
+  html[data-xhy-theme][data-xhy-surface="wallet"] body :is(.topbar, .hero,
+    .chart-section, .bottom, .details, .wallet-notes) { padding-inline: 18px; }
+}
+
+/* Quiet, readable details rather than many little colored boxes. */
+html[data-xhy-theme] body :is(.food-name, .food-table small, .food-item-note,
+  .item-detail, .item-detail summary, .item-detail p, .meal-actions button,
+  .month-weekday, .month-day-meta, .weekday, .chart-day, .chart-value,
+  .combined-source strong, .combined-total>small, .combined-empty,
+  .portfolio-fields label, .portfolio-legend thead th, .history-count,
+  .address-row, .address-row a, .badge, .status, .fact strong small,
+  .goal-detail strong, .tt-date, .tt-row) { font-size: 14px !important; }
+html[data-xhy-theme][data-xhy-surface="diet"] body :is(.month-day, .calendar-day) {
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  border-radius: 3px;
+}
+html[data-xhy-theme][data-xhy-surface="diet"] body :is(.month-day.has-record, .calendar-day.has-record) {
+  background: transparent !important;
+  border-color: var(--xhy-line) !important;
+}
+html[data-xhy-theme][data-xhy-surface="diet"] body :is(.month-day:hover, .calendar-day:hover) {
+  background: var(--xhy-soft) !important;
+}
+html[data-xhy-theme][data-xhy-surface="diet"] body :is(.month-day.is-selected, .calendar-day.is-selected) {
+  background: var(--xhy-button) !important;
+  color: var(--xhy-on-button) !important;
+  border-color: var(--xhy-button) !important;
+}
+html[data-xhy-theme][data-xhy-surface="diet"] body :is(.month-day.is-selected, .calendar-day.is-selected) * {
+  color: var(--xhy-on-button) !important;
+}
+html[data-xhy-theme][data-xhy-surface="diet"] body .month-day.is-selected .month-day-number::after {
+  background: var(--xhy-on-button) !important;
+}
+html[data-xhy-theme][data-xhy-surface="btc"] body .combined-wallet { margin-top: 0; border-top: 0; padding-top: 22px; }
+html[data-xhy-theme][data-xhy-surface="btc"] body :is(.combined-state, .combined-source-state,
+  .btc-cost-state, .portfolio-state, .okx-state, .status-badge, .monitor-pill) {
+  padding: 0;
+  border: 0;
+  background: transparent !important;
+}
+html[data-xhy-theme][data-xhy-surface="btc"] body .combined-milestones li {
+  background: transparent !important;
+  border-width: 0 0 1px;
+  border-radius: 0;
+  padding: 8px 0;
+}
+html[data-xhy-theme][data-xhy-surface="wallet"] body .topbar .identity { display: none; }
+html[data-xhy-theme][data-xhy-surface="wallet"] body .topbar {
+  justify-content: flex-end;
+  border-bottom: 0;
+  padding-block: 12px 0;
+}
+
+/* A date opens a compact page. Meal summaries remain usable by keyboard and touch. */
+html[data-xhy-theme][data-xhy-surface="diet"] body .sidebar { min-height:48px; }
+html[data-xhy-theme][data-xhy-surface="diet"] body .nav-button { min-height:48px; padding-block:8px; }
+html[data-xhy-theme][data-xhy-surface="diet"] body .main-content { padding-block:12px 16px; }
+html[data-xhy-theme][data-xhy-surface="diet"] body .hero { top:12px; }
+html[data-xhy-theme][data-xhy-surface="diet"] body .month-calendar { padding:14px 0 12px; }
+html[data-xhy-theme][data-xhy-surface="diet"] body .month-day-meta { font-size:12px !important; }
+html[data-xhy-theme][data-xhy-surface="diet"] body.is-day-view .day-detail { margin-top:12px; }
+html[data-xhy-theme][data-xhy-surface="diet"] body :is(.month-calendar,.day-detail,.hero)[hidden] { display:none !important; }
+html[data-xhy-theme][data-xhy-surface="diet"] body .topbar[hidden] { display:none !important; }
+html[data-xhy-theme][data-xhy-surface="diet"] body.is-day-view .nutrition-method-note { display:none !important; }
+html[data-xhy-theme][data-xhy-surface="diet"] body .summary-content>.sync-note { grid-column:1 / -1; padding:0; }
+html[data-xhy-theme][data-xhy-surface="diet"] body.is-day-view .daily-stats { margin-bottom:14px; }
+html[data-xhy-theme][data-xhy-surface="diet"] body.is-day-view .daily-stats>.stat-card {
+  min-height:0;
+  padding:10px 16px;
+  border:0;
+  border-right:1px solid var(--xhy-line);
+}
+html[data-xhy-theme][data-xhy-surface="diet"] body.is-day-view .daily-stats>.stat-card:last-child { border-right:0; }
+html[data-xhy-theme][data-xhy-surface="diet"] body.is-day-view .daily-stats>.stat-card { height:auto !important; padding:10px 12px; }
+html[data-xhy-theme][data-xhy-surface="diet"] body.is-day-view .daily-stats .stat-detail { display:none !important; }
+html[data-xhy-theme][data-xhy-surface="diet"] body.is-day-view .stat-value { font-size:25px; }
+html[data-xhy-theme][data-xhy-surface="diet"] body.is-day-view :is(.stat-label,.stat-unit) { font-size:12px !important; line-height:1.4; }
+html[data-xhy-theme][data-xhy-surface="diet"] body.is-day-view .stat-detail { font-size:11px !important; line-height:1.4; }
+html[data-xhy-theme][data-xhy-surface="diet"] body.is-day-view .selected-date-row p { font-size:13px !important; line-height:1.5; }
+html[data-xhy-theme][data-xhy-surface="diet"] body.is-day-view :is(.coverage-note,.nutrition-method-note) { font-size:12px !important; line-height:1.5; }
+html[data-xhy-theme][data-xhy-surface="diet"] body.is-day-view .meals-panel { border-top:0; }
+html[data-xhy-theme][data-xhy-surface="diet"] body.is-day-view .meals-panel>.card-heading { padding:9px 0; }
+html[data-xhy-theme][data-xhy-surface="diet"] body.is-day-view .meals-panel>.card-heading h3 { font-size:14px; }
+html[data-xhy-theme][data-xhy-surface="diet"] body.is-day-view .meal-list { padding:0; }
+html[data-xhy-theme][data-xhy-surface="diet"] body .meal-summary { background:transparent !important; }
+html[data-xhy-theme][data-xhy-surface="diet"] body .meal-summary:hover { background:var(--xhy-soft) !important; }
+html[data-xhy-theme][data-xhy-surface="diet"] body .meal-summary:focus-visible { outline-color:var(--xhy-text); }
+html[data-xhy-theme][data-xhy-surface="diet"] body :is(.meal-summary-status,.meal-summary-kcal small) { color:var(--xhy-muted) !important; }
+html[data-xhy-theme][data-xhy-surface="diet"] body .meal-summary-kcal small { font-size:11px !important; }
+html[data-xhy-theme][data-xhy-surface="diet"] body .meal-disclosure[open]>.meal-summary { background:var(--xhy-bg) !important; }
+html[data-xhy-theme][data-xhy-surface="diet"] body.is-day-view .day-ai-hint { font-size:12px; }
+html[data-xhy-theme][data-xhy-surface="diet"] body.is-day-view .day-ai-panel .diary-chat { padding-block:16px; }
+html[data-xhy-theme][data-xhy-surface="diet"] body.is-day-view .nutrition-details { background:transparent !important; }
+@media(max-width:760px){
+  html[data-xhy-theme][data-xhy-surface="diet"] body .sidebar { min-height:44px; }
+  html[data-xhy-theme][data-xhy-surface="diet"] body .nav-button { min-height:44px; font-size:13px; }
+  html[data-xhy-theme][data-xhy-surface="diet"] body .sidebar-tools { gap:14px; }
+  html[data-xhy-theme][data-xhy-surface="diet"] body .sidebar-tools :is(button,label) { font-size:12px; padding-block:5px; min-height:34px; }
+  html[data-xhy-theme][data-xhy-surface="diet"] body .main-content { padding-block:10px 12px; }
+  html[data-xhy-theme][data-xhy-surface="diet"] body .hero { top:10px; }
+  html[data-xhy-theme][data-xhy-surface="diet"] body .month-calendar { padding-block:11px; }
+  html[data-xhy-theme][data-xhy-surface="diet"] body .month-day-meta { font-size:11px !important; }
+  html[data-xhy-theme][data-xhy-surface="diet"] body .month-weekday { font-size:12px !important; }
+  html[data-xhy-theme][data-xhy-surface="diet"] body.is-day-view .daily-stats>.stat-card { padding:10px 8px; }
+  html[data-xhy-theme][data-xhy-surface="diet"] body.is-day-view .stat-value { font-size:22px; }
+  html[data-xhy-theme][data-xhy-surface="diet"] body.is-day-view :is(.stat-label,.stat-unit) { font-size:11px !important; }
+  html[data-xhy-theme][data-xhy-surface="diet"] body.is-day-view .stat-detail { font-size:10px !important; }
+  html[data-xhy-theme][data-xhy-surface="diet"] body.is-day-view .selected-date-row p { font-size:12px !important; }
+  html[data-xhy-theme][data-xhy-surface="diet"] body .meal-summary-kcal small { font-size:10px !important; }
+  html[data-xhy-theme][data-xhy-surface="diet"] body.is-day-view .day-ai-hint { font-size:11px; }
+}
+
+/* Match the shell's compact type and spacing across the embedded applications. */
+html[data-xhy-theme]{--motion-ease:cubic-bezier(.22,1,.36,1);--motion-fast:160ms;--motion-page:260ms;--xhy-font:-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif}
+html[data-xhy-theme] body{font-family:var(--xhy-font);font-size:14px;line-height:1.5}
+html[data-xhy-theme] body :is(h1,h2,h3,.hero h2,.record-page-heading h2){font-family:var(--xhy-font);font-weight:600;letter-spacing:-.3px}
+html[data-xhy-theme] body h1{font-size:30px;line-height:1.2}
+html[data-xhy-theme] body :is(.stat-label,.stat-detail,.stat-unit,.subtle-label,.meal-type,.meal-meta,.meal-time,.meal-note,.meal-footer,.food-amount,.food-kcal,.weight-basis,.coverage-note,.card-footnote,.source-note,.nutrition-method-note,.view-intro,.chat-storage,.chat-privacy,.chat-composer-actions>span,.chat-message strong,.chat-date-label,.reference-note,.reference-meta,.calendar-legend,.metric-label,.price-caption,.metric small,.daily-prices span,.small-label,.rule-note,.form-status,.latest-alert,.email-description,.email-help,.email-delivery,.email-field label,.email-field small,.valuation-note,.monitor-pill,.status-badge,.combined-state,.combined-source-state,.combined-source-state time,.combined-total>span,.combined-total>p,.combined-source>div>span,.combined-source small,.combined-pnl>label,.combined-pnl>small,.combined-goal-note,.combined-footer,.combined-readout,.combined-day-pnl>span,.combined-day-pnl>small,.combined-milestones span,.btc-cost-state,.btc-cost-total>span,.btc-cost-quantity>span,.btc-cost-total>small,.btc-cost-quantity>small,.btc-cost-daily>small,.btc-cost-daily-head>span,.btc-cost-daily-head>small,.btc-cost-footer,.portfolio-state,.portfolio-source,.portfolio-source small,.portfolio-total-unit>span,.portfolio-footer,.portfolio-help,.portfolio-config-actions small,.okx-state,.okx-help,.okx-fields label,.okx-fields small,.okx-config-actions>span,.subtitle,.label,.quote-box small,.pnl-box small,.pnl-dates,.wallet-sync,.wallet-notes,.chart-sub,.chart-bottom,.fact .label,.bottom,.details-note,.notes,.milestone-state,.goal-detail,.milestone-next){font-size:12px !important;line-height:1.5}
+html[data-xhy-theme] body :is(th,td,.food-table th,.food-table td,.trend-table th,.trend-table td,.portfolio-legend table){font-size:13px;line-height:1.5}
+html[data-xhy-theme] body :is(.food-name,.food-table small,.food-item-note,.item-detail,.item-detail summary,.item-detail p,.meal-actions button,.month-weekday,.month-day-meta,.weekday,.chart-day,.chart-value,.combined-source strong,.combined-total>small,.combined-empty,.portfolio-fields label,.portfolio-legend thead th,.history-count,.address-row,.address-row a,.badge,.status,.fact strong small,.goal-detail strong,.tt-date,.tt-row){font-size:12px !important;line-height:1.5}
+html[data-xhy-theme] body :is(button,input,select,textarea,.threshold-field,.record-method,.food-row,.chat-message,.day-ai-toggle,.nutrition-details,.portfolio-tabs,.tooltip){border-radius:8px}
+html[data-xhy-theme] body :is(.button,.primary-button,.secondary-button){min-height:34px;font-size:13px}
+html[data-xhy-theme] body :is(th,td,.food-table th,.food-table td,.trend-table th,.trend-table td,.portfolio-legend th,.portfolio-legend td){padding-block:8px}
+html[data-xhy-theme] body :is(.price-chart,.combined-chart,.plot) text{font-family:var(--xhy-font);font-size:14px}
+
+html[data-xhy-theme][data-xhy-surface="diet"] body .sidebar{min-height:44px}
+html[data-xhy-theme][data-xhy-surface="diet"] body .nav-button{min-height:44px;font-size:13px}
+html[data-xhy-theme][data-xhy-surface="diet"] body .sidebar-tools :is(button,label){font-size:12px;min-height:34px;padding-block:5px}
+html[data-xhy-theme][data-xhy-surface="diet"] body .main-content{padding-block:10px 12px}
+html[data-xhy-theme][data-xhy-surface="diet"] body :is(.card-heading h3,.record-form .dialog-header h3,.diary-chat-heading h3){font-size:17px}
+html[data-xhy-theme][data-xhy-surface="diet"] body .record-page-heading h2{font-size:28px}
+html[data-xhy-theme][data-xhy-surface="diet"] body :is(.record-form,.diary-chat){padding-block:18px}
+html[data-xhy-theme][data-xhy-surface="diet"] body .record-method{min-height:68px}
+html[data-xhy-theme][data-xhy-surface="diet"] body .diary-chat-log{gap:12px}
+html[data-xhy-theme][data-xhy-surface="diet"] body .chat-message{line-height:1.65}
+html[data-xhy-theme][data-xhy-surface="diet"] body.is-day-view :is(.stat-label,.stat-unit,.stat-detail,.day-ai-hint){font-size:12px !important}
+html[data-xhy-theme][data-xhy-surface="diet"] body .meal-summary-kcal small{font-size:12px !important}
+
+html[data-xhy-theme][data-xhy-surface="btc"] body .topbar{height:44px;gap:24px}
+html[data-xhy-theme][data-xhy-surface="btc"] body .topbar nav{gap:26px}
+html[data-xhy-theme][data-xhy-surface="btc"] body .hero{padding-block:10px}
+html[data-xhy-theme][data-xhy-surface="btc"] body :is(.chart-panel,.alarm-panel,.email-panel,.alert-history,.combined-wallet,.btc-cost,.crypto-portfolio,.okx-wallet){padding:14px 0;margin-top:12px}
+html[data-xhy-theme][data-xhy-surface="btc"] body .combined-wallet{margin-top:0;padding-top:14px}
+html[data-xhy-theme][data-xhy-surface="btc"] body :is(h2,.wallet-heading h2){font-size:18px}
+html[data-xhy-theme][data-xhy-surface="btc"] body h3{font-size:16px}
+html[data-xhy-theme][data-xhy-surface="btc"] body .price-overview{padding-block:12px;margin-bottom:12px;gap:20px}
+html[data-xhy-theme][data-xhy-surface="btc"] body .price-value{font-size:30px;margin-top:4px;font-weight:550}
+html[data-xhy-theme][data-xhy-surface="btc"] body .metric>strong{font-size:23px;margin:5px 0}
+html[data-xhy-theme][data-xhy-surface="btc"] body .monitor-grid{gap:20px}
+html[data-xhy-theme][data-xhy-surface="btc"] body .price-chart{height:180px;margin-top:10px}
+html[data-xhy-theme][data-xhy-surface="btc"] body .setting-row{margin-top:9px;font-size:13px}
+html[data-xhy-theme][data-xhy-surface="btc"] body :is(.combined-overview,.btc-cost-overview){margin:12px 0;gap:16px}
+html[data-xhy-theme][data-xhy-surface="btc"] body :is(.combined-total>strong,.btc-cost-total>strong,.portfolio-total-unit strong){font-size:28px;font-weight:550;margin-top:5px}
+html[data-xhy-theme][data-xhy-surface="btc"] body :is(.combined-pnl>strong,.btc-cost-daily>strong){font-size:24px;margin-top:5px}
+html[data-xhy-theme][data-xhy-surface="btc"] body .combined-source+.combined-source{margin-top:10px}
+html[data-xhy-theme][data-xhy-surface="btc"] body :is(.combined-sources,.combined-pnl,.btc-cost-quantity,.btc-cost-daily){padding-left:16px}
+html[data-xhy-theme][data-xhy-surface="btc"] body :is(.combined-goal,.portfolio-settings){padding:12px 0}
+html[data-xhy-theme][data-xhy-surface="btc"] body .combined-goal-track{margin-block:10px}
+html[data-xhy-theme][data-xhy-surface="btc"] body .combined-milestones li{padding-block:6px}
+html[data-xhy-theme][data-xhy-surface="btc"] body :is(.combined-chart-head,.portfolio-chart-head){margin-top:14px;gap:10px;flex-wrap:wrap}
+html[data-xhy-theme][data-xhy-surface="btc"] body .combined-controls{gap:10px;flex-wrap:wrap}
+html[data-xhy-theme][data-xhy-surface="btc"] body .combined-controls button{font-size:12px;min-height:32px;padding:5px 8px}
+html[data-xhy-theme][data-xhy-surface="btc"] body :is(.combined-chart,.combined-chart svg){min-height:180px;height:180px}
+html[data-xhy-theme][data-xhy-surface="btc"] body .combined-chart{margin-top:10px}
+html[data-xhy-theme][data-xhy-surface="btc"] body .combined-day-pnl{margin-top:5px}
+html[data-xhy-theme][data-xhy-surface="btc"] body .combined-day-pnl>strong{font-size:20px}
+html[data-xhy-theme][data-xhy-surface="btc"] body .combined-lifetime{margin:0 0 4px;padding:10px 0;background:transparent !important}
+html[data-xhy-theme][data-xhy-surface="btc"] body .combined-lifetime-heading h3{font-size:14px;font-family:var(--xhy-font)}
+html[data-xhy-theme][data-xhy-surface="btc"] body :is(.combined-lifetime-method,.combined-lifetime-state,.combined-lifetime-metrics dt,.combined-lifetime-costs dt,.combined-lifetime-details,.combined-lifetime-dates){font-size:12px;line-height:1.5}
+html[data-xhy-theme][data-xhy-surface="btc"] body :is(.combined-lifetime-method,.combined-lifetime-metrics dt,.combined-lifetime-costs dt,.combined-lifetime-details>summary,.combined-lifetime-details>summary>span,.combined-lifetime-quantity,.combined-lifetime-formula,.combined-lifetime-buy-prices dt,.combined-lifetime-assumptions li,.combined-lifetime-dates span){color:var(--xhy-muted) !important}
+html[data-xhy-theme][data-xhy-surface="btc"] body .combined-lifetime-state:not(.stale):not(.unavailable){color:var(--xhy-muted) !important}
+html[data-xhy-theme][data-xhy-surface="btc"] body .combined-lifetime-metrics{margin:8px 0 5px}
+html[data-xhy-theme][data-xhy-surface="btc"] body .combined-lifetime-metrics dd{font-family:var(--xhy-font);font-size:22px;font-weight:550;letter-spacing:-.5px}
+html[data-xhy-theme][data-xhy-surface="btc"] body .combined-lifetime-metrics .combined-lifetime-profit dd{font-weight:650}
+html[data-xhy-theme][data-xhy-surface="btc"] body .combined-lifetime-costs dd{font-family:var(--xhy-font);font-size:13px}
+html[data-xhy-theme][data-xhy-surface="btc"] body .combined-lifetime-buy-prices dd{font-family:var(--xhy-font);font-size:12px}
+html[data-xhy-theme][data-xhy-surface="btc"] body .portfolio-sources{margin-top:10px}
+html[data-xhy-theme][data-xhy-surface="btc"] body .portfolio-totals{gap:12px 18px}
+html[data-xhy-theme][data-xhy-surface="btc"] body .portfolio-content{grid-template-columns:180px minmax(0,1fr);gap:18px}
+html[data-xhy-theme][data-xhy-surface="btc"] body .portfolio-chart{min-height:180px}
+html[data-xhy-theme][data-xhy-surface="btc"] body .portfolio-chart svg{width:180px}
+html[data-xhy-theme][data-xhy-surface="btc"] body :is(.combined-footer,.btc-cost-footer,.portfolio-footer){padding-top:8px;margin-top:10px}
+html[data-xhy-theme][data-xhy-surface="btc"] body .wallet-page .wallet-section{margin-top:14px}
+html[data-xhy-theme][data-xhy-surface="btc"] body .wallet-heading{margin-bottom:10px}
+
+html[data-xhy-theme][data-xhy-surface="wallet"] body :is(.topbar,.hero,.chart-section,.bottom,.details,.wallet-notes){padding-inline:16px}
+html[data-xhy-theme][data-xhy-surface="wallet"] body .hero{padding-block:16px;gap:18px}
+html[data-xhy-theme][data-xhy-surface="wallet"] body .hero h2{font-size:30px;line-height:1.2;margin:7px 0;font-weight:550}
+html[data-xhy-theme][data-xhy-surface="wallet"] body .quote-box strong{font-size:22px;margin-block:7px}
+html[data-xhy-theme][data-xhy-surface="wallet"] body .pnl-box strong{font-size:26px;margin-block:7px}
+html[data-xhy-theme][data-xhy-surface="wallet"] body .address-row{margin:0 16px 14px}
+html[data-xhy-theme][data-xhy-surface="wallet"] body .goal{margin:0 16px 16px;padding-block:12px}
+html[data-xhy-theme][data-xhy-surface="wallet"] body .goal-heading h2{font-size:17px}
+html[data-xhy-theme][data-xhy-surface="wallet"] body .goal-track{margin-block:12px 10px}
+html[data-xhy-theme][data-xhy-surface="wallet"] body .milestones{margin-top:12px;gap:6px}
+html[data-xhy-theme][data-xhy-surface="wallet"] body .milestone{padding:8px 10px;gap:4px;border-radius:8px}
+html[data-xhy-theme][data-xhy-surface="wallet"] body .chart-section{padding-block:16px 12px}
+html[data-xhy-theme][data-xhy-surface="wallet"] body .chart-heading h3{font-size:17px}
+html[data-xhy-theme][data-xhy-surface="wallet"] body .plot{height:220px;margin-top:16px}
+html[data-xhy-theme][data-xhy-surface="wallet"] body .facts{margin-inline:16px;padding-block:12px}
+html[data-xhy-theme][data-xhy-surface="wallet"] body .bottom{padding-block:10px}
+html[data-xhy-theme][data-xhy-surface="wallet"] body .wallet-notes{padding-block:10px;line-height:1.5}
+
+@media(min-width:1100px){
+  html[data-xhy-theme][data-xhy-surface="btc"] body .combined-wallet{display:grid;grid-template-columns:minmax(0,1.8fr) minmax(260px,1fr);grid-template-areas:"heading heading" "message message" "overview overview" "lifetime lifetime" "charthead goal" "chart goal" "readout goal" "footer footer";gap:10px 24px;align-items:start}
+  html[data-xhy-theme][data-xhy-surface="btc"] body .combined-heading{grid-area:heading}
+  html[data-xhy-theme][data-xhy-surface="btc"] body .combined-message{grid-area:message;margin:0}
+  html[data-xhy-theme][data-xhy-surface="btc"] body .combined-overview{grid-area:overview;margin:0 0 4px}
+  html[data-xhy-theme][data-xhy-surface="btc"] body .combined-lifetime{grid-area:lifetime}
+  html[data-xhy-theme][data-xhy-surface="btc"] body .combined-goal{grid-area:goal;padding:12px 0;margin:0}
+  html[data-xhy-theme][data-xhy-surface="btc"] body .combined-chart-head{grid-area:charthead;margin:0;flex-direction:column;align-items:stretch}
+  html[data-xhy-theme][data-xhy-surface="btc"] body .combined-chart{grid-area:chart;margin:0}
+  html[data-xhy-theme][data-xhy-surface="btc"] body .combined-readout{grid-area:readout;margin:0}
+  html[data-xhy-theme][data-xhy-surface="btc"] body .combined-footer{grid-area:footer;margin:0}
+  html[data-xhy-theme][data-xhy-surface="btc"] body .combined-milestones{grid-template-columns:1fr 1fr}
+}
+@media(max-width:760px){
+  html[data-xhy-theme] body :is(.button,.primary-button,.secondary-button){min-height:38px}
+  html[data-xhy-theme][data-xhy-surface="btc"] body :is(.chart-panel,.alarm-panel,.email-panel,.alert-history,.combined-wallet,.btc-cost,.crypto-portfolio,.okx-wallet){padding-block:12px}
+  html[data-xhy-theme][data-xhy-surface="btc"] body .monitor-grid{gap:14px}
+  html[data-xhy-theme][data-xhy-surface="btc"] body :is(.combined-sources,.combined-pnl,.btc-cost-quantity,.btc-cost-daily){padding-left:0}
+  html[data-xhy-theme][data-xhy-surface="btc"] body .portfolio-content{grid-template-columns:1fr;gap:8px}
+  html[data-xhy-theme][data-xhy-surface="btc"] body .portfolio-chart{min-height:150px}
+  html[data-xhy-theme][data-xhy-surface="btc"] body .portfolio-chart svg{width:150px}
+  html[data-xhy-theme][data-xhy-surface="btc"] body .combined-controls{gap:7px}
+  html[data-xhy-theme][data-xhy-surface="btc"] body .combined-controls button{padding-inline:7px}
+  html[data-xhy-theme][data-xhy-surface="btc"] body .combined-lifetime-metrics dd{font-size:20px}
+  html[data-xhy-theme][data-xhy-surface="wallet"] body :is(.topbar,.hero,.chart-section,.bottom,.details,.wallet-notes){padding-inline:12px}
+  html[data-xhy-theme][data-xhy-surface="wallet"] body .hero{padding-block:14px}
+  html[data-xhy-theme][data-xhy-surface="wallet"] body .hero h2{font-size:28px}
+  html[data-xhy-theme][data-xhy-surface="wallet"] body .plot{height:200px}
+}
+@media(prefers-reduced-motion:no-preference){
+  html[data-xhy-theme][data-xhy-surface="diet"] body .meal-disclosure-mark{transition:transform var(--motion-fast) var(--motion-ease) !important}
+  @supports selector(details::details-content) and (interpolate-size:allow-keywords){
+    html[data-xhy-theme][data-xhy-surface="diet"] body .meal-disclosure{interpolate-size:allow-keywords}
+    html[data-xhy-theme][data-xhy-surface="diet"] body .meal-disclosure::details-content{height:0;overflow:clip;opacity:0;transition:height var(--motion-page) var(--motion-ease),content-visibility var(--motion-page) allow-discrete,opacity var(--motion-fast) ease !important}
+    html[data-xhy-theme][data-xhy-surface="diet"] body .meal-disclosure[open]::details-content{height:auto;opacity:1}
+  }
+}

@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#30483b" />
+    <meta name="description" content="食光，将每天吃过的食物、餐食与营养估算，整理成一份属于自己的饮食日记。" />
+    <title>食光 · 我的饮食日记</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <script type="module" src="./app.js"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">跳到日记内容</a>
+    <aside class="sidebar" aria-label="主导航">
+      <a class="brand" href="./" aria-label="食光首页">
+        <span class="brand-icon" aria-hidden="true"><svg viewBox="0 0 36 36" fill="none"><path d="M10 26C9 15 15 8 28 7c1 12-5 20-16 21" fill="currentColor"/><path d="M8 30 23 14" stroke="#f7f6ee" stroke-width="1.7" stroke-linecap="round"/></svg></span>
+        <span><strong>食光<span class="brand-dot">.</span></strong><small>DIET JOURNAL</small></span>
+      </a>
+      <nav class="main-nav">
+        <button class="nav-button active" type="button" data-view="diary" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4.5" width="16" height="16" rx="3"/><path d="M8 3v4m8-4v4M4 10h16m-12 4h3m-3 3h6"/></svg><span>饮食日历</span></button>
+        <button class="nav-button" type="button" data-view="trends"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4v16h16M8 15l4-5 4 2 4-6"/><path d="M16 6h4v4"/></svg><span>饮食趋势</span></button>
+        <button class="nav-button" type="button" data-view="foods"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 9c-7-5-11 4-6 10 2 3 4 1 6 1s4 2 6-1c5-6 1-15-6-10Zm0 0c-1-4 1-6 4-6 1 3-1 5-4 6Z"/></svg><span>食材参考</span></button>
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="sidebar-tools"><button id="export-button" type="button"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3v9m-3-3 3 3 3-3M4 13v4h12v-4"/></svg>导出日记</button><label for="import-input"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 12V3M7 6l3-3 3 3M4 13v4h12v-4"/></svg>导入备份<input id="import-input" type="file" accept="application/json,.json" /></label></div>
+        <p class="sidebar-footer"><span class="status-dot"></span> 日常慢慢记，生活慢慢来</p>
+      </div>
+    </aside>
+
+    <main id="main-content" class="main-content" tabindex="-1">
+      <header class="topbar">
+        <div class="topbar-kicker">我的饮食日记</div>
+        <div class="topbar-actions"><label class="search-box" for="search-input"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5"/><path d="m13 13 4 4"/></svg><input id="search-input" type="search" aria-label="搜索餐食或食材" placeholder="搜索餐食、食材…" autocomplete="off" /></label><span class="profile-avatar" aria-hidden="true">食</span></div>
+      </header>
+
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="hero-copy"><h1 id="hero-title">饮食日历<span>。</span></h1><p class="hero-description">点开一天，看看吃了什么。</p></div>
+        <button id="add-meal-button" class="button button-primary" type="button"><span class="plus-icon" aria-hidden="true">＋</span>记录饮食</button>
+      </section>
+
+      <p id="load-status" class="load-status" role="status">正在打开饮食日记…</p>
+      <aside id="draft-recovery" class="draft-recovery" aria-label="恢复本机草稿" hidden><p id="draft-recovery-message"></p><button id="export-raw-drafts" class="button button-outline" type="button">导出原始草稿</button></aside>
+
+      <section id="view-diary" class="view-panel" aria-label="饮食日历">
+        <section class="month-calendar" aria-label="按日期查看饮食">
+          <div class="month-toolbar">
+            <div class="month-navigation"><button id="calendar-prev" class="calendar-arrow" type="button" aria-label="上个月">‹</button><label class="month-picker" for="calendar-month"><span class="sr-only">选择月份</span><input id="calendar-month" type="month" min="0001-01" max="9999-12" /></label><button id="calendar-next" class="calendar-arrow" type="button" aria-label="下个月">›</button></div>
+            <button id="today-button" class="button button-outline" type="button">今天</button>
+          </div>
+          <div id="calendar-grid" class="month-grid" aria-label="饮食日历"></div>
+          <p class="calendar-legend"><span aria-hidden="true"></span> 有饮食记录 <span class="legend-divider" aria-hidden="true">·</span> 点击日期查看当天</p>
+        </section>
+        <section id="day-detail" class="day-detail" aria-labelledby="selected-date-title" hidden>
+        <div class="selected-date-row"><div><h2 id="selected-date-title" tabindex="-1">这一天的饮食</h2><p id="selected-date-subtitle">一日三餐，慢慢记录。</p></div><div class="day-page-actions"><button id="close-day-detail" class="text-button" type="button">← 返回日历</button><button id="day-search-toggle" class="text-button" type="button" aria-expanded="false" aria-controls="search-input" aria-label="搜索当天餐食">搜索</button><button id="day-add-meal" class="text-button" type="button">＋ 记录饮食</button></div></div>
+        <div id="daily-stats" class="daily-stats" aria-label="当日营养概览"></div>
+        <div class="diary-columns"><div class="diary-main-column"><section class="card meals-panel"><div class="card-heading"><div class="card-heading-title"><span class="section-symbol" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M4 3v5m3-5v5M4 6h3M5.5 8v9M13 3v7h3V3m0 7v7"/></svg></span><h3>这一日的餐食</h3></div><span class="subtle-label">营养数据为估算值</span></div><div id="meal-list" class="meal-list" aria-live="polite"></div></section><div class="day-ai-entry"><button id="day-ai-toggle" class="button button-outline day-ai-toggle" type="button" aria-expanded="false" aria-controls="day-ai-panel" aria-describedby="day-ai-hint">用 AI 修改这一天 <span aria-hidden="true">↗</span></button><p id="day-ai-hint" class="day-ai-hint">用自然语言说明哪一餐、食材或份量需要更正。</p></div><section id="day-ai-panel" class="day-ai-panel" aria-label="修改这一天的饮食" hidden></section></div>
+          <aside class="diary-summary" aria-label="饮食小结"><details class="nutrition-details"><summary>营养与本周小结 <span aria-hidden="true">⌄</span></summary><div class="summary-content"><p id="coverage-note" class="coverage-note"></p><section class="card macro-panel"><div class="card-heading"><h3>今日营养小结</h3><span class="tiny-mark" aria-hidden="true">↗</span></div><div id="daily-macros" class="daily-macros"></div><p class="card-footnote">分量与做法会影响实际数值，<br />把估算当作认识饮食的小参考。</p></section><section class="card week-panel"><div class="card-heading"><div><p class="section-eyebrow">A LITTLE LOOK BACK</p><h3>本周摄入</h3></div><span class="chart-unit">kcal</span></div><div id="weekly-chart" class="weekly-chart" aria-label="本周已吃热量记录"></div></section><div class="sync-note"><span class="sync-icon" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M15 7a6 6 0 0 0-10-2L3 7m0-4v4h4m-2 6a6 6 0 0 0 10 2l2-2m0 4v-4h-4"/></svg></span><p id="sync-note">网站内新增保存在当前浏览器。对话记录会整理进仓库，发布后各设备可查看。</p></div></div></details></aside>
+        </div>
+        </section>
+      </section>
+
+      <section id="view-record" class="record-page" aria-labelledby="record-title" hidden>
+        <button id="record-back" class="text-button record-back" type="button">← 返回日历</button>
+        <div class="record-page-heading"><h2 id="record-title" tabindex="-1">记录饮食</h2><p>选一种顺手的方式，记下一餐或一整天。</p></div>
+        <div class="record-methods" role="tablist" aria-label="选择记录方式">
+          <button id="record-method-natural" class="record-method" type="button" role="tab" data-record-method="natural" aria-controls="record-natural-panel" aria-selected="true"><span class="method-icon" aria-hidden="true">✳</span><span><strong>AI 对话</strong><small>记录、查询或修改任何一天</small></span></button>
+          <button id="record-method-form" class="record-method" type="button" role="tab" data-record-method="form" aria-controls="record-form-panel" aria-selected="false" tabindex="-1"><span class="method-icon" aria-hidden="true">☷</span><span><strong>填写表格</strong><small>逐项填写食材和分量</small></span></button>
+        </div>
+        <div id="record-natural-panel" class="record-panel" role="tabpanel" tabindex="0" aria-labelledby="record-method-natural">
+          <section class="diary-chat" aria-labelledby="diary-chat-title">
+            <div class="diary-chat-heading"><div><p class="section-eyebrow">YOUR FOOD COMPANION</p><h3 id="diary-chat-title">和食光聊聊</h3></div><button id="diary-chat-clear" class="text-button" type="button">新对话</button></div>
+            <p id="diary-chat-storage" class="chat-storage" role="status">正在连接日记…</p>
+            <div id="diary-chat-log" class="diary-chat-log" role="log" aria-live="polite" aria-label="与饮食助手的对话"></div>
+            <div class="chat-examples"><button type="button" data-chat-example="帮我看看10月24日吃了什么">看看某一天</button><button type="button" data-chat-example="把10月24日早餐的牛奶改成200毫升，其他不变">更正一份食材</button><button type="button" data-chat-example="今天晚餐计划吃150克熟米饭">记一顿计划</button></div>
+            <form id="diary-chat-form"><label class="chat-date-label" for="diary-chat-date">未说明日期时记录到<input id="diary-chat-date" type="date" required /></label><label class="sr-only" for="diary-chat-text">告诉 AI 你想记录、查询或更正的饮食</label><textarea id="diary-chat-text" rows="3" maxlength="4000" required placeholder="直接说就好：昨天晚餐的牛排是250克生重，帮我改一下。"></textarea><div class="chat-composer-actions"><span>支持连续追问 · Ctrl + Enter 发送</span><button id="diary-chat-submit" class="button button-primary" type="submit">发送</button></div></form>
+            <p id="diary-chat-status" class="quick-status" role="status" aria-live="polite"></p>
+            <div class="chat-tools"><button id="diary-chat-refresh" class="text-button" type="button">刷新日记</button><button id="diary-chat-sync" class="text-button" type="button" hidden>同步本机草稿</button><button id="diary-chat-undo" class="text-button" type="button" disabled>撤销最近修改</button></div>
+            <p class="chat-privacy">点击发送后，当前饮食记录、对话和食材参考会交由 DeepSeek 处理。修改通过校验后写入本机日记，可撤销最近一次保存。</p>
+          </section>
+          <details class="legacy-quick"><summary>快速口述整理</summary>
+      <section id="quick-entry" class="quick-entry" aria-labelledby="quick-entry-title">
+        <div class="quick-entry-heading"><h3 id="quick-entry-title">说说吃了什么</h3></div>
+        <p class="quick-entry-intro">一餐或全天都可以。自动识别餐次，未提供的分量会粗略估算。</p>
+        <form id="quick-entry-form">
+          <div class="quick-entry-fields"><label for="quick-date">吃饭的日期<input id="quick-date" type="date" required /></label><label for="quick-meal-type">这次记录<select id="quick-meal-type"><option value="auto">自动识别餐次</option><option value="breakfast">早餐</option><option value="lunch">午餐</option><option value="dinner">晚餐</option><option value="snack">加餐</option></select></label></div>
+          <label class="quick-text-label" for="quick-text">今天吃了什么？<span>打字或口述都可以</span></label>
+          <div class="quick-text-wrap"><textarea id="quick-text" rows="4" maxlength="4000" placeholder="比如：今天早餐吃了两个鸡蛋，一杯250毫升牛奶。" aria-describedby="quick-voice-hint quick-count" required></textarea><span id="quick-count" class="quick-count">0 / 4,000</span></div>
+          <div class="quick-examples" aria-label="试填示例"><span>试着这样说</span><button type="button" data-quick-example="meal">一顿早餐 ↗</button><button type="button" data-quick-example="day">一整天 ↗</button></div>
+          <div class="quick-entry-actions"><button id="dictate-button" class="button quick-dictate-button" type="button" aria-pressed="false"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="7" y="2" width="6" height="10" rx="3"/><path d="M4 9v1a6 6 0 0 0 12 0V9m-6 7v3m-3 0h6"/></svg><span>开始口述</span></button><button id="quick-submit" class="button button-primary" type="submit"><span class="quick-submit-label">整理并记录</span><span aria-hidden="true">↗</span></button></div>
+          <p id="quick-voice-hint" class="quick-voice-hint">也可以用手机键盘语音输入。口述结束后可修改文字，再点“整理并记录”。</p>
+          <p class="quick-privacy-note">点击整理后才会提交文字。直接口述由浏览器识别。</p>
+          <div class="quick-result-row"><p id="quick-status" class="quick-status" role="status" aria-live="polite" aria-atomic="true"></p><button id="quick-undo" class="text-button quick-undo" type="button" hidden>撤销这次记录</button></div>
+        </form>
+      </section>
+          </details>
+          <button id="record-view-day" class="button button-outline record-view-day" type="button" hidden>查看记录的日期 <span aria-hidden="true">→</span></button>
+        </div>
+        <div id="record-form-panel" class="record-panel" role="tabpanel" tabindex="0" aria-labelledby="record-method-form" hidden>
+    <section class="meal-dialog record-form" aria-labelledby="meal-dialog-title"><div class="dialog-header"><div><h3 id="meal-dialog-title">填写一餐</h3></div></div><form id="meal-form"><div class="form-grid"><label>日期<input id="entry-date" name="date" type="date" required /></label><label>餐次<select id="entry-type" name="type"><option value="breakfast">早餐</option><option value="lunch">午餐</option><option value="dinner">晚餐</option><option value="snack">加餐</option></select></label><label>记录状态<select id="entry-status" name="status"><option value="eaten">已经吃过</option><option value="planned">计划吃</option></select></label></div><label class="form-label">这餐吃了什么<input id="entry-title" name="title" placeholder="给这顿饭起个名字" maxlength="100" required /></label><div class="food-form-heading"><h3>食材与分量</h3><span>可以直接填写大概的数值</span></div><div id="food-rows" class="food-rows"></div><button id="add-food-row" class="add-food-button" type="button">＋ 添加食材</button><label class="form-label note-form-label">想记下的话 <span>选填</span><textarea id="entry-note" name="note" placeholder="口味、做法、饱腹感，或此刻的心情…" rows="3" maxlength="1000"></textarea></label><p class="form-hint">营养数值仅作日常参考。尚未吃过的计划餐不会计入已摄入热量。</p><div class="dialog-actions"><button id="cancel-meal" class="button button-outline" type="button">取消</button><button id="save-meal" class="button button-primary" type="submit">保存这顿饭 <span aria-hidden="true">↗</span></button></div></form></section>
+        </div>
+      </section>
+      <section id="view-trends" class="view-panel" aria-label="饮食趋势" hidden><div class="section-heading"><div><p class="section-eyebrow">PATTERNS IN EVERYDAY LIFE</p><h2>饮食趋势<span class="heading-dot"></span></h2></div></div><p class="view-intro">从每天的一餐一饭，看见自己的饮食习惯。</p><div id="trend-content" class="trend-content"></div></section>
+      <section id="view-foods" class="view-panel" aria-label="食材参考" hidden><div class="section-heading"><div><p class="section-eyebrow">KNOW YOUR FOOD</p><h2>食材参考<span class="heading-dot"></span></h2></div></div><p class="view-intro">整理日记里出现的食材与营养估算，方便下次记录时参考。</p><div id="food-reference" class="food-reference"></div></section>
+      <p class="nutrition-method-note">热量和营养为估算值，仅统计已吃的餐食；未知数值以“—”表示。</p>
+      <footer class="page-footer"><span class="footer-wordmark">食光.</span><p>把吃饭这件小事，放在心上。</p></footer>
+    </main>
+
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  </body>
+</html>

@@ -1,0 +1,597 @@
+{
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "id": "usda-sr-legacy-2018",
+      "name": "USDA FoodData Central SR Legacy（2018年4月）",
+      "url": "https://fdc.nal.usda.gov/download-datasets/",
+      "note": "直接提取官方FoodData_Central_sr_legacy_food_csv_2018-04.zip。所有数值为每100g可食部，能量kcal、其余g；Nutrient IDs：1008、1003、1005、1004、1079、1258。原始数据：https://fdc.nal.usda.gov/fdc-datasets/FoodData_Central_sr_legacy_food_csv_2018-04.zip；说明：https://www.ars.usda.gov/ARSUserFiles/80400525/Data/SR-Legacy/SR-Legacy_Doc.pdf。null表示来源未提供，不等于0。"
+    },
+    {
+      "id": "nongshim-jp-shin-120g",
+      "name": "农心日本官网：辛ラーメン袋麺120g",
+      "url": "https://www.nongshim.co.jp/lineup/lineup01_01.html",
+      "note": "2026-10-25核实。每包120g：500kcal、蛋白质9.8g、碳水81.5g、脂肪15g。fiber及saturatedFat未列明。用户地区版本未确认，仅代表性近似，以实际包装为准。"
+    }
+  ],
+  "foods": [
+    {
+      "id": "rice-cooked",
+      "name": "白米饭",
+      "basis": "每100g可食部；熟重；无盐、无额外油",
+      "unit": "g",
+      "sourceId": "usda-sr-legacy-2018",
+      "fdcId": 169757,
+      "per100": {
+        "kcal": 130,
+        "protein": 2.69,
+        "carbs": 28.17,
+        "fat": 0.28,
+        "fiber": 0.4,
+        "saturatedFat": 0.077
+      },
+      "note": "长粒白米饭近似，实际含水量会影响每100g能量。 USDA原始条目：Rice, white, long-grain, regular, unenriched, cooked without salt."
+    },
+    {
+      "id": "egg-noodles-cooked",
+      "name": "鸡蛋面",
+      "basis": "每100g可食部；煮熟沥水重；无盐、无额外油",
+      "unit": "g",
+      "sourceId": "usda-sr-legacy-2018",
+      "fdcId": 168926,
+      "per100": {
+        "kcal": 138,
+        "protein": 4.54,
+        "carbs": 25.16,
+        "fat": 2.07,
+        "fiber": 1.2,
+        "saturatedFat": 0.419
+      },
+      "note": "普通面条的近似参考；汤、浇头和额外油另计。 USDA原始条目：Noodles, egg, unenriched, cooked, without added salt."
+    },
+    {
+      "id": "egg-boiled",
+      "name": "水煮鸡蛋",
+      "basis": "每100g可食部；煮熟后去壳可食部重量",
+      "unit": "g",
+      "sourceId": "usda-sr-legacy-2018",
+      "fdcId": 173424,
+      "per100": {
+        "kcal": 155,
+        "protein": 12.58,
+        "carbs": 1.12,
+        "fat": 10.61,
+        "fiber": 0,
+        "saturatedFat": 3.267
+      },
+      "note": "未知大小时，1枚可暂按去壳50g估算。 USDA原始条目：Egg, whole, cooked, hard-boiled."
+    },
+    {
+      "id": "milk-whole",
+      "name": "全脂牛奶",
+      "basis": "每100g可食部；液态；每100g，不是每100ml",
+      "unit": "g",
+      "sourceId": "usda-sr-legacy-2018",
+      "fdcId": 172217,
+      "per100": {
+        "kcal": 61,
+        "protein": 3.15,
+        "carbs": 4.78,
+        "fat": 3.27,
+        "fiber": 0,
+        "saturatedFat": 1.865
+      },
+      "note": "参考脂肪约3.25%的全脂牛奶。无包装时250ml可粗略按250g计，实际品牌和密度存在差异。 USDA原始条目：Milk, whole, 3.25% milkfat, without added vitamin A and vitamin D."
+    },
+    {
+      "id": "oats-dry",
+      "name": "原味燕麦片（干）",
+      "basis": "每100g可食部；冲泡前干重；无糖未强化",
+      "unit": "g",
+      "sourceId": "usda-sr-legacy-2018",
+      "fdcId": 173904,
+      "per100": {
+        "kcal": 379,
+        "protein": 13.15,
+        "carbs": 67.7,
+        "fat": 6.52,
+        "fiber": 10.1,
+        "saturatedFat": 1.11
+      },
+      "note": "不能与煮熟燕麦粥按相同重量直接替换。 USDA原始条目：Cereals, oats, regular and quick, not fortified, dry."
+    },
+    {
+      "id": "oats-cooked",
+      "name": "清水燕麦粥",
+      "basis": "每100g可食部；清水煮熟重量；无盐、无糖",
+      "unit": "g",
+      "sourceId": "usda-sr-legacy-2018",
+      "fdcId": 173905,
+      "per100": {
+        "kcal": 71,
+        "protein": 2.54,
+        "carbs": 12,
+        "fat": 1.52,
+        "fiber": 1.7,
+        "saturatedFat": 0.31
+      },
+      "note": "加水比例会明显改变每100g能量。 USDA原始条目：Cereals, oats, regular and quick, unenriched, cooked with water (includes boiling and microwaving), without salt."
+    },
+    {
+      "id": "chicken-breast-cooked",
+      "name": "去皮鸡胸肉",
+      "basis": "每100g可食部；烤熟肉重；去皮可食部",
+      "unit": "g",
+      "sourceId": "usda-sr-legacy-2018",
+      "fdcId": 171477,
+      "per100": {
+        "kcal": 165,
+        "protein": 31.02,
+        "carbs": 0,
+        "fat": 3.57,
+        "fiber": 0,
+        "saturatedFat": 1.01
+      },
+      "note": "采用熟重参考；若用户提供生重，需改用生鸡胸数据。额外油和酱料另计。 USDA原始条目：Chicken, broilers or fryers, breast, meat only, cooked, roasted."
+    },
+    {
+      "id": "pork-tenderloin-cooked",
+      "name": "瘦猪里脊",
+      "basis": "每100g可食部；烤熟肉重；仅瘦肉",
+      "unit": "g",
+      "sourceId": "usda-sr-legacy-2018",
+      "fdcId": 168250,
+      "per100": {
+        "kcal": 143,
+        "protein": 26.17,
+        "carbs": 0,
+        "fat": 3.51,
+        "fiber": 0,
+        "saturatedFat": 1.198
+      },
+      "note": "不适用于五花肉等含脂肪较多的部位。 USDA原始条目：Pork, fresh, loin, tenderloin, separable lean only, cooked, roasted."
+    },
+    {
+      "id": "beef-90lean-cooked",
+      "name": "牛肉（90%瘦肉参考）",
+      "basis": "每100g可食部；熟重；90%瘦肉、10%脂肪的牛肉饼",
+      "unit": "g",
+      "sourceId": "usda-sr-legacy-2018",
+      "fdcId": 171793,
+      "per100": {
+        "kcal": 204,
+        "protein": 25.21,
+        "carbs": 0,
+        "fat": 10.68,
+        "fiber": 0,
+        "saturatedFat": 4.189
+      },
+      "note": "仅为普通牛肉近似，不能代表眼肉。 USDA原始条目：Beef, ground, 90% lean meat / 10% fat, patty, cooked, pan-broiled."
+    },
+    {
+      "id": "tilapia-cooked",
+      "name": "罗非鱼肉",
+      "basis": "每100g可食部；干热熟制；去骨可食部重量",
+      "unit": "g",
+      "sourceId": "usda-sr-legacy-2018",
+      "fdcId": 175177,
+      "per100": {
+        "kcal": 128,
+        "protein": 26.15,
+        "carbs": 0,
+        "fat": 2.65,
+        "fiber": 0,
+        "saturatedFat": 0.94
+      },
+      "note": "作为低脂鱼参考，不适用于三文鱼等高脂鱼。 USDA原始条目：Fish, tilapia, cooked, dry heat."
+    },
+    {
+      "id": "shrimp-cooked",
+      "name": "熟虾仁",
+      "basis": "每100g可食部；熟重；去壳可食部",
+      "unit": "g",
+      "sourceId": "usda-sr-legacy-2018",
+      "fdcId": 175180,
+      "per100": {
+        "kcal": 99,
+        "protein": 23.98,
+        "carbs": 0.2,
+        "fat": 0.28,
+        "fiber": null,
+        "saturatedFat": 0.056
+      },
+      "note": "额外油和酱料另计。USDA未提供膳食纤维值，保留null。 USDA原始条目：Crustaceans, shrimp, cooked."
+    },
+    {
+      "id": "tofu-regular",
+      "name": "普通豆腐",
+      "basis": "每100g可食部；未烹调可食部重量；石膏凝固",
+      "unit": "g",
+      "sourceId": "usda-sr-legacy-2018",
+      "fdcId": 172476,
+      "per100": {
+        "kcal": 76,
+        "protein": 8.08,
+        "carbs": 1.87,
+        "fat": 4.78,
+        "fiber": 0.3,
+        "saturatedFat": 0.691
+      },
+      "note": "豆腐品牌、凝固方式和含水量差异较大。 USDA原始条目：Tofu, raw, regular, prepared with calcium sulfate."
+    },
+    {
+      "id": "potato-boiled",
+      "name": "水煮土豆",
+      "basis": "每100g可食部；去皮煮熟重量；无盐无油",
+      "unit": "g",
+      "sourceId": "usda-sr-legacy-2018",
+      "fdcId": 170440,
+      "per100": {
+        "kcal": 86,
+        "protein": 1.71,
+        "carbs": 20.01,
+        "fat": 0.1,
+        "fiber": 1.8,
+        "saturatedFat": 0.026
+      },
+      "note": "不含调味油。 USDA原始条目：Potatoes, boiled, cooked without skin, flesh, without salt."
+    },
+    {
+      "id": "sweet-potato-boiled",
+      "name": "水煮红薯",
+      "basis": "每100g可食部；去皮煮熟重量",
+      "unit": "g",
+      "sourceId": "usda-sr-legacy-2018",
+      "fdcId": 168484,
+      "per100": {
+        "kcal": 76,
+        "protein": 1.37,
+        "carbs": 17.72,
+        "fat": 0.14,
+        "fiber": 2.5,
+        "saturatedFat": 0.031
+      },
+      "note": "品种和烤制脱水程度会影响能量密度。 USDA原始条目：Sweet potato, cooked, boiled, without skin."
+    },
+    {
+      "id": "broccoli-boiled",
+      "name": "水煮西兰花",
+      "basis": "每100g可食部；煮熟沥水重量；无盐无油",
+      "unit": "g",
+      "sourceId": "usda-sr-legacy-2018",
+      "fdcId": 169967,
+      "per100": {
+        "kcal": 35,
+        "protein": 2.38,
+        "carbs": 7.18,
+        "fat": 0.41,
+        "fiber": 3.3,
+        "saturatedFat": 0.079
+      },
+      "note": "炒制时需另记油。 USDA原始条目：Broccoli, cooked, boiled, drained, without salt."
+    },
+    {
+      "id": "bok-choy-boiled",
+      "name": "水煮小白菜",
+      "basis": "每100g可食部；煮熟沥水重量；无盐无油",
+      "unit": "g",
+      "sourceId": "usda-sr-legacy-2018",
+      "fdcId": 170391,
+      "per100": {
+        "kcal": 12,
+        "protein": 1.56,
+        "carbs": 1.78,
+        "fat": 0.16,
+        "fiber": 1,
+        "saturatedFat": 0.021
+      },
+      "note": "可作为普通绿叶菜的粗略参考；炒制油另计。 USDA原始条目：Cabbage, chinese (pak-choi), cooked, boiled, drained, without salt."
+    },
+    {
+      "id": "banana",
+      "name": "香蕉",
+      "basis": "每100g可食部；生食；去皮可食部重量",
+      "unit": "g",
+      "sourceId": "usda-sr-legacy-2018",
+      "fdcId": 173944,
+      "per100": {
+        "kcal": 89,
+        "protein": 1.09,
+        "carbs": 22.84,
+        "fat": 0.33,
+        "fiber": 2.6,
+        "saturatedFat": 0.112
+      },
+      "note": "未知大小时可按可食部约118g的中等香蕉估算，必须标注份量为估算。 USDA原始条目：Bananas, raw."
+    },
+    {
+      "id": "apple",
+      "name": "苹果",
+      "basis": "每100g可食部；生食；带皮、去核可食部重量",
+      "unit": "g",
+      "sourceId": "usda-sr-legacy-2018",
+      "fdcId": 171688,
+      "per100": {
+        "kcal": 52,
+        "protein": 0.26,
+        "carbs": 13.81,
+        "fat": 0.17,
+        "fiber": 2.4,
+        "saturatedFat": 0.028
+      },
+      "note": "大小未知时应估算可食部重量。 USDA原始条目：Apples, raw, with skin (Includes foods for USDA's Food Distribution Program)."
+    },
+    {
+      "id": "soybean-oil",
+      "name": "大豆油",
+      "basis": "每100g可食部；食用油实际摄入重量",
+      "unit": "g",
+      "sourceId": "usda-sr-legacy-2018",
+      "fdcId": 171411,
+      "per100": {
+        "kcal": 884,
+        "protein": 0,
+        "carbs": 0,
+        "fat": 100,
+        "fiber": 0,
+        "saturatedFat": 15.65
+      },
+      "note": "5g约44kcal；锅中剩余油不一定全部被吃下。 USDA原始条目：Oil, soybean, salad or cooking."
+    },
+    {
+      "id": "mixed-nuts",
+      "name": "混合坚果",
+      "basis": "每100g可食部；干烤、无盐、含花生；每100g可食部",
+      "unit": "g",
+      "sourceId": "usda-sr-legacy-2018",
+      "fdcId": 170585,
+      "per100": {
+        "kcal": 607,
+        "protein": 19.5,
+        "carbs": 22.42,
+        "fat": 53.5,
+        "fiber": 6.4,
+        "saturatedFat": 8.01
+      },
+      "note": "以USDA含花生的无盐干烤混合坚果近似。真实配方、果干比例、裹糖和烘焙油未知，需以包装校正。 USDA原始条目：Nuts, mixed nuts, dry roasted, with peanuts, without salt added."
+    },
+    {
+      "id": "strawberries",
+      "name": "草莓",
+      "basis": "每100g可食部；生食；去蒂可食部重量",
+      "unit": "g",
+      "sourceId": "usda-sr-legacy-2018",
+      "fdcId": 167762,
+      "per100": {
+        "kcal": 32,
+        "protein": 0.67,
+        "carbs": 7.68,
+        "fat": 0.3,
+        "fiber": 2,
+        "saturatedFat": 0.015
+      },
+      "note": "少量仍需估算克重；不含糖浆。 USDA原始条目：Strawberries, raw."
+    },
+    {
+      "id": "blueberries",
+      "name": "蓝莓",
+      "basis": "每100g可食部；生食可食部重量",
+      "unit": "g",
+      "sourceId": "usda-sr-legacy-2018",
+      "fdcId": 171711,
+      "per100": {
+        "kcal": 57,
+        "protein": 0.74,
+        "carbs": 14.49,
+        "fat": 0.33,
+        "fiber": 2.4,
+        "saturatedFat": 0.028
+      },
+      "note": "不含糖浆或其他添加物。 USDA原始条目：Blueberries, raw."
+    },
+    {
+      "id": "black-bread",
+      "name": "黑面包",
+      "basis": "每100g可食部；即食重量；pumpernickel黑麦面包参考",
+      "unit": "g",
+      "sourceId": "usda-sr-legacy-2018",
+      "fdcId": 174918,
+      "per100": {
+        "kcal": 250,
+        "protein": 8.7,
+        "carbs": 47.5,
+        "fat": 3.1,
+        "fiber": 6.5,
+        "saturatedFat": 0.437
+      },
+      "note": "品牌与配方未知，黑面包暂以pumpernickel近似；切片大小不能据名称确定。 USDA原始条目：Bread, pumpernickel."
+    },
+    {
+      "id": "rye-bread",
+      "name": "黑麦面包",
+      "basis": "每100g可食部；即食重量",
+      "unit": "g",
+      "sourceId": "usda-sr-legacy-2018",
+      "fdcId": 172684,
+      "per100": {
+        "kcal": 259,
+        "protein": 8.5,
+        "carbs": 48.3,
+        "fat": 3.3,
+        "fiber": 5.8,
+        "saturatedFat": 0.626
+      },
+      "note": "普通黑麦面包的另一个参考；以实际包装优先。 USDA原始条目：Bread, rye."
+    },
+    {
+      "id": "cheese-slice",
+      "name": "芝士片",
+      "basis": "每100g可食部；即食重量；美式再制干酪参考",
+      "unit": "g",
+      "sourceId": "usda-sr-legacy-2018",
+      "fdcId": 171290,
+      "per100": {
+        "kcal": 371,
+        "protein": 18.13,
+        "carbs": 3.7,
+        "fat": 31.79,
+        "fiber": 0,
+        "saturatedFat": 18.057
+      },
+      "note": "品牌、干酪类型和每片重量未知；以全脂美式再制干酪近似，不能当作具体品牌标签。 USDA原始条目：Cheese, pasteurized process, American, without added vitamin D."
+    },
+    {
+      "id": "cheddar-slice",
+      "name": "切达芝士片",
+      "basis": "每100g可食部；即食重量；切片浓味切达干酪",
+      "unit": "g",
+      "sourceId": "usda-sr-legacy-2018",
+      "fdcId": 170899,
+      "per100": {
+        "kcal": 410,
+        "protein": 24.25,
+        "carbs": 2.13,
+        "fat": 33.82,
+        "fiber": 0,
+        "saturatedFat": 19.368
+      },
+      "note": "仅在确认是切达干酪时使用；品牌可能不同。 USDA原始条目：Cheese, cheddar, sharp, sliced."
+    },
+    {
+      "id": "lettuce",
+      "name": "生菜",
+      "basis": "每100g可食部；生食可食部重量",
+      "unit": "g",
+      "sourceId": "usda-sr-legacy-2018",
+      "fdcId": 169249,
+      "per100": {
+        "kcal": 15,
+        "protein": 1.36,
+        "carbs": 2.87,
+        "fat": 0.15,
+        "fiber": 1.3,
+        "saturatedFat": 0.02
+      },
+      "note": "仅生菜，不含沙拉酱、油、坚果或其他沙拉配料。 USDA原始条目：Lettuce, green leaf, raw."
+    },
+    {
+      "id": "olive-oil",
+      "name": "橄榄油",
+      "basis": "每100g可食部；食用油实际摄入重量",
+      "unit": "g",
+      "sourceId": "usda-sr-legacy-2018",
+      "fdcId": 171413,
+      "per100": {
+        "kcal": 884,
+        "protein": 0,
+        "carbs": 0,
+        "fat": 100,
+        "fiber": 0,
+        "saturatedFat": 13.808
+      },
+      "note": "含油沙拉需单独记录油量，1汤匙的容量或重量可能不同。 USDA原始条目：Oil, olive, salad or cooking."
+    },
+    {
+      "id": "balsamic-vinegar",
+      "name": "意大利黑醋",
+      "basis": "每100g可食部；液态；每100g重量",
+      "unit": "g",
+      "sourceId": "usda-sr-legacy-2018",
+      "fdcId": 172241,
+      "per100": {
+        "kcal": 88,
+        "protein": 0.49,
+        "carbs": 17.03,
+        "fat": 0,
+        "fiber": null,
+        "saturatedFat": 0
+      },
+      "note": "普通balsamic醋近似，不适用于浓缩黑醋膏；品牌和加糖程度未知。USDA未提供膳食纤维值，保留null。 USDA原始条目：Vinegar, balsamic."
+    },
+    {
+      "id": "shiitake-dried",
+      "name": "干香菇",
+      "basis": "每100g可食部；泡发前干重",
+      "unit": "g",
+      "sourceId": "usda-sr-legacy-2018",
+      "fdcId": 168436,
+      "per100": {
+        "kcal": 296,
+        "protein": 9.58,
+        "carbs": 75.37,
+        "fat": 0.99,
+        "fiber": 11.5,
+        "saturatedFat": 0.225
+      },
+      "note": "泡发后重量含水，不可直接套用干重营养值。 USDA原始条目：Mushrooms, shiitake, dried."
+    },
+    {
+      "id": "mung-bean-sprouts",
+      "name": "绿豆芽（生）",
+      "basis": "每100g可食部；烹调前可食部生重",
+      "unit": "g",
+      "sourceId": "usda-sr-legacy-2018",
+      "fdcId": 169957,
+      "per100": {
+        "kcal": 30,
+        "protein": 3.04,
+        "carbs": 5.94,
+        "fat": 0.18,
+        "fiber": 1.8,
+        "saturatedFat": 0.046
+      },
+      "note": "豆芽种类未确认，暂按绿豆芽；黄豆芽不同。 USDA原始条目：Mung beans, mature seeds, sprouted, raw."
+    },
+    {
+      "id": "mung-bean-sprouts-cooked",
+      "name": "水煮绿豆芽",
+      "basis": "每100g可食部；水煮沥水熟重；无盐无油",
+      "unit": "g",
+      "sourceId": "usda-sr-legacy-2018",
+      "fdcId": 169137,
+      "per100": {
+        "kcal": 21,
+        "protein": 2.03,
+        "carbs": 4.19,
+        "fat": 0.09,
+        "fiber": 0.8,
+        "saturatedFat": 0.025
+      },
+      "note": "若使用生重请选绿豆芽（生）；额外油另计。 USDA原始条目：Mung beans, mature seeds, sprouted, cooked, boiled, drained, without salt."
+    },
+    {
+      "id": "ribeye-raw",
+      "name": "草饲眼肉牛排（生）",
+      "basis": "每100g可食部；生重；去骨、含瘦肉和可分离脂肪",
+      "unit": "g",
+      "sourceId": "usda-sr-legacy-2018",
+      "fdcId": 173975,
+      "per100": {
+        "kcal": 217,
+        "protein": 19.8,
+        "carbs": 0.11,
+        "fat": 15.21,
+        "fiber": 0,
+        "saturatedFat": 6.782
+      },
+      "note": "用USDA澳洲草饲眼肉含脂肪数据近似阿根廷草饲眼肉，未用瘦肉替代。产地、修脂程度和实际脂肪含量仍有差异；煎制油另计，250g生重约543kcal。 USDA原始条目：Beef, Australian, imported, grass-fed, rib, ribeye steak/roast lip-on, boneless, separable lean and fat, raw."
+    },
+    {
+      "id": "shin-ramyun",
+      "name": "农心辛拉面（120g袋装参考）",
+      "basis": "每100g干包装内容物；由日本官网每包120g标签换算",
+      "unit": "g",
+      "sourceId": "nongshim-jp-shin-120g",
+      "fdcId": null,
+      "per100": {
+        "kcal": 416.6667,
+        "protein": 8.1667,
+        "carbs": 67.9167,
+        "fat": 12.5,
+        "fiber": null,
+        "saturatedFat": null
+      },
+      "note": "日本官网120g一包：500kcal、蛋白质9.8g、碳水81.5g、脂肪15g。地区版本和包装尚未确认；美国版120g官网为520kcal，不能混用标签。以用户手中包装优先。日本官网未列膳食纤维和饱和脂肪，保留null。泡面加水不增加热量，额外食材另计；调料或面未吃完时实际摄入可能较少。"
+    }
+  ]
+}

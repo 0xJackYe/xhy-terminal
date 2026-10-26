@@ -1,0 +1,15 @@
+{
+  "name": "shiguang-diet-journal",
+  "version": "1.1.0",
+  "private": true,
+  "type": "module",
+  "description": "食光：每天的食材、餐食与营养估算日记",
+  "scripts": {
+    "dev": "node scripts/serve.mjs",
+    "build": "node scripts/build.mjs",
+    "check": "node scripts/check.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "record": "node scripts/record-day.mjs"
+  },
+  "engines": { "node": ">=20" }
+}

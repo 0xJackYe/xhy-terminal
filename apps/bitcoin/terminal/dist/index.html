@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Bitcoin · 价格警报、期权与钱包</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23bd694d'/%3E%3Ctext x='32' y='47' font-family='serif' font-size='46' fill='%23f4f1e9' text-anchor='middle'%3E%E2%82%BF%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/terminal.css">
+  <link rel="stylesheet" href="/okx-wallet.css">
+  <link rel="stylesheet" href="/combined-wallet.css">
+  <link rel="stylesheet" href="/btc-cost.css">
+  <link rel="stylesheet" href="/crypto-portfolio.css">
+  <script src="/terminal.js" defer></script>
+  <script src="/okx-wallet.js" defer></script>
+  <script src="/combined-wallet.js" defer></script>
+  <script src="/btc-cost.js" defer></script>
+  <script src="/crypto-portfolio.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a href="#alerts" class="brand" aria-label="比特币终端首页"><span class="brand-mark" aria-hidden="true">₿</span><span>Bitcoin</span></a>
+    <nav aria-label="看板导航" id="pageNavigation"><a href="#alerts" class="nav-link" data-page="alerts" aria-current="page" aria-controls="alertsPage">价格警报</a><a href="#options" class="nav-link" data-page="options" aria-controls="optionsPage">期权看板</a><a href="#wallet" class="nav-link" data-page="wallet" aria-controls="walletPage">钱包走势</a></nav>
+  </header>
+  <main class="page">
+    <section class="page-panel" id="alertsPage" aria-labelledby="pageTitle">
+    <section class="hero" id="price-alert" aria-labelledby="pageTitle">
+      <h1 id="pageTitle" class="visually-hidden">价格警报</h1>
+      <div class="hero-state"><span class="status-badge connecting" id="feedBadge"><i></i><span>正在连接行情</span></span><time id="clock">北京时间 —</time></div>
+    </section>
+
+    <div class="notice" id="connectionNotice" role="status" hidden></div>
+    <section class="price-overview" aria-label="BTC 当日行情">
+      <div class="price-primary"><div class="metric-label"><span class="asset-mark">₿</span> Bitcoin <span class="unit">BTC / USDT</span></div><strong class="price-value numeric" id="priceValue">—</strong><div class="price-caption"><span id="priceTime">等待行情</span></div></div>
+      <div class="metric"><span class="metric-label">当日涨跌幅</span><strong class="numeric" id="changeValue">—</strong><small>相对北京时间 00:00</small></div>
+      <div class="metric"><span class="metric-label">当日振幅</span><strong class="numeric" id="rangeValue">—</strong></div>
+      <div class="daily-prices"><div><span>开盘</span><strong class="numeric" id="openValue">—</strong></div><div><span>最高</span><strong class="numeric" id="highValue">—</strong></div><div><span>最低</span><strong class="numeric" id="lowValue">—</strong></div></div>
+    </section>
+
+    <div class="monitor-grid" id="monitorGrid">
+      <section class="chart-panel card" aria-labelledby="chartTitle">
+        <div class="section-heading"><h2 id="chartTitle">价格走势</h2><span class="small-label" id="chartDate">北京时间 · 今日</span></div>
+        <div class="price-chart" id="priceChart"><div class="chart-empty">等待行情</div></div>
+        <div class="chart-footer"><span><i class="line-key"></i>BTC / USDT</span><span id="chartCoverage">当日行情 · 北京时间</span></div>
+      </section>
+      <section class="alarm-panel card" aria-labelledby="alarmTitle">
+        <div class="section-heading"><h2 id="alarmTitle">波动警报</h2><span class="monitor-pill" id="monitorPill">正在读取设置</span></div>
+        <form id="alarmForm">
+          <div class="setting-row"><label for="metricInput">监测指标</label><select id="metricInput" name="metric"><option value="daily_change">当日涨跌幅</option><option value="day_range">当日振幅</option></select></div>
+          <div class="setting-row"><label for="thresholdInput">第一档</label><div class="threshold-field"><input type="number" id="thresholdInput" name="threshold_pct" min="0.1" max="50" step="0.1" value="2.5" required inputmode="decimal"><span>%</span></div></div>
+          <div class="setting-row"><label for="threshold2Input">第二档</label><div class="threshold-field"><input type="number" id="threshold2Input" min="0.1" max="50" step="0.1" value="3.5" placeholder="3.5" inputmode="decimal"><span>%</span></div></div>
+          <div class="setting-row"><label for="threshold3Input">第三档</label><div class="threshold-field"><input type="number" id="threshold3Input" min="0.1" max="50" step="0.1" value="5" placeholder="5" inputmode="decimal"><span>%</span></div></div>
+          <p class="rule-note" id="ruleNote">北京时间 00:00 开盘价 ±2.5% / ±3.5% / ±5%；每方向每档每日一次。</p>
+          <label class="sound-setting"><input type="checkbox" id="soundInput" name="sound" checked><span>本机警报声</span></label>
+          <div class="alarm-actions"><button type="button" class="primary-button" id="monitorButton" disabled>读取设置…</button><button type="submit" class="secondary-button" id="saveSettings" disabled>保存设置</button></div>
+          <div class="form-status" id="settingsStatus" role="status"></div>
+        </form>
+        <div class="notification-actions"><select id="alarmSoundLevel" aria-label="试听铃声档位"><option value="1">第一档铃声</option><option value="2">第二档铃声</option><option value="3">第三档铃声</option></select><button type="button" id="testAlarm" class="text-button">测试后台警报</button><button type="button" id="previewAlarm" class="text-button">浏览器试听</button><button type="button" id="silenceAlarm" class="text-button">停止响铃</button><button type="button" id="desktopNotifications" class="text-button">开启桌面通知</button></div>
+      </section>
+    </div>
+
+    <section class="email-panel card" aria-labelledby="emailTitle">
+      <div class="section-heading"><h2 id="emailTitle">邮件提醒</h2><span class="monitor-pill" id="emailState">正在读取</span></div>
+      <p class="email-description">波动警报触发后发送至 <span class="numeric">oxjackye@qq.com</span>。手机 QQ 邮箱开启新邮件通知后即可接收提醒。</p>
+      <form id="emailForm" autocomplete="off">
+        <div class="email-fields">
+          <div class="email-field"><label for="emailSender">QQ 发件邮箱</label><input id="emailSender" name="email" type="email" value="oxjackye@qq.com" autocomplete="off" spellcheck="false" inputmode="email" maxlength="254" aria-describedby="emailSenderHelp"><small id="emailSenderHelp">首次使用填写邮箱；已配置后可留空沿用。</small></div>
+          <div class="email-field"><label for="emailAuthorization">SMTP 授权码</label><input id="emailAuthorization" name="authorization_code" type="password" autocomplete="off" spellcheck="false" autocapitalize="none" maxlength="128" placeholder="已保存时留空，无需重复填写" aria-describedby="emailAuthorizationHelp"><small id="emailAuthorizationHelp">填写 QQ 邮箱授权码，非邮箱登录密码。提交后清空。</small></div>
+        </div>
+        <div class="email-footer"><label class="sound-setting"><input id="emailEnabled" name="enabled" type="checkbox"><span>启用邮件提醒</span></label><div class="email-actions"><button id="emailSave" type="submit" class="secondary-button" disabled>保存邮件设置</button><button id="emailTest" type="button" class="secondary-button" disabled>发送测试邮件</button><button id="emailRefresh" type="button" class="text-button">刷新状态</button></div></div>
+        <p id="emailStatus" class="form-status" role="status" aria-live="polite"></p>
+      </form>
+      <p id="emailDelivery" class="email-delivery" role="status" aria-live="polite">正在读取邮件发送状态…</p>
+      <details class="email-help"><summary>如何开启手机提醒</summary><p>在 <a href="https://mail.qq.com/" target="_blank" rel="noopener noreferrer">QQ 邮箱</a> 的“设置 → 第三方服务 / IMAP / SMTP”中开启 SMTP 并获取授权码。手机 QQ 邮箱中开启新邮件通知，并允许系统通知。电脑需要保持开机联网；保存设置不会发送测试邮件。</p></details>
+    </section>
+
+    <section class="alert-history card" aria-labelledby="historyTitle">
+      <div class="section-heading"><div class="history-heading"><h2 id="historyTitle">警报记录</h2><span class="history-count" id="historyCount">0</span></div><button class="text-button" id="toggleHistory" type="button" aria-expanded="false" aria-controls="historyBody">展开记录 <span aria-hidden="true">↓</span></button></div>
+      <div class="latest-alert" id="latestAlert">暂无警报</div>
+      <div class="history-body" id="historyBody" hidden><div class="table-scroll"><table><caption class="visually-hidden">比特币价格警报及本机测试记录</caption><thead><tr><th>北京时间</th><th>事件</th><th>幅度</th><th>触发价格 · USDT</th><th>声音状态</th></tr></thead><tbody id="historyRows"><tr><td colspan="5" class="empty-row">暂无记录</td></tr></tbody></table></div></div>
+    </section>
+    </section>
+
+    <section class="page-panel options-page" id="optionsPage" aria-labelledby="optionsPageTitle" hidden>
+      <h1 class="visually-hidden" id="optionsPageTitle">比特币期权看板</h1>
+      <div class="options-frame-wrap"><iframe id="optionsFrame" title="比特币期权报价与盈亏模拟"></iframe></div>
+    </section>
+
+    <section class="page-panel wallet-page" id="walletPage" aria-labelledby="walletTitle" hidden>
+    <section id="combinedWalletPanel" aria-label="比特币合计资产"></section>
+    <section id="btcCostPanel" aria-label="BTC 定投与成本"></section>
+    <section id="cryptoPortfolioPanel" aria-label="加密资产投资组合"></section>
+    <section id="okxWalletPanel" aria-label="欧易连接"></section>
+    <section class="wallet-section" id="wallet-panel" aria-labelledby="walletTitle">
+      <div class="section-heading wallet-heading"><h2 id="walletTitle">钱包走势</h2><div class="wallet-actions"><button type="button" class="secondary-button" id="toggleWallet" aria-expanded="true" aria-controls="walletFrameWrap">收起余额走势</button><button type="button" class="secondary-button" id="focusWallet" aria-pressed="false">专注余额</button></div></div>
+      <div class="wallet-frame-wrap" id="walletFrameWrap"><iframe id="walletFrame" src="/wallet.html" title="比特币余额与市值走势" loading="eager"></iframe></div>
+    </section>
+    </section>
+  </main>
+</body>
+</html>
