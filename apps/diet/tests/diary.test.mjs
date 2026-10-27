@@ -6,10 +6,12 @@ import { join } from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { NUTRIENTS, validDate, estimate, nutritionTotal, dayTotal, validateDay, validateDiary, mergeDays } from '../site/lib.mjs';
+import { createDiaryFixture } from './diary-fixture.mjs';
 
 const execFileAsync = promisify(execFile);
 const readJson = async path => JSON.parse(await readFile(new URL(path, import.meta.url), 'utf8'));
-const [diary, catalog] = await Promise.all([readJson('../data/diary.json'), readJson('../data/foods.json')]);
+const diary = createDiaryFixture();
+const catalog = await readJson('../data/foods.json');
 function baseDay() {
   return {
     date: '2026-10-23', title: '测试日记', note: '',
@@ -130,7 +132,7 @@ test('导入拒绝重复日期、餐食 ID 以及零或负份量', () => {
   }
 });
 
-test('真实记录用 250g 生重草饲眼肉计算约 542.5kcal', () => {
+test('合成记录用 250g 生重草饲眼肉计算约 542.5kcal', () => {
   const day = diary.days.find(item => item.date === '2026-10-24');
   const lunch = day.meals.find(meal => meal.type === 'lunch');
   const ribeye = lunch.items.find(item => item.foodId === 'ribeye-raw');
@@ -162,7 +164,7 @@ test('record CLI 在无效输入时退出失败且不改日记文件（独立临
   await Promise.all([
     copyFile(new URL('../scripts/record-day.mjs', import.meta.url), join(root, 'scripts', 'record-day.mjs')),
     copyFile(new URL('../site/lib.mjs', import.meta.url), join(root, 'site', 'lib.mjs')),
-    copyFile(new URL('../data/diary.json', import.meta.url), join(root, 'data', 'diary.json'))
+    writeFile(join(root, 'data', 'diary.json'), JSON.stringify(createDiaryFixture()))
   ]);
   const diaryPath = join(root, 'data', 'diary.json');
   const before = await readFile(diaryPath);
