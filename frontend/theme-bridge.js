@@ -148,6 +148,14 @@
       });
     };
     win.__xhyDocumentHeight = { announce };
+    // Frames grow to their content, so their own vh is circular. Long lists
+    // size themselves against the top window instead.
+    try {
+      const top = win.top;
+      const syncViewport = () => doc.documentElement.style.setProperty("--xhy-vh", `${top.innerHeight}px`);
+      top.addEventListener("resize", syncViewport);
+      syncViewport();
+    } catch { /* Only same-origin portal frames reach this point. */ }
     new win.ResizeObserver(announce).observe(doc.body);
     new win.MutationObserver(announce).observe(doc.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["hidden", "class", "style"] });
     win.addEventListener("load", announce);
@@ -179,11 +187,15 @@
       root.dataset.xhySurface = /^\/diet(?:\/|$)/.test(doc.location.pathname) ? "diet" : /\/wallet\.html$/.test(doc.location.pathname) ? "wallet" : "btc";
       root.style.colorScheme = theme;
       if (doc.head && !doc.querySelector('link[data-xhy-embed-theme]')) {
-        const sheet = doc.createElement("link");
-        sheet.rel = "stylesheet";
-        sheet.href = "/embed-theme.css";
-        sheet.dataset.xhyEmbedTheme = "";
-        doc.head.append(sheet);
+        // embed-dense.css only applies inside the portal frame: it re-flows each
+        // page so its content fits one window under the shell header.
+        for (const href of ["/embed-theme.css", "/embed-dense.css"]) {
+          const sheet = doc.createElement("link");
+          sheet.rel = "stylesheet";
+          sheet.href = href;
+          sheet.dataset.xhyEmbedTheme = "";
+          doc.head.append(sheet);
+        }
       }
       // Native terminal CSS also uses body.dark. Keep both token systems aligned.
       if (doc.body) doc.body.classList.toggle("dark", theme === "dark");

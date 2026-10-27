@@ -68,7 +68,8 @@ def summarize_day(day, date):
     items = [item for meal in meals for item in meal.get("items", [])]
     return {"date": date, "recorded": bool(meals), "mealCount": len(meals), "itemCount": len(items),
             "totals": nutrient_total(items),
-            "meals": [{key: meal.get(key) for key in ("id", "type", "title", "status")} for meal in meals]}
+            "meals": [{**{key: meal.get(key) for key in ("id", "type", "title", "status")},
+                       "kcal": nutrient_total(meal.get("items", []))["kcal"]} for meal in meals]}
 
 
 def diet_overview(config, today=None):
@@ -126,7 +127,31 @@ def wallet_overview(portfolio, combined):
             "sources": portfolio.get("sources", []), "scopeNote": portfolio.get("scope_note"),
             "thresholdUsd": portfolio.get("threshold_usd"), "excludedUsd": portfolio.get("excluded_usd"),
             "unpricedCurrencies": portfolio.get("unpriced_currencies", []),
-            "liabilitiesUsd": portfolio.get("liabilities_usd"), "conversionQuotes": portfolio.get("conversion_quotes", {})}
+            "liabilitiesUsd": portfolio.get("liabilities_usd"), "conversionQuotes": portfolio.get("conversion_quotes", {}),
+            "pnl": lifetime_summary(combined.get("lifetime_pnl") if isinstance(combined, dict) else None)}
+
+
+def lifetime_summary(lifetime):
+    """Long-term BTC position: moving-average cost against the current price (USDT)."""
+    metrics = lifetime.get("metrics") if isinstance(lifetime, dict) else None
+    if not isinstance(metrics, dict) or not metrics:
+        return None
+    return {"status": lifetime.get("status"), "averageCost": metrics.get("average_cost"),
+            "price": metrics.get("price_usdt"), "unrealized": metrics.get("unrealized_net"),
+            "returnPct": metrics.get("unrealized_return_pct"), "cost": metrics.get("remaining_cost")}
+
+
+def price_chart(history, limit=120):
+    """Downsample the terminal's per-minute history to a small [time_ms, price] series."""
+    points = [[p["time_ms"], p["price"]] for p in history or [] if isinstance(p, dict)
+              and type(p.get("time_ms")) in (int, float) and type(p.get("price")) in (int, float)
+              and math.isfinite(p["time_ms"]) and math.isfinite(p["price"]) and p["price"] > 0]
+    points.sort()
+    step = max(1, math.ceil(len(points) / limit))
+    sampled = points[::step]
+    if points and sampled[-1] is not points[-1]:
+        sampled.append(points[-1])
+    return sampled
 
 
 def alerts_overview(terminal):
@@ -147,6 +172,7 @@ def alerts_overview(terminal):
             "enabled": settings.get("enabled"), "thresholds": settings.get("thresholds_pct", []),
             "metric": settings.get("metric"), "settings": settings,
             "recent": (terminal.get("alerts") or [])[-8:] if terminal else [],
+            "chart": price_chart(terminal.get("history") if terminal else None),
             "storageError": terminal.get("storage_error") if terminal else None}
 
 

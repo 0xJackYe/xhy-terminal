@@ -127,11 +127,6 @@
     return new Intl.DateTimeFormat("en-CA", { timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
   }
 
-  function greeting(now) {
-    const hour = Number(new Intl.DateTimeFormat("en-GB", { timeZone: zone, hour: "2-digit", hourCycle: "h23" }).format(now));
-    return hour < 5 ? "夜深了" : hour < 11 ? "早上好" : hour < 13 ? "中午好" : hour < 18 ? "下午好" : "晚上好";
-  }
-
   function updateClock() {
     const now = new Date();
     $("clock").dateTime = now.toISOString();
@@ -139,8 +134,7 @@
     $("gmt-clock").dateTime = now.toISOString();
     text("gmt-clock", new Intl.DateTimeFormat("en-GB", { timeZone: "UTC", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" }).format(now));
     $("gmt-clock").title = new Intl.DateTimeFormat("zh-CN", { timeZone: "UTC", year: "numeric", month: "2-digit", day: "2-digit" }).format(now) + " · 格林尼治时间 UTC+0";
-    text("today", new Intl.DateTimeFormat("zh-CN", { timeZone: zone, month: "long", day: "numeric", weekday: "long" }).format(now));
-    text("greeting", greeting(now));
+    text("today", new Intl.DateTimeFormat("zh-CN", { timeZone: zone, month: "long", day: "numeric", weekday: "short" }).format(now));
     updateWorkSchedule(now);
   }
 
@@ -165,16 +159,50 @@
     setModuleStatus("diet", diet.status || "offline");
     text("diet-date", (today.date || diet.date || localDate()).replaceAll("-", "."));
     animateNumber("diet-kcal", recorded ? totals.kcal : null);
-    for (const key of ["protein", "carbs", "fat"]) animateNumber(`diet-${key}`, recorded ? totals[key] : null, 1);
+    for (const key of ["protein", "carbs", "fat", "fiber"]) animateNumber(`diet-${key}`, recorded ? totals[key] : null, 1);
     renderMacroSplit(recorded ? totals : {});
     let context = recorded ? `${number(today.mealCount)} 餐已记录${finite(today.itemCount) ? ` · ${number(today.itemCount)} 项食物` : ""}` : "今天还没有饮食记录";
     if (diet.status === "offline") context = recorded ? "显示最近保存的饮食记录" : "暂时无法读取饮食记录";
     text("diet-context", context);
     const week = diet.week || {};
-    text("diet-week-summary", finite(week.recordedDays) ? `${number(week.recordedDays)} / 7 天已记录` : "暂无记录");
-    renderWeek(Array.isArray(week.days) ? week.days : []);
-    text("diet-note", diet.status === "offline" ? "饮食服务暂未连接，可重试同步或独立打开日记。" : "在日记中用自然语言记录或修改饮食。");
+    const weekDays = Array.isArray(week.days) ? week.days : [];
+    const recordedKcal = weekDays.filter((day) => day?.recorded && finite(day.totals?.kcal)).map((day) => Number(day.totals.kcal));
+    const average = recordedKcal.length ? recordedKcal.reduce((sum, value) => sum + value, 0) / recordedKcal.length : null;
+    text("diet-week-summary", finite(week.recordedDays) ? `${number(week.recordedDays)}/7 天${finite(average) ? ` · 日均 ${number(average)} kcal` : ""}` : "暂无记录");
+    renderWeek(weekDays);
+    renderMeals(recorded && Array.isArray(today.meals) ? today.meals : [], diet.status);
+    text("diet-note", diet.status === "offline" ? "饮食服务暂未连接，可刷新或独立打开日记。" : "");
+    $("diet-note").hidden = diet.status !== "offline";
     text("diet-module-updated", `Diet · ${diet.updatedAt ? `更新于 ${timestamp(diet.updatedAt, true)}` : "尚未同步"}`);
+  }
+
+  const mealNames = { breakfast: "早餐", lunch: "午餐", dinner: "晚餐", snack: "加餐" };
+  function renderMeals(meals, status) {
+    const list = $("diet-meals");
+    list.replaceChildren();
+    meals.forEach((meal, index) => {
+      const row = document.createElement("li");
+      row.style.setProperty("--d", index);
+      const type = document.createElement("span");
+      type.className = "meal-type";
+      type.textContent = mealNames[meal?.type] || "餐食";
+      const title = document.createElement("span");
+      title.className = "meal-title";
+      title.textContent = typeof meal?.title === "string" ? meal.title : "";
+      title.title = title.textContent;
+      const kcal = document.createElement("span");
+      kcal.className = "meal-kcal";
+      kcal.textContent = finite(meal?.kcal) ? `${number(meal.kcal)} kcal` : "—";
+      row.append(type, title, kcal);
+      list.append(row);
+    });
+    if (!meals.length) {
+      const empty = document.createElement("li");
+      empty.className = "inline-empty";
+      empty.textContent = status === "offline" ? "饮食服务未连接" : "今天还没有记录餐食";
+      list.append(empty);
+    }
+    text("diet-meal-total", meals.length ? `${number(meals.length)} 餐` : "");
   }
 
   function renderMacroSplit(totals) {
@@ -246,7 +274,10 @@
     text("wallet-btc-label", `BTC 实际持仓${finite(wallet.btcHoldings) && wallet.btcHoldingsStale ? " · 已延迟" : ""}`);
     const list = $("wallet-assets");
     const assets = (Array.isArray(wallet.assets) ? wallet.assets : []).filter((asset) => asset && typeof asset.ccy === "string" && finite(asset.usd_value));
-    const shown = assets.slice(0, 3);
+    const shown = assets.slice(0, 6);
+    renderPnl(wallet.pnl);
+    renderLocations(Array.isArray(wallet.locations) ? wallet.locations : [], wallet);
+    text("wallet-asset-count", assets.length ? `${number(assets.length)} 种${assets.length > shown.length ? ` · 显示前 ${shown.length}` : ""}` : "");
     const total = finite(wallet.totalUsd) && Number(wallet.totalUsd) > 0 ? Number(wallet.totalUsd) : assets.reduce((sum, asset) => sum + Math.max(0, Number(asset.usd_value)), 0);
     const signature = shown.map((asset) => asset.ccy).join("|");
     // Rebuild rows only when the set of coins changes; otherwise update in place.
@@ -294,6 +325,85 @@
     text("wallet-module-updated", `加密钱包 · ${wallet.updatedAt ? `更新于 ${timestamp(wallet.updatedAt, true)}` : "尚未同步"}`);
   }
 
+  function renderPnl(pnl) {
+    const metrics = pnl && typeof pnl === "object" ? pnl : {};
+    text("wallet-avg-cost", finite(metrics.averageCost) ? number(metrics.averageCost, 2) : "—");
+    const unrealized = $("wallet-unrealized"), ratio = $("wallet-return");
+    const sign = (value) => finite(value) ? Number(value) > 0 ? "positive" : Number(value) < 0 ? "negative" : "" : "";
+    unrealized.className = sign(metrics.unrealized);
+    unrealized.textContent = finite(metrics.unrealized) ? `${Number(metrics.unrealized) > 0 ? "+" : ""}${number(metrics.unrealized, 2)}` : "—";
+    ratio.className = sign(metrics.returnPct);
+    ratio.textContent = finite(metrics.returnPct) ? `${Number(metrics.returnPct) > 0 ? "+" : ""}${number(metrics.returnPct, 2)}%` : "—";
+  }
+
+  const locationColors = { offline: "var(--accent)", okx: "var(--text)", binance: "var(--amber)" };
+  function renderLocations(locations, wallet) {
+    const rows = locations.filter((row) => row && typeof row.label === "string" && finite(row.usd_value) && Number(row.usd_value) > 0);
+    const total = rows.reduce((sum, row) => sum + Number(row.usd_value), 0);
+    const split = $("wallet-locations");
+    const legend = $("wallet-location-legend");
+    if (split.dataset.signature !== rows.map((row) => row.id).join("|")) {
+      split.dataset.signature = rows.map((row) => row.id).join("|");
+      split.replaceChildren(...rows.map((row) => {
+        const segment = document.createElement("span");
+        segment.style.background = locationColors[row.id] || "var(--faint)";
+        return segment;
+      }));
+    }
+    rows.forEach((row, index) => {
+      const segment = split.children[index];
+      requestAnimationFrame(() => { segment.style.width = `calc((100% - ${(rows.length - 1) * 2}px) * ${Number(row.usd_value) / total})`; });
+    });
+    legend.replaceChildren(...rows.map((row) => {
+      const item = document.createElement("li");
+      item.style.setProperty("--c", locationColors[row.id] || "var(--faint)");
+      const label = document.createElement("span");
+      label.textContent = row.label;
+      const value = document.createElement("strong");
+      value.textContent = money(row.usd_value, 0);
+      const share = document.createElement("small");
+      share.textContent = `${number(Number(row.usd_value) / total * 100, 1)}%`;
+      value.append(share);
+      item.append(label, value);
+      return item;
+    }));
+    if (!rows.length) {
+      const empty = document.createElement("li");
+      empty.className = "inline-empty";
+      empty.textContent = wallet.status === "offline" ? "钱包服务未连接" : "暂无可核实的存放位置";
+      legend.append(empty);
+    }
+    const sources = Array.isArray(wallet.sources) ? wallet.sources.filter((source) => source && typeof source === "object") : [];
+    const connected = sources.filter((source) => source.status === "connected").length;
+    text("wallet-location-note", sources.length ? `${connected}/${sources.length} 个来源已连接` : "");
+  }
+
+  let sparkDrawn = false;
+  function renderSparkline(points, open) {
+    const chart = $("alerts-chart");
+    const valid = (Array.isArray(points) ? points : []).filter((point) => Array.isArray(point) && finite(point[0]) && finite(point[1]));
+    chart.dataset.empty = String(valid.length < 2);
+    if (valid.length < 2) { text("alerts-chart-caption", ""); return; }
+    const times = valid.map((point) => Number(point[0])), prices = valid.map((point) => Number(point[1]));
+    const low = Math.min(...prices, ...(finite(open) ? [Number(open)] : [])), high = Math.max(...prices, ...(finite(open) ? [Number(open)] : []));
+    const span = high - low || 1, start = times[0], width = times[times.length - 1] - start || 1;
+    const x = (time) => ((time - start) / width * 300).toFixed(1);
+    const y = (price) => (76 - (price - low) / span * 72).toFixed(1);
+    const line = valid.map((point, index) => `${index ? "L" : "M"}${x(Number(point[0]))},${y(Number(point[1]))}`).join("");
+    const svg = chart.querySelector("svg");
+    svg.querySelector(".spark-line").setAttribute("d", line);
+    svg.querySelector(".spark-area").setAttribute("d", `${line}L300,80L0,80Z`);
+    const openLine = svg.querySelector(".spark-open");
+    openLine.style.display = finite(open) ? "" : "none";
+    if (finite(open)) { openLine.setAttribute("y1", y(Number(open))); openLine.setAttribute("y2", y(Number(open))); }
+    chart.dataset.trend = finite(open) ? prices[prices.length - 1] >= Number(open) ? "up" : "down" : "flat";
+    const hours = (times[times.length - 1] - start) / 3600000;
+    text("alerts-chart-caption", `近 ${hours >= 1 ? `${number(hours, 0)} 小时` : `${number(hours * 60, 0)} 分钟`}${finite(open) ? " · 虚线为开盘价" : ""}`);
+    // Draw the line in once; later refreshes just update the shape.
+    if (!sparkDrawn && !reducedMotion.matches) { chart.dataset.draw = "true"; sparkDrawn = true; }
+    else chart.dataset.draw = "false";
+  }
+
   function flashPrice(previous, next) {
     if (!finite(previous) || !finite(next) || Number(previous) === Number(next) || reducedMotion.matches) return;
     const metric = $("alerts-price").parentElement;
@@ -316,6 +426,9 @@
     text("alerts-threshold-label", rangeMode ? "当日振幅警报" : "当日涨跌幅警报");
     text("alerts-low", money(alerts.dayLow));
     text("alerts-high", money(alerts.dayHigh));
+    text("alerts-open", money(alerts.dayOpen));
+    renderRecentAlerts(Array.isArray(alerts.recent) ? alerts.recent : [], alerts.status);
+    renderSparkline(alerts.chart, alerts.dayOpen);
     const range = $("alerts-range");
     const hasRange = finite(alerts.price) && finite(alerts.dayLow) && finite(alerts.dayHigh) && Number(alerts.dayHigh) > Number(alerts.dayLow);
     range.dataset.ready = String(hasRange);
@@ -344,6 +457,40 @@
     renderMeter(thresholds, current);
     text("alerts-note", alerts.status === "offline" ? "行情服务暂未连接，可独立打开检查连接。" : alerts.stale || alerts.status === "stale" ? "行情已延迟，当前价格为最近一次收到的数据。" : enabled === false ? "价格警报已暂停，可在警报页重新开启。" : rangeMode ? "当日振幅 =（最高价 − 最低价）÷ 今日开盘价。" : "以北京时间 00:00 为当日涨跌幅基准。");
     text("alerts-module-updated", `Binance Spot · ${alerts.updatedAt ? `更新于 ${timestamp(alerts.updatedAt, true)}` : "尚未同步"}`);
+  }
+
+  function renderRecentAlerts(recent, status) {
+    const list = $("alerts-recent");
+    list.replaceChildren();
+    const rows = recent.filter((alert) => alert && typeof alert === "object").slice(-4).reverse();
+    rows.forEach((alert, index) => {
+      const row = document.createElement("li");
+      row.style.setProperty("--d", index);
+      const time = document.createElement("span");
+      time.className = "alert-time";
+      const at = finite(alert.at_ms) ? new Date(Number(alert.at_ms)) : null;
+      time.textContent = at ? new Intl.DateTimeFormat("zh-CN", { timeZone: zone, month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(at) : "—";
+      const range = alert.metric === "day_range" || alert.metric === "amplitude";
+      const value = range ? alert.range_pct : alert.change_pct;
+      const change = document.createElement("span");
+      change.className = `alert-change${!range && finite(value) ? Number(value) >= 0 ? " positive" : " negative" : ""}`;
+      change.textContent = finite(value) ? `${!range && Number(value) > 0 ? "+" : ""}${number(value, 2)}%` : "—";
+      const tier = document.createElement("span");
+      tier.className = "alert-tier";
+      tier.textContent = finite(alert.threshold_pct) ? `${number(alert.threshold_pct, 2)}% 档${alert.kind === "test" ? " · 测试" : ""}` : alert.kind === "test" ? "测试警报" : "";
+      const price = document.createElement("span");
+      price.className = "alert-price";
+      price.textContent = money(alert.price);
+      row.append(time, change, tier, price);
+      list.append(row);
+    });
+    if (!rows.length) {
+      const empty = document.createElement("li");
+      empty.className = "inline-empty";
+      empty.textContent = status === "offline" ? "行情服务未连接" : "暂无警报记录";
+      list.append(empty);
+    }
+    text("alerts-recent-count", recent.length ? `共 ${number(recent.length)} 条` : "");
   }
 
   function renderMeter(thresholds, current) {
@@ -386,7 +533,7 @@
     const btcService = data.services?.btc || {};
     setSource("diet", dietService.status || data.diet?.status || "offline", data.diet?.updatedAt);
     setSource("btc", btcService.status || data.alerts?.status || data.wallet?.status || "offline", latestDate([data.wallet?.updatedAt, data.alerts?.updatedAt]));
-    text("last-sync", `总览同步于 ${timestamp(data.updatedAt || state.lastSuccess, true)} · 北京时间`);
+    text("last-sync", `总览同步于 ${timestamp(data.updatedAt || state.lastSuccess, true)} · 北京时间 · 每分钟自动刷新`);
     updateConnection();
     updateProjectHint();
   }
@@ -625,15 +772,16 @@
     if (changed) {
       window.XHYMotion?.cancelAll();
       // Overview cards run their own staggered entrance whenever they are shown.
-      window.XHYMotion?.enter(document.querySelector(".page-heading"), { y: 6, duration: 360 });
       if (next !== "overview") window.XHYMotion?.enter($("project-view"), { y: 10, duration: 420 });
     }
   }
 
-  const header = $("site-header");
-  const markScrolled = () => { header.dataset.scrolled = String(scrollY > 4); };
-  addEventListener("scroll", markScrolled, { passive: true });
-  markScrolled();
+  // The connection popover closes like a menu: outside click or Escape.
+  const syncMenu = $("sync-menu");
+  document.addEventListener("click", (event) => { if (syncMenu.open && !syncMenu.contains(event.target)) syncMenu.open = false; });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && syncMenu.open) { syncMenu.open = false; $("connection").focus(); }
+  });
 
   $("theme-toggle").addEventListener("click", toggleTheme);
   preferredTheme.addEventListener("change", (event) => {

@@ -75,6 +75,31 @@ class OverviewTests(unittest.TestCase):
         self.assertEqual(result["totalBtc"], "0.9")
         self.assertEqual(result["btcHoldings"], "0.5")
         self.assertTrue(result["btcHoldingsStale"])
+        self.assertIsNone(result["pnl"])
+
+    def test_today_lists_eaten_meals_with_their_energy(self):
+        with patch("server.safe_read", return_value=None):
+            result = server.diet_overview(self.config, dt.date(2026, 10, 24))
+        self.assertEqual([(m["title"], m["kcal"]) for m in result["today"]["meals"]], [("午餐", 100)])
+
+    def test_long_term_position_summarizes_the_cost_basis_metrics(self):
+        lifetime = {"status": "fresh", "metrics": {"average_cost": "58000", "price_usdt": "67000",
+                    "unrealized_net": "900", "unrealized_return_pct": "15.5", "remaining_cost": "5800"}}
+        pnl = server.wallet_overview({"complete": True, "stale": False}, {"lifetime_pnl": lifetime})["pnl"]
+        self.assertEqual(pnl, {"status": "fresh", "averageCost": "58000", "price": "67000",
+                               "unrealized": "900", "returnPct": "15.5", "cost": "5800"})
+        self.assertIsNone(server.lifetime_summary({"status": "loading", "metrics": {}}))
+
+    def test_price_chart_is_sorted_downsampled_and_keeps_the_latest_point(self):
+        history = [{"time_ms": 1000 * i, "price": 100 + i} for i in reversed(range(500))]
+        history.append({"time_ms": "bad", "price": 1})
+        points = server.price_chart(history, limit=120)
+        self.assertLessEqual(len(points), 121)
+        self.assertEqual(points[0], [0, 100])
+        self.assertEqual(points[-1], [499000, 599])
+        self.assertEqual(points, sorted(points))
+        self.assertEqual(server.price_chart(None), [])
+        self.assertEqual(server.alerts_overview(None)["chart"], [])
 
 
 class ProxyTests(unittest.TestCase):

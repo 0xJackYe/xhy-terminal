@@ -432,7 +432,7 @@ function renderCalendar() {
     const planned = day?.meals.filter(m => m.status === 'planned').length ?? 0;
     const active = detailOpen && date === selected;
     const description = [eaten ? `${eaten}餐已吃` : '', planned ? `${planned}餐计划` : ''].filter(Boolean).join('，') || '未记录';
-    return `<button type="button" class="month-day ${active ? 'is-selected' : ''} ${eaten || planned ? 'has-record' : ''} ${date === today() ? 'is-today' : ''}" data-calendar-date="${date}" aria-controls="day-detail" aria-label="${date} ${description}"><span class="month-day-number">${i + 1}</span><span class="month-day-meta">${eaten ? `${eaten}餐已吃` : planned ? `${planned}餐计划` : ''}</span></button>`;
+    return `<button type="button" class="month-day ${active ? 'is-selected' : ''} ${eaten || planned ? 'has-record' : ''} ${date === today() ? 'is-today' : ''}" data-calendar-date="${date}" aria-controls="day-detail" aria-label="${date} ${description}"><span class="month-day-number">${i + 1}</span><span class="month-day-meta">${eaten ? `${eaten}餐已吃` : planned ? `${planned}餐计划` : ''}</span>${eaten && dayTotal(day).kcal != null ? `<span class="month-day-kcal">${fmt(dayTotal(day).kcal)} kcal</span>` : ''}</button>`;
   }).join('');
 }
 function changeMonth(offset) {

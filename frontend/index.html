@@ -13,90 +13,94 @@
   <div class="header-inner">
     <a class="wordmark" href="#overview" aria-label="XHY 个人终端首页"><span class="wordmark-prompt" aria-hidden="true">~/</span>xhy<span class="wordmark-caret" aria-hidden="true"></span></a>
     <nav class="navigation segmented" aria-label="主导航"><a href="#overview" data-nav="overview" aria-current="page">总览</a><a href="#diet" data-nav="diet">饮食日记</a><a href="#wallet" data-nav="wallet">加密资产</a></nav>
-    <button id="theme-toggle" class="icon-button theme-toggle" type="button" aria-label="切换明暗模式" aria-pressed="false">
-      <svg class="theme-icon" viewBox="0 0 24 24" aria-hidden="true">
-        <mask id="theme-icon-mask"><rect width="24" height="24" fill="#fff"/><circle class="theme-icon-cut" cx="24" cy="4" r="7" fill="#000"/></mask>
-        <circle class="theme-icon-core" cx="12" cy="12" r="5" mask="url(#theme-icon-mask)" fill="currentColor"/>
-        <g class="theme-icon-rays" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 2.5v2M12 19.5v2M21.5 12h-2M4.5 12h-2M18.7 5.3l-1.4 1.4M6.7 17.3l-1.4 1.4M18.7 18.7l-1.4-1.4M6.7 6.7L5.3 5.3"/></g>
-      </svg>
-      <span id="theme-label" class="sr-only">白天模式</span>
-    </button>
-  </div>
-</header>
-<div class="utility-line" aria-label="时间与工作班次">
-  <div class="world-clocks" aria-label="世界时钟"><span class="clock"><span class="clock-label">北京</span><time id="clock">--:--:--</time></span><span class="clock"><span class="clock-label">GMT</span><time id="gmt-clock" title="格林尼治时间 UTC+0">--:--:--</time></span></div>
-  <div class="schedule-current"><span id="work-dot" class="status-dot" data-working="false" aria-hidden="true"></span><span id="work-status">休息时间</span><span id="work-countdown" class="work-countdown">--</span></div>
-  <div class="shift-toggle segmented segmented-small" role="group" aria-label="北京时间工作班次"><button type="button" data-shift="summer" aria-pressed="true">夏季 23–07</button><button type="button" data-shift="winter" aria-pressed="false">冬季 00–08</button></div>
-</div>
-<main id="main" tabindex="-1">
-  <div class="page-heading">
-    <div class="heading-text"><p class="eyebrow"><span id="greeting">你好</span><span class="eyebrow-sep" aria-hidden="true">·</span><span id="today"></span></p><h1 id="page-title" tabindex="-1">总览</h1><p id="page-description" class="page-description">饮食、资产与比特币行情。</p></div>
-    <div class="heading-actions">
-      <span class="sync-status" id="connection" data-status="loading"><span class="status-dot" aria-hidden="true"></span><span id="connection-text">正在同步</span></span>
-      <button id="refresh" type="button" class="pill-button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v4.5h-4.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>刷新</span></button>
-      <span id="project-actions" class="project-actions" hidden><button class="pill-button" id="reload-project" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v4.5h-4.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>重新加载</span></button><a class="pill-button" id="open-project" href="/diet/" target="_blank" rel="noopener noreferrer"><span>独立打开</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 16L16 8M9.5 8H16v6.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></a></span>
+    <div class="utility" aria-label="时间与工作班次">
+      <span class="today-label" id="today"></span>
+      <span class="clock"><span class="clock-label">北京</span><time id="clock">--:--:--</time></span>
+      <span class="clock clock-gmt"><span class="clock-label">GMT</span><time id="gmt-clock" title="格林尼治时间 UTC+0">--:--:--</time></span>
+      <span class="schedule-current"><span id="work-dot" class="status-dot" data-working="false" aria-hidden="true"></span><span id="work-status">休息时间</span><span id="work-countdown" class="work-countdown">--</span></span>
+      <span class="shift-toggle segmented segmented-small" role="group" aria-label="北京时间工作班次"><button type="button" data-shift="summer" aria-pressed="true">夏 23–07</button><button type="button" data-shift="winter" aria-pressed="false">冬 00–08</button></span>
+    </div>
+    <div class="header-actions">
+      <details class="sync-menu" id="sync-menu">
+        <summary class="sync-status" id="connection" data-status="loading" title="连接详情"><span class="status-dot" aria-hidden="true"></span><span id="connection-text">正在同步</span></summary>
+        <div class="sync-popover">
+          <p class="sync-popover-title" id="last-sync">等待数据同步</p>
+          <div class="source-row"><strong>饮食日记</strong><span id="diet-source-state" class="source-state">读取中</span><span id="diet-updated">尚未同步</span><a id="diet-source-link" href="/diet/" target="_blank" rel="noopener noreferrer">独立打开 ↗</a></div>
+          <div class="source-row"><strong>钱包与警报</strong><span id="btc-source-state" class="source-state">读取中</span><span id="btc-updated">尚未同步</span><a id="btc-source-link" href="/btc/" target="_blank" rel="noopener noreferrer">独立打开 ↗</a></div>
+        </div>
+      </details>
+      <button id="refresh" type="button" class="icon-button" aria-label="刷新总览" title="刷新总览"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v4.5h-4.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <span id="project-actions" class="project-actions" hidden><button class="icon-button" id="reload-project" type="button" aria-label="重新加载" title="重新加载"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v4.5h-4.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><a class="icon-button" id="open-project" href="/diet/" target="_blank" rel="noopener noreferrer" title="独立打开"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 16L16 8M9.5 8H16v6.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></a></span>
+      <button id="theme-toggle" class="icon-button theme-toggle" type="button" aria-label="切换明暗模式" aria-pressed="false">
+        <svg class="theme-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <mask id="theme-icon-mask"><rect width="24" height="24" fill="#fff"/><circle class="theme-icon-cut" cx="24" cy="4" r="7" fill="#000"/></mask>
+          <circle class="theme-icon-core" cx="12" cy="12" r="5" mask="url(#theme-icon-mask)" fill="currentColor"/>
+          <g class="theme-icon-rays" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 2.5v2M12 19.5v2M21.5 12h-2M4.5 12h-2M18.7 5.3l-1.4 1.4M6.7 17.3l-1.4 1.4M18.7 18.7l-1.4-1.4M6.7 6.7L5.3 5.3"/></g>
+        </svg>
+        <span id="theme-label" class="sr-only">白天模式</span>
+      </button>
     </div>
   </div>
+</header>
+<main id="main" tabindex="-1">
+  <h1 id="page-title" class="sr-only" tabindex="-1">总览</h1><p id="page-description" class="sr-only">饮食、资产与比特币行情。</p>
   <p id="global-notice" class="notice" role="status" hidden></p>
-  <section id="overview-view" class="bento" aria-label="总览">
+  <section id="overview-view" class="board" aria-label="总览">
     <article class="card card-diet" style="--i:0" aria-labelledby="diet-title">
-      <div class="card-head"><h2 id="diet-title">饮食日记</h2><span class="module-status" id="diet-status" data-status="loading"><span class="status-dot" aria-hidden="true"></span><span>读取中</span></span><a class="card-link" href="#diet" aria-label="查看饮食记录"><span>查看记录</span><span class="card-arrow" aria-hidden="true">→</span></a></div>
-      <div class="card-body">
-        <div class="card-main">
-          <p class="metric-label">今日摄入 <span id="diet-date" class="mono"></span></p>
-          <div class="primary-metric"><span id="diet-kcal">—</span><span class="metric-unit">kcal</span></div>
-          <p class="metric-context" id="diet-context">正在读取饮食记录</p>
-          <div class="macro-split" id="diet-split" aria-hidden="true"><span class="macro-segment" data-macro="protein"></span><span class="macro-segment" data-macro="carbs"></span><span class="macro-segment" data-macro="fat"></span></div>
-          <dl class="macros"><div data-macro="protein"><dt>蛋白质</dt><dd><span id="diet-protein">—</span><small>g</small></dd></div><div data-macro="carbs"><dt>碳水</dt><dd><span id="diet-carbs">—</span><small>g</small></dd></div><div data-macro="fat"><dt>脂肪</dt><dd><span id="diet-fat">—</span><small>g</small></dd></div></dl>
-        </div>
-        <div class="card-detail diet-history">
-          <div class="detail-heading"><span>过去七天</span><span id="diet-week-summary">—</span></div>
-          <div class="week-chart" id="diet-week" role="img" aria-label="过去七天热量摄入"></div>
-          <p id="diet-note" class="card-note">可用自然语言记录或修改饮食。</p>
-        </div>
-        <span id="diet-module-updated" class="sr-only"></span>
+      <div class="card-head"><h2 id="diet-title">饮食日记</h2><span id="diet-date" class="card-meta mono"></span><span class="module-status" id="diet-status" data-status="loading"><span class="status-dot" aria-hidden="true"></span><span>读取中</span></span><a class="card-link" href="#diet" aria-label="查看饮食记录"><span>记录</span><span class="card-arrow" aria-hidden="true">→</span></a></div>
+      <div class="metric-row">
+        <div class="primary-metric"><span id="diet-kcal">—</span><span class="metric-unit">kcal</span></div>
+        <p class="metric-context" id="diet-context">正在读取饮食记录</p>
       </div>
+      <div class="macro-split" id="diet-split" aria-hidden="true"><span class="macro-segment" data-macro="protein"></span><span class="macro-segment" data-macro="carbs"></span><span class="macro-segment" data-macro="fat"></span></div>
+      <dl class="macros"><div data-macro="protein"><dt>蛋白质</dt><dd><span id="diet-protein">—</span><small>g</small></dd></div><div data-macro="carbs"><dt>碳水</dt><dd><span id="diet-carbs">—</span><small>g</small></dd></div><div data-macro="fat"><dt>脂肪</dt><dd><span id="diet-fat">—</span><small>g</small></dd></div><div data-macro="fiber"><dt>膳食纤维</dt><dd><span id="diet-fiber">—</span><small>g</small></dd></div></dl>
+      <div class="section-label"><span>今日餐食</span><span id="diet-meal-total"></span></div>
+      <ul class="meal-list" id="diet-meals"><li class="inline-empty">正在读取</li></ul>
+      <div class="section-label"><span>过去七天</span><span id="diet-week-summary">—</span></div>
+      <div class="week-chart" id="diet-week" role="img" aria-label="过去七天热量摄入"></div>
+      <p id="diet-note" class="card-note" hidden></p>
+      <span id="diet-module-updated" class="sr-only"></span>
     </article>
     <article class="card card-wallet" style="--i:1" aria-labelledby="wallet-title">
-      <div class="card-head"><h2 id="wallet-title">加密资产</h2><span class="module-status" id="wallet-status" data-status="loading"><span class="status-dot" aria-hidden="true"></span><span>读取中</span></span><a class="card-link" href="#wallet" aria-label="查看加密钱包"><span>查看钱包</span><span class="card-arrow" aria-hidden="true">→</span></a></div>
-      <div class="card-body">
-        <div class="card-main">
-          <p class="metric-label">资产估值 · USD</p>
-          <div class="primary-metric"><span class="currency-prefix">$</span><span id="wallet-usd">—</span></div>
-          <p class="metric-context" id="wallet-cny">正在读取钱包估值</p>
-          <p class="holding-line"><span id="wallet-btc-label">BTC 实际持仓</span><strong><span id="wallet-btc">—</span><small>BTC</small></strong></p>
-        </div>
-        <div class="card-detail">
-          <div class="detail-heading"><span>币种</span><span>估值 · USD</span></div>
-          <div id="wallet-assets" class="asset-list"><p class="inline-empty">正在读取持仓</p></div>
-        </div>
-        <p class="card-note" id="wallet-note">以已连接的钱包及账户数据为准。</p><span id="wallet-module-updated" class="sr-only"></span>
+      <div class="card-head"><h2 id="wallet-title">加密资产</h2><span class="card-meta">USD</span><span class="module-status" id="wallet-status" data-status="loading"><span class="status-dot" aria-hidden="true"></span><span>读取中</span></span><a class="card-link" href="#wallet" aria-label="查看加密钱包"><span>钱包</span><span class="card-arrow" aria-hidden="true">→</span></a></div>
+      <div class="metric-row">
+        <div class="primary-metric"><span class="currency-prefix">$</span><span id="wallet-usd">—</span></div>
+        <p class="metric-context" id="wallet-cny">正在读取钱包估值</p>
       </div>
+      <dl class="stat-grid">
+        <div><dt id="wallet-btc-label">BTC 实际持仓</dt><dd class="mono"><span id="wallet-btc">—</span><small>BTC</small></dd></div>
+        <div><dt>持仓均价 · USDT</dt><dd><span id="wallet-avg-cost">—</span></dd></div>
+        <div><dt>持仓浮盈 · USDT</dt><dd><span id="wallet-unrealized">—</span></dd></div>
+        <div><dt>收益率</dt><dd><span id="wallet-return">—</span></dd></div>
+      </dl>
+      <div class="section-label"><span>存放位置</span><span id="wallet-location-note"></span></div>
+      <div class="location-split" id="wallet-locations" aria-hidden="true"></div>
+      <ul class="location-legend" id="wallet-location-legend"><li class="inline-empty">正在读取</li></ul>
+      <div class="section-label"><span>币种分布</span><span id="wallet-asset-count"></span></div>
+      <div id="wallet-assets" class="asset-list"><p class="inline-empty">正在读取持仓</p></div>
+      <p class="card-note" id="wallet-note" hidden></p><span id="wallet-module-updated" class="sr-only"></span>
     </article>
     <article class="card card-alerts" style="--i:2" aria-labelledby="alerts-title">
-      <div class="card-head"><h2 id="alerts-title">价格警报</h2><span class="module-status" id="alerts-status" data-status="loading"><span class="status-dot" aria-hidden="true"></span><span>读取中</span></span><a class="card-link" href="#alerts" aria-label="查看比特币行情"><span>查看行情</span><span class="card-arrow" aria-hidden="true">→</span></a></div>
-      <div class="card-body">
-        <div class="card-main">
-          <p class="metric-label">BTC / USDT</p>
-          <div class="primary-metric"><span id="alerts-price">—</span></div>
-          <p class="metric-context market-change"><span id="alerts-change" class="change-badge">—</span><span id="alerts-change-label">北京时间今日涨跌</span></p>
-          <div class="day-range">
-            <div class="range-track" id="alerts-range" data-ready="false" aria-hidden="true"><span class="range-fill"></span><span class="range-marker"><span></span></span></div>
-            <div class="range-labels"><span>最低 <strong id="alerts-low">—</strong></span><span>最高 <strong id="alerts-high">—</strong></span></div>
-          </div>
-        </div>
-        <div class="card-detail">
-          <div class="detail-heading"><span id="alerts-threshold-label">当日涨跌幅警报</span><span id="alerts-enabled">—</span></div>
-          <div class="threshold-meter" id="alerts-meter" aria-hidden="true"><span class="meter-fill"></span></div>
-          <div class="threshold-list" id="alerts-thresholds"></div>
-          <p class="card-note" id="alerts-note">以北京时间 00:00 为当日基准。</p>
-        </div>
-        <span id="alerts-module-updated" class="sr-only"></span>
+      <div class="card-head"><h2 id="alerts-title">价格警报</h2><span class="card-meta">BTC / USDT</span><span class="module-status" id="alerts-status" data-status="loading"><span class="status-dot" aria-hidden="true"></span><span>读取中</span></span><a class="card-link" href="#alerts" aria-label="查看比特币行情"><span>行情</span><span class="card-arrow" aria-hidden="true">→</span></a></div>
+      <div class="metric-row">
+        <div class="primary-metric"><span id="alerts-price">—</span></div>
+        <p class="metric-context market-change"><span id="alerts-change" class="change-badge">—</span><span id="alerts-change-label">北京时间今日涨跌</span></p>
       </div>
+      <div class="day-range">
+        <div class="range-track" id="alerts-range" data-ready="false" aria-hidden="true"><span class="range-fill"></span><span class="range-marker"><span></span></span></div>
+        <div class="range-labels"><span>低 <strong id="alerts-low">—</strong></span><span>开 <strong id="alerts-open">—</strong></span><span>高 <strong id="alerts-high">—</strong></span></div>
+      </div>
+      <div class="sparkline" id="alerts-chart" role="img" aria-label="今日价格走势"><svg viewBox="0 0 300 80" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="spark-fill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity=".16"/><stop offset="1" stop-color="currentColor" stop-opacity="0"/></linearGradient></defs><line class="spark-open" x1="0" x2="300" y1="40" y2="40"/><path class="spark-area" d=""/><path class="spark-line" d=""/></svg><span class="spark-caption" id="alerts-chart-caption"></span></div>
+      <div class="section-label"><span id="alerts-threshold-label">当日涨跌幅警报</span><span id="alerts-enabled">—</span></div>
+      <div class="threshold-meter" id="alerts-meter" aria-hidden="true"><span class="meter-fill"></span></div>
+      <div class="threshold-list" id="alerts-thresholds"></div>
+      <div class="section-label"><span>最近警报</span><span id="alerts-recent-count"></span></div>
+      <ul class="alert-list" id="alerts-recent"><li class="inline-empty">暂无警报记录</li></ul>
+      <p class="card-note" id="alerts-note">以北京时间 00:00 为当日基准。</p>
+      <span id="alerts-module-updated" class="sr-only"></span>
     </article>
   </section>
   <section id="project-view" aria-label="项目工作区" hidden><p id="project-hint" class="project-hint" role="status">正在打开</p><div class="project-frames" id="project-frames"></div></section>
-  <footer class="page-footer"><div class="footer-line"><span class="footer-brand"><span class="mono">~/xhy</span> 本机个人终端</span><span id="last-sync">等待数据同步</span><details class="connection-details"><summary>连接详情</summary><div class="source-list"><div class="source-row"><strong>饮食日记</strong><span id="diet-source-state" class="source-state">读取中</span><span id="diet-updated">尚未同步</span><a id="diet-source-link" href="/diet/" target="_blank" rel="noopener noreferrer">独立打开 ↗</a></div><div class="source-row"><strong>钱包与警报</strong><span id="btc-source-state" class="source-state">读取中</span><span id="btc-updated">尚未同步</span><a id="btc-source-link" href="/btc/" target="_blank" rel="noopener noreferrer">独立打开 ↗</a></div></div></details></div></footer>
 </main>
 <div class="sr-only" id="announcer" role="status" aria-live="polite"></div>
 </body>
