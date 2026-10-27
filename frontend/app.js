@@ -820,7 +820,23 @@
 
   // The connection popover closes like a menu: outside click or Escape.
   const syncMenu = $("sync-menu");
-  document.addEventListener("click", (event) => { if (syncMenu.open && !syncMenu.contains(event.target)) syncMenu.open = false; });
+  // On phones the sheet's dimmed backdrop is the menu's own ::before, so a tap
+  // on it targets the menu element itself.
+  document.addEventListener("click", (event) => { if (syncMenu.open && (!syncMenu.contains(event.target) || event.target === syncMenu)) syncMenu.open = false; });
+
+  // 界面 switch: auto follows the device; a fixed choice is remembered per browser.
+  const uiChoice = document.documentElement.dataset.uiPref || "auto";
+  for (const button of document.querySelectorAll("button[data-ui-choice]")) {
+    button.setAttribute("aria-pressed", String(button.dataset.uiChoice === uiChoice));
+    button.addEventListener("click", () => {
+      const choice = button.dataset.uiChoice;
+      try { if (choice === "auto") localStorage.removeItem("xhy-ui"); else localStorage.setItem("xhy-ui", choice); } catch {}
+      if (choice === uiChoice) return;
+      const url = new URL(location.href);
+      url.searchParams.delete("ui");
+      location.replace(url);
+    });
+  }
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && syncMenu.open) { syncMenu.open = false; $("connection").focus(); }
   });

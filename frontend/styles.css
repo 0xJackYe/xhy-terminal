@@ -344,3 +344,111 @@ html[data-demo="true"] :is(#project-actions, .source-row a) { display: none !imp
   *, *::before, *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; animation-delay: 0ms !important; transition-duration: 1ms !important; transition-delay: 0ms !important; }
   .wordmark-caret { animation: none; }
 }
+
+/* Tab icons and the layout switch exist in both interfaces; icons show on phones only. */
+.nav-icon { display: none; width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.ui-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 14px 4px; border-top: 1px solid var(--line); }
+.ui-row > span:first-child { color: var(--text); font-weight: 550; }
+.ui-switch { display: inline-flex; gap: 2px; padding: 2px; border-radius: 999px; background: var(--soft); }
+.ui-switch button { border: 0; padding: 3px 11px; border-radius: 999px; background: none; color: var(--muted); font-size: 12px; transition: background-color var(--motion-fast) ease, color var(--motion-fast) ease; }
+.ui-switch button[aria-pressed="true"] { background: var(--panel); color: var(--text); box-shadow: 0 1px 2px rgb(0 0 0 / .08); }
+
+/* ================= Phone interface =================
+   Chosen in <head> from the device (phone user agent, or a touch screen
+   whose short side is under 600px), or by the 界面 switch. A large title,
+   a time strip, a floating tab bar and bottom sheets instead of the
+   desktop header row and popover. */
+:root[data-ui="mobile"] { --gutter: 16px; --header-h: calc(98px + env(safe-area-inset-top)); --tabbar-h: 64px; --radius: 20px; }
+:root[data-ui="mobile"] body { font-size: 14px; -webkit-user-select: none; user-select: none; overscroll-behavior-y: none; }
+:root[data-ui="mobile"] :is(input, textarea) { -webkit-user-select: text; user-select: text; }
+
+/* Header: the blur lives on a pseudo-element so the fixed tab bar inside the
+   header is positioned against the viewport, not the header. */
+:root[data-ui="mobile"] .site-header { -webkit-backdrop-filter: none; backdrop-filter: none; background: transparent; border-bottom: 0; }
+:root[data-ui="mobile"] .site-header::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--header-bg); -webkit-backdrop-filter: saturate(1.8) blur(20px); backdrop-filter: saturate(1.8) blur(20px); border-bottom: 1px solid var(--line); }
+:root[data-ui="mobile"] .header-inner { flex-wrap: wrap; gap: 0 4px; min-height: 0; padding: env(safe-area-inset-top) 0 0; }
+:root[data-ui="mobile"] .wordmark { min-height: 48px; font-size: 16px; }
+:root[data-ui="mobile"] .header-actions { margin-left: auto; padding-left: 0; border-left: 0; gap: 0; }
+:root[data-ui="mobile"] .icon-button { width: 40px; height: 40px; }
+:root[data-ui="mobile"] .icon-button > svg { width: 18px; height: 18px; }
+:root[data-ui="mobile"] .sync-status { height: 32px; padding: 0 10px; background: var(--soft); font-size: 12px; }
+:root[data-ui="mobile"] .sync-status #connection-text { display: inline; }
+
+/* Time strip: one swipeable row of chips. */
+:root[data-ui="mobile"] .utility { order: 3; flex: 1 1 100%; flex-wrap: nowrap; justify-content: flex-start; gap: 6px; margin: 0 calc(var(--gutter) * -1); padding: 2px var(--gutter) 10px; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; scroll-snap-type: x proximity; }
+:root[data-ui="mobile"] .utility::-webkit-scrollbar { display: none; }
+:root[data-ui="mobile"] .utility { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); }
+:root[data-ui="mobile"] .utility > * { flex: none; scroll-snap-align: start; }
+:root[data-ui="mobile"] .utility > :is(.today-label, .clock, .schedule-current) { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 11px; border-radius: 999px; background: var(--soft); font-size: 12px; }
+:root[data-ui="mobile"] .today-label { color: var(--text); font-weight: 550; }
+:root[data-ui="mobile"] .schedule-current { margin: 0; }
+:root[data-ui="mobile"] .shift-toggle { margin: 0; }
+:root[data-ui="mobile"] .segmented-small > button { padding: 4px 10px; font-size: 11.5px; }
+
+/* Floating tab bar. */
+:root[data-ui="mobile"] .navigation { position: fixed; z-index: 25; left: max(12px, env(safe-area-inset-left)); right: max(12px, env(safe-area-inset-right)); bottom: calc(10px + env(safe-area-inset-bottom)); order: 0; display: flex; align-items: stretch; gap: 4px; height: var(--tabbar-h); margin: 0; padding: 5px; border: 1px solid var(--line); border-radius: 26px; background: var(--header-bg); -webkit-backdrop-filter: saturate(1.8) blur(22px); backdrop-filter: saturate(1.8) blur(22px); box-shadow: 0 12px 32px -12px rgb(0 0 0 / .28), 0 2px 6px rgb(0 0 0 / .06); }
+:root[data-ui="mobile"] .navigation > a { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; padding: 0; border-radius: 21px; font-size: 11px; font-weight: 600; letter-spacing: .2px; color: var(--muted); }
+:root[data-ui="mobile"] .navigation > a[aria-current="page"] { color: var(--accent-text); }
+:root[data-ui="mobile"] .navigation > a:active { transform: scale(.94); transition: transform 120ms var(--ease-out); }
+:root[data-ui="mobile"] .nav-icon { display: block; transition: transform var(--motion-base) var(--ease-spring); }
+:root[data-ui="mobile"] .navigation > a[aria-current="page"] .nav-icon { transform: translateY(-1px) scale(1.06); }
+:root[data-ui="mobile"] .nav-long { display: none; }
+:root[data-ui="mobile"] .navigation .segment-indicator { border-radius: 21px; background: var(--soft); box-shadow: none; }
+:root[data-theme="dark"][data-ui="mobile"] .navigation .segment-indicator { background: var(--soft-strong); }
+
+/* Large title, then content clear of the tab bar. */
+:root[data-ui="mobile"] main { padding: 0 0 calc(var(--tabbar-h) + 28px + env(safe-area-inset-bottom)); }
+:root[data-ui="mobile"] #page-title.sr-only { position: static; width: auto; height: auto; margin: 14px 0 12px; overflow: visible; clip: auto; white-space: normal; font-size: 32px; font-weight: 700; letter-spacing: -.8px; line-height: 1.1; animation: fade-in var(--motion-base) ease; }
+:root[data-ui="mobile"]:is([data-view="diet"], [data-view="wallet"]) #page-title.sr-only { margin: 10px 0 6px; font-size: 24px; }
+:root[data-ui="mobile"] .notice { margin: 0 0 12px; }
+
+/* Overview: the live price first, then assets, then today's food. */
+:root[data-ui="mobile"] .board { grid-template-columns: minmax(0, 1fr); gap: 12px; min-height: 0; }
+:root[data-ui="mobile"] .card-alerts { order: -2; }
+:root[data-ui="mobile"] .card-wallet { order: -1; }
+:root[data-ui="mobile"] .card-diet { grid-column: auto; }
+:root[data-ui="mobile"] .card { padding: 16px 16px 18px; border-radius: var(--radius); }
+:root[data-ui="mobile"] .card:hover { transform: none; box-shadow: var(--shadow); border-color: var(--line); }
+:root[data-ui="mobile"] .card:active { transform: scale(.985); transition: transform 140ms var(--ease-out); }
+:root[data-ui="mobile"] .card-head h2 { font-size: 15px; }
+:root[data-ui="mobile"] .primary-metric { font-size: 36px; letter-spacing: -1.2px; }
+:root[data-ui="mobile"] .sparkline { flex: none; height: 128px; max-height: none; }
+:root[data-ui="mobile"] .week-chart { flex: none; height: 116px; max-height: none; }
+:root[data-ui="mobile"] .macros { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 10px; }
+:root[data-ui="mobile"] :is(.meal-list li, .alert-list li):not(.inline-empty) { padding: 6px 0; font-size: 13.5px; }
+:root[data-ui="mobile"] .alert-list li:not(.inline-empty) { grid-template-columns: 78px 58px minmax(0, 1fr) auto; }
+:root[data-ui="mobile"] .card-note { margin-top: 12px; }
+
+/* Connection details become a bottom sheet over a dimmed page. */
+:root[data-ui="mobile"] .sync-menu[open]::before { content: ""; position: fixed; inset: 0; z-index: 29; background: rgb(0 0 0 / .32); animation: fade-in 220ms ease; }
+:root[data-ui="mobile"] .sync-popover { position: fixed; top: auto; left: 8px; right: 8px; bottom: calc(8px + env(safe-area-inset-bottom)); width: auto; padding: 8px 0 10px; border-radius: 24px; font-size: 13px; transform-origin: bottom center; animation: sheet-up 340ms var(--ease-out); }
+:root[data-ui="mobile"] .sync-popover::before { content: ""; display: block; width: 36px; height: 5px; margin: 0 auto 8px; border-radius: 3px; background: var(--line-strong); }
+@keyframes sheet-up { from { transform: translateY(105%); } }
+:root[data-ui="mobile"] .source-row { grid-template-columns: 1fr auto; gap: 2px 12px; padding: 12px 18px; }
+:root[data-ui="mobile"] .source-row a { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
+:root[data-ui="mobile"] .sync-popover-title { padding: 6px 18px 12px; }
+:root[data-ui="mobile"] .ui-row { padding: 12px 18px 4px; }
+:root[data-ui="mobile"] .ui-switch button { padding: 6px 14px; font-size: 13px; }
+
+/* App pages fill the space between the header and the tab bar. */
+:root[data-ui="mobile"] :is(.project-frame, .project-frame > iframe) { min-height: calc(100vh - var(--header-h) - 80px); min-height: calc(100dvh - var(--header-h) - 80px); }
+:root[data-ui="mobile"] .project-hint { margin: 0 0 8px; }
+
+/* Landscape phones: two columns. */
+@media (min-width: 640px) {
+  :root[data-ui="mobile"] .board { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  :root[data-ui="mobile"] .card-diet { grid-column: 1 / -1; }
+}
+/* Landscape phones are short: one header row, no large title, a slim centred tab bar. */
+@media (max-height: 500px) {
+  :root[data-ui="mobile"] { --header-h: calc(52px + env(safe-area-inset-top)); --tabbar-h: 50px; }
+  :root[data-ui="mobile"] .header-inner { flex-wrap: nowrap; gap: 8px; }
+  :root[data-ui="mobile"] .utility { order: 1; flex: 1 1 0; min-width: 0; margin: 0; padding: 0; }
+  :root[data-ui="mobile"] .header-actions { order: 2; }
+  :root[data-ui="mobile"] #page-title.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
+  :root[data-ui="mobile"] main { padding-top: 12px; }
+  :root[data-ui="mobile"] .navigation { left: 50%; right: auto; width: min(440px, calc(100% - 24px)); transform: translateX(-50%); bottom: calc(8px + env(safe-area-inset-bottom)); border-radius: 22px; }
+  :root[data-ui="mobile"] .navigation > a { flex-direction: row; gap: 6px; border-radius: 17px; font-size: 12px; }
+  :root[data-ui="mobile"] .navigation .segment-indicator { border-radius: 17px; }
+  :root[data-ui="mobile"] .nav-icon { width: 19px; height: 19px; }
+}

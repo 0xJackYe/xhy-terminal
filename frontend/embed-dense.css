@@ -96,6 +96,21 @@
 :root[data-xhy-embedded="true"][data-xhy-surface="diet"] body .chat-privacy { margin-top: 4px; }
 :root[data-xhy-embedded="true"][data-xhy-surface="diet"] body .legacy-quick > summary { padding-block: 6px; font-size: 12.5px; }
 
+@media (max-width: 999px) {
+  /* Narrow frames (phones): the record button gets its own row instead of overlapping the month controls. */
+  :root[data-xhy-embedded="true"][data-xhy-surface="diet"] body .hero { position: static !important; display: flex; margin: 0 0 8px; }
+  :root[data-xhy-embedded="true"][data-xhy-surface="diet"] body .hero .button { flex: 1; justify-content: center; min-height: 38px; }
+  :root[data-xhy-embedded="true"][data-xhy-surface="diet"] body .month-toolbar { padding-right: 0; }
+}
+@media (max-width: 640px) {
+  /* Phone calendar cells hold the date and the day's kcal number only. */
+  :root[data-xhy-embedded="true"][data-xhy-surface="diet"] body .month-day:has(.month-day-kcal) .month-day-meta { display: none; }
+  :root[data-xhy-embedded="true"][data-xhy-surface="diet"] body .month-day-kcal small { display: none; }
+  :root[data-xhy-embedded="true"][data-xhy-surface="diet"] body .month-day { align-items: center; padding: 6px 2px !important; text-align: center; }
+  :root[data-xhy-embedded="true"][data-xhy-surface="diet"] body .month-day-kcal { font-size: 10.5px !important; letter-spacing: -.2px; }
+  :root[data-xhy-embedded="true"][data-xhy-surface="diet"] body :is(.month-day, .month-pad) { min-height: 48px !important; }
+}
+
 @media (min-width: 1000px) {
   /* Calendar and the selected day stay visible together: picking a date fills the right pane. */
   :root[data-xhy-embedded="true"][data-xhy-surface="diet"] body #view-diary { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 28px; align-items: start; }
