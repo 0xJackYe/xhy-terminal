@@ -28,7 +28,7 @@
       if (preference.matches || !element.animate || !element.getClientRects().length || element.closest("[hidden]")) return;
       if (win.frameElement && !win.frameElement.getClientRects().length) return;
       const animation = element.animate([
-        { opacity: .94, transform: `translate3d(${x}px,${y}px,0)` },
+        { opacity: 0, transform: `translate3d(${x}px,${y}px,0)` },
         { opacity: 1, transform: "translate3d(0,0,0)" },
       ], { duration, easing: "cubic-bezier(.22,1,.36,1)" });
       running.set(element, animation);

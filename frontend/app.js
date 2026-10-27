@@ -8,6 +8,7 @@
     ? new Intl.NumberFormat("zh-CN", { maximumFractionDigits: digits, minimumFractionDigits: 0 }).format(Number(value)) : "—";
   const finite = (value) => value !== null && value !== undefined && value !== "" && typeof value !== "boolean" && Number.isFinite(Number(value));
   const money = (value, digits = 2) => finite(value) ? `$${number(value, digits)}` : "—";
+  const clamp = (value, min = 0, max = 1) => Math.min(max, Math.max(min, value));
   const views = {
     overview: { title: "总览", description: "饮食、资产与比特币行情。" },
     diet: { title: "饮食日记", description: "按日期查看和记录饮食。", url: "/diet/" },
@@ -18,27 +19,57 @@
   const statusLabels = { online: "已同步", stale: "数据延迟", offline: "未连接", empty: "暂无记录", loading: "读取中" };
   const preferredTheme = matchMedia("(prefers-color-scheme: dark)");
   const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
-  const navigation = document.querySelector(".navigation");
-  const indicator = document.createElement("span");
-  indicator.className = "nav-indicator";
-  indicator.setAttribute("aria-hidden", "true");
-  navigation.prepend(indicator);
-  let indicatorAnimation = null, indicatorReady = false;
-  function moveNavigationIndicator(animate = true) {
-    const active = navigation.querySelector('[aria-current="page"]');
-    if (!active) return;
-    const before = getComputedStyle(indicator);
-    const from = { transform: before.transform, width: before.width, height: before.height };
-    const to = { transform: `translate3d(${active.offsetLeft}px,${active.offsetTop}px,0)`, width: `${active.offsetWidth}px`, height: `${active.offsetHeight}px` };
-    indicatorAnimation?.cancel();
-    Object.assign(indicator.style, to);
-    if (animate && indicatorReady && !reducedMotion.matches) indicatorAnimation = indicator.animate([from, to], { duration: 280, easing: "cubic-bezier(.22,1,.36,1)" });
-    navigation.dataset.indicatorReady = "true";
-    indicatorReady = true;
+  const easeOut = "cubic-bezier(.22,1,.36,1)";
+
+  // Segmented controls (main navigation and work shift) share one sliding pill.
+  function segmentIndicator(container, activeSelector) {
+    const pill = document.createElement("span");
+    pill.className = "segment-indicator";
+    pill.setAttribute("aria-hidden", "true");
+    container.prepend(pill);
+    let animation = null, ready = false;
+    const move = (animate = true) => {
+      const active = container.querySelector(activeSelector);
+      if (!active) return;
+      const from = { transform: getComputedStyle(pill).transform, width: `${pill.offsetWidth}px`, height: `${pill.offsetHeight}px` };
+      const to = { transform: `translate3d(${active.offsetLeft}px,${active.offsetTop}px,0)`, width: `${active.offsetWidth}px`, height: `${active.offsetHeight}px` };
+      animation?.cancel();
+      Object.assign(pill.style, to);
+      if (animate && ready && !reducedMotion.matches) animation = pill.animate([from, to], { duration: 420, easing: "cubic-bezier(.3,1.25,.5,1)" });
+      container.dataset.indicatorReady = "true";
+      ready = true;
+    };
+    new ResizeObserver(() => move(false)).observe(container);
+    document.fonts?.ready.then(() => move(false));
+    reducedMotion.addEventListener("change", () => { animation?.cancel(); move(false); });
+    return move;
   }
-  new ResizeObserver(() => moveNavigationIndicator(false)).observe(navigation);
-  document.fonts?.ready.then(() => moveNavigationIndicator(false));
-  reducedMotion.addEventListener("change", () => { indicatorAnimation?.cancel(); moveNavigationIndicator(false); });
+  const moveNavigationIndicator = segmentIndicator(document.querySelector(".navigation"), '[aria-current="page"]');
+  const moveShiftIndicator = segmentIndicator(document.querySelector(".shift-toggle"), '[aria-pressed="true"]');
+
+  // Numbers ease between values instead of jumping; the first value appears directly.
+  const tweens = new WeakMap();
+  function animateNumber(id, value, digits = 0) {
+    const element = $(id);
+    cancelAnimationFrame(tweens.get(element));
+    if (!finite(value)) { element.textContent = "—"; delete element.dataset.value; return; }
+    const to = Number(value);
+    const from = element.dataset.value === undefined ? null : Number(element.dataset.value);
+    const final = number(to, digits);
+    element.dataset.value = String(to);
+    if (from === null || from === to || reducedMotion.matches || document.hidden) { element.textContent = final; return; }
+    const decimals = (final.split(".")[1] || "").length;
+    const format = new Intl.NumberFormat("zh-CN", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+    const start = performance.now();
+    const step = (now) => {
+      const progress = Math.min(1, (now - start) / 900);
+      const eased = 1 - Math.pow(1 - progress, 4);
+      element.textContent = progress < 1 ? format.format(from + (to - from) * eased) : final;
+      if (progress < 1) tweens.set(element, requestAnimationFrame(step));
+    };
+    tweens.set(element, requestAnimationFrame(step));
+  }
+
   let shift = "summer";
   try { if (localStorage.getItem("xhy-work-shift") === "winter") shift = "winter"; } catch {}
 
@@ -47,13 +78,26 @@
     const next = theme === "dark" ? "dark" : "light";
     document.documentElement.dataset.theme = next;
     document.documentElement.style.colorScheme = next;
-    document.querySelector('meta[name="theme-color"]').content = next === "dark" ? "#161617" : "#f5f5f7";
+    document.querySelector('meta[name="theme-color"]').content = next === "dark" ? "#0e0e0d" : "#f6f5f2";
     $("theme-toggle").setAttribute("aria-pressed", String(next === "dark"));
     $("theme-toggle").setAttribute("aria-label", `当前${next === "dark" ? "黑夜" : "白天"}模式，切换至${next === "dark" ? "白天" : "黑夜"}模式`);
-    text("theme-icon", next === "dark" ? "☾" : "☼");
     text("theme-label", next === "dark" ? "黑夜模式" : "白天模式");
     if (persist) { try { localStorage.setItem("xhy-theme", next); } catch {} }
     window.dispatchEvent(new CustomEvent("xhy:theme-change", { detail: { theme: next } }));
+  }
+
+  function toggleTheme() {
+    const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+    if (!document.startViewTransition || reducedMotion.matches) { setTheme(next); return; }
+    // Reveal the new palette as a circle growing out of the toggle.
+    const rect = $("theme-toggle").getBoundingClientRect();
+    const x = rect.left + rect.width / 2, y = rect.top + rect.height / 2;
+    const radius = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y));
+    const transition = document.startViewTransition(() => setTheme(next));
+    transition.ready.then(() => {
+      document.documentElement.animate({ clipPath: [`circle(0px at ${x}px ${y}px)`, `circle(${radius}px at ${x}px ${y}px)`] },
+        { duration: 620, easing: "cubic-bezier(.65,0,.35,1)", pseudoElement: "::view-transition-new(root)" });
+    }).catch(() => {});
   }
 
   function updateWorkSchedule(now) {
@@ -83,6 +127,11 @@
     return new Intl.DateTimeFormat("en-CA", { timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
   }
 
+  function greeting(now) {
+    const hour = Number(new Intl.DateTimeFormat("en-GB", { timeZone: zone, hour: "2-digit", hourCycle: "h23" }).format(now));
+    return hour < 5 ? "夜深了" : hour < 11 ? "早上好" : hour < 13 ? "中午好" : hour < 18 ? "下午好" : "晚上好";
+  }
+
   function updateClock() {
     const now = new Date();
     $("clock").dateTime = now.toISOString();
@@ -91,6 +140,7 @@
     text("gmt-clock", new Intl.DateTimeFormat("en-GB", { timeZone: "UTC", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" }).format(now));
     $("gmt-clock").title = new Intl.DateTimeFormat("zh-CN", { timeZone: "UTC", year: "numeric", month: "2-digit", day: "2-digit" }).format(now) + " · 格林尼治时间 UTC+0";
     text("today", new Intl.DateTimeFormat("zh-CN", { timeZone: zone, month: "long", day: "numeric", weekday: "long" }).format(now));
+    text("greeting", greeting(now));
     updateWorkSchedule(now);
   }
 
@@ -114,16 +164,29 @@
     const recorded = today.recorded === true || diet.recorded === true;
     setModuleStatus("diet", diet.status || "offline");
     text("diet-date", (today.date || diet.date || localDate()).replaceAll("-", "."));
-    text("diet-kcal", recorded ? number(totals.kcal) : "—");
-    for (const key of ["protein", "carbs", "fat"]) text(`diet-${key}`, recorded ? number(totals[key], 1) : "—");
+    animateNumber("diet-kcal", recorded ? totals.kcal : null);
+    for (const key of ["protein", "carbs", "fat"]) animateNumber(`diet-${key}`, recorded ? totals[key] : null, 1);
+    renderMacroSplit(recorded ? totals : {});
     let context = recorded ? `${number(today.mealCount)} 餐已记录${finite(today.itemCount) ? ` · ${number(today.itemCount)} 项食物` : ""}` : "今天还没有饮食记录";
     if (diet.status === "offline") context = recorded ? "显示最近保存的饮食记录" : "暂时无法读取饮食记录";
     text("diet-context", context);
     const week = diet.week || {};
-    text("diet-week-summary", finite(week.recordedDays) ? `${number(week.recordedDays)} 天已记录` : "暂无记录");
+    text("diet-week-summary", finite(week.recordedDays) ? `${number(week.recordedDays)} / 7 天已记录` : "暂无记录");
     renderWeek(Array.isArray(week.days) ? week.days : []);
     text("diet-note", diet.status === "offline" ? "饮食服务暂未连接，可重试同步或独立打开日记。" : "在日记中用自然语言记录或修改饮食。");
     text("diet-module-updated", `Diet · ${diet.updatedAt ? `更新于 ${timestamp(diet.updatedAt, true)}` : "尚未同步"}`);
+  }
+
+  function renderMacroSplit(totals) {
+    // Energy share: protein and carbohydrate 4 kcal/g, fat 9 kcal/g.
+    const energy = { protein: Number(totals.protein) * 4, carbs: Number(totals.carbs) * 4, fat: Number(totals.fat) * 9 };
+    const valid = Object.values(energy).every((value) => Number.isFinite(value) && value >= 0);
+    const sum = valid ? energy.protein + energy.carbs + energy.fat : 0;
+    const split = $("diet-split");
+    split.dataset.empty = String(!sum);
+    for (const segment of split.children) {
+      segment.style.width = sum ? `calc((100% - 6px) * ${energy[segment.dataset.macro] / sum})` : "";
+    }
   }
 
   function renderWeek(days) {
@@ -137,64 +200,89 @@
     });
     const max = Math.max(1, ...entries.filter((day) => day.recorded && finite(day.totals?.kcal)).map((day) => Number(day.totals.kcal)));
     const chart = $("diet-week");
-    chart.replaceChildren();
+    // Columns are created once and then updated in place so bars ease to new heights.
+    if (chart.children.length !== 7) {
+      chart.replaceChildren(...entries.map((_, index) => {
+        const column = document.createElement("div");
+        column.className = "week-day";
+        column.setAttribute("aria-hidden", "true");
+        column.style.setProperty("--d", index);
+        const value = document.createElement("span");
+        value.className = "week-value";
+        const track = document.createElement("div");
+        track.className = "week-bar-track";
+        const bar = document.createElement("div");
+        bar.className = "week-bar";
+        track.append(bar, value);
+        const caption = document.createElement("span");
+        caption.className = "week-label";
+        column.append(track, caption);
+        return column;
+      }));
+    }
     const descriptions = [];
-    for (const day of entries) {
+    entries.forEach((day, index) => {
+      const column = chart.children[index];
       const hasValue = day.recorded === true && finite(day.totals?.kcal);
       const label = `${day.date.slice(5).replace("-", "/")} ${hasValue ? `${number(day.totals.kcal)} kcal` : "未记录"}`;
       descriptions.push(label);
-      const column = document.createElement("div");
-      column.className = "week-day";
       column.dataset.today = String(day.date === today);
       column.dataset.recorded = String(hasValue);
       column.title = label;
-      column.setAttribute("aria-hidden", "true");
-      const track = document.createElement("div");
-      track.className = "week-bar-track";
-      const bar = document.createElement("div");
-      bar.className = "week-bar";
-      bar.style.height = hasValue ? `${Math.max(3, Number(day.totals.kcal) / max * 100)}%` : "2px";
-      track.append(bar);
-      const caption = document.createElement("span");
-      caption.className = "week-label";
-      caption.textContent = day.date === today ? "今天" : day.date.slice(5).replace("-", "/");
-      column.append(track, caption);
-      chart.append(column);
-    }
+      column.querySelector(".week-value").textContent = hasValue ? number(day.totals.kcal) : "";
+      column.querySelector(".week-label").textContent = day.date === today ? "今天" : day.date.slice(5).replace("-", "/");
+      const scale = hasValue ? Math.max(.03, Number(day.totals.kcal) / max) : 0;
+      const bar = column.querySelector(".week-bar");
+      requestAnimationFrame(() => { bar.style.transform = `scaleY(${scale})`; column.style.setProperty("--h", scale); });
+    });
     chart.setAttribute("aria-label", `过去七天热量摄入：${descriptions.join("；")}`);
   }
 
   function renderWallet(wallet = {}) {
     setModuleStatus("wallet", wallet.status || "offline");
-    text("wallet-usd", number(wallet.totalUsd, 2));
+    animateNumber("wallet-usd", wallet.totalUsd, 2);
     text("wallet-cny", finite(wallet.totalCny) ? `约 ¥${number(wallet.totalCny, 2)} CNY` : wallet.status === "offline" ? "暂时无法读取钱包估值" : "连接账户后显示资产总估值");
-    const btc = $("wallet-btc");
-    btc.replaceChildren(document.createTextNode(number(wallet.btcHoldings, 8) + " "));
-    const unit = document.createElement("small");
-    unit.textContent = "BTC";
-    btc.append(unit);
+    animateNumber("wallet-btc", wallet.btcHoldings, 8);
     text("wallet-btc-label", `BTC 实际持仓${finite(wallet.btcHoldings) && wallet.btcHoldingsStale ? " · 已延迟" : ""}`);
     const list = $("wallet-assets");
-    list.replaceChildren();
     const assets = (Array.isArray(wallet.assets) ? wallet.assets : []).filter((asset) => asset && typeof asset.ccy === "string" && finite(asset.usd_value));
-    for (const asset of assets.slice(0, 3)) {
-      const row = document.createElement("div");
-      row.className = "asset-row";
-      const name = document.createElement("span");
-      name.className = "asset-name";
-      const marker = document.createElement("span");
-      marker.className = "asset-marker";
-      marker.setAttribute("aria-hidden", "true");
-      name.append(marker, document.createTextNode(asset.ccy));
-      const value = document.createElement("span");
-      value.className = "asset-value";
-      value.textContent = money(asset.usd_value);
-      row.append(name, value);
-      row.title = `${asset.ccy} 持仓 ${number(asset.quantity, 8)}，估值 ${money(asset.usd_value)}`;
-      list.append(row);
+    const shown = assets.slice(0, 3);
+    const total = finite(wallet.totalUsd) && Number(wallet.totalUsd) > 0 ? Number(wallet.totalUsd) : assets.reduce((sum, asset) => sum + Math.max(0, Number(asset.usd_value)), 0);
+    const signature = shown.map((asset) => asset.ccy).join("|");
+    // Rebuild rows only when the set of coins changes; otherwise update in place.
+    if (list.dataset.signature !== signature || !shown.length) {
+      list.replaceChildren();
+      list.dataset.signature = signature;
+      shown.forEach((asset, index) => {
+        const row = document.createElement("div");
+        row.className = "asset-row";
+        row.style.setProperty("--d", index);
+        const name = document.createElement("span");
+        name.className = "asset-name";
+        const share = document.createElement("span");
+        share.className = "asset-share";
+        name.append(document.createTextNode(asset.ccy), share);
+        const value = document.createElement("span");
+        value.className = "asset-value";
+        const bar = document.createElement("span");
+        bar.className = "asset-bar";
+        bar.setAttribute("aria-hidden", "true");
+        bar.append(document.createElement("span"));
+        row.append(name, value, bar);
+        list.append(row);
+      });
     }
-    if (!assets.length) {
-      const empty = document.createElement("div");
+    shown.forEach((asset, index) => {
+      const row = list.children[index];
+      const ratio = total > 0 ? clamp(Number(asset.usd_value) / total) : 0;
+      row.querySelector(".asset-share").textContent = total > 0 ? `${number(ratio * 100, 1)}%` : "";
+      row.querySelector(".asset-value").textContent = money(asset.usd_value);
+      row.title = `${asset.ccy} 持仓 ${number(asset.quantity, 8)}，估值 ${money(asset.usd_value)}`;
+      const fill = row.querySelector(".asset-bar > span");
+      requestAnimationFrame(() => { fill.style.transform = `scaleX(${ratio})`; });
+    });
+    if (!shown.length) {
+      const empty = document.createElement("p");
       empty.className = "inline-empty";
       empty.textContent = wallet.status === "offline" ? "钱包连接恢复后显示资产明细" : "暂时没有可显示的资产明细";
       list.append(empty);
@@ -206,26 +294,43 @@
     text("wallet-module-updated", `加密钱包 · ${wallet.updatedAt ? `更新于 ${timestamp(wallet.updatedAt, true)}` : "尚未同步"}`);
   }
 
+  function flashPrice(previous, next) {
+    if (!finite(previous) || !finite(next) || Number(previous) === Number(next) || reducedMotion.matches) return;
+    const metric = $("alerts-price").parentElement;
+    metric.classList.remove("tick-up", "tick-down");
+    metric.classList.add(Number(next) > Number(previous) ? "tick-up" : "tick-down");
+    // Two frames let the instant colour paint before it fades back.
+    requestAnimationFrame(() => requestAnimationFrame(() => metric.classList.remove("tick-up", "tick-down")));
+  }
+
   function renderAlerts(alerts = {}) {
     setModuleStatus("alerts", alerts.status || "offline");
-    text("alerts-price", number(alerts.price, 2));
+    flashPrice($("alerts-price").dataset.value, alerts.price);
+    animateNumber("alerts-price", alerts.price, 2);
     const rangeMode = ["day_range", "amplitude"].includes(alerts.metric || alerts.settings?.metric);
     const changeValue = rangeMode ? alerts.rangePct : alerts.changePct;
     const change = $("alerts-change");
-    change.className = finite(changeValue) ? Number(changeValue) >= 0 ? "positive" : "negative" : "";
+    change.className = `change-badge${finite(changeValue) ? Number(changeValue) >= 0 ? " positive" : " negative" : ""}`;
     change.textContent = finite(changeValue) ? `${!rangeMode && Number(changeValue) > 0 ? "+" : ""}${number(changeValue, 2)}%` : "—";
     text("alerts-change-label", rangeMode ? "北京时间今日振幅" : "北京时间今日涨跌");
     text("alerts-threshold-label", rangeMode ? "当日振幅警报" : "当日涨跌幅警报");
     text("alerts-low", money(alerts.dayLow));
     text("alerts-high", money(alerts.dayHigh));
+    const range = $("alerts-range");
+    const hasRange = finite(alerts.price) && finite(alerts.dayLow) && finite(alerts.dayHigh) && Number(alerts.dayHigh) > Number(alerts.dayLow);
+    range.dataset.ready = String(hasRange);
+    if (hasRange) range.style.setProperty("--pos", clamp((Number(alerts.price) - Number(alerts.dayLow)) / (Number(alerts.dayHigh) - Number(alerts.dayLow))));
     const enabled = alerts.enabled ?? alerts.settings?.enabled;
     text("alerts-enabled", enabled === true ? "已开启" : enabled === false ? "已暂停" : "未读取");
-    const thresholds = Array.isArray(alerts.thresholds) ? alerts.thresholds : Array.isArray(alerts.settings?.thresholds_pct) ? alerts.settings.thresholds_pct : [];
+    $("alerts-enabled").dataset.enabled = String(enabled);
+    const thresholds = (Array.isArray(alerts.thresholds) ? alerts.thresholds : Array.isArray(alerts.settings?.thresholds_pct) ? alerts.settings.thresholds_pct : []).filter(finite).map(Number);
+    const current = finite(changeValue) ? Math.abs(Number(changeValue)) : null;
     const list = $("alerts-thresholds");
     list.replaceChildren();
-    for (const threshold of thresholds.filter(finite)) {
+    for (const threshold of thresholds) {
       const chip = document.createElement("span");
       chip.className = "threshold-chip";
+      chip.dataset.hit = String(current !== null && current >= threshold);
       chip.textContent = `${rangeMode ? "" : "± "}${number(threshold, 2)}%`;
       chip.title = rangeMode ? `当日振幅达到 ${number(threshold, 2)}% 时触发警报` : `当日涨跌幅达到正负 ${number(threshold, 2)}% 时触发警报`;
       list.append(chip);
@@ -236,8 +341,26 @@
       empty.textContent = "暂无可读取的警报阈值";
       list.append(empty);
     }
+    renderMeter(thresholds, current);
     text("alerts-note", alerts.status === "offline" ? "行情服务暂未连接，可独立打开检查连接。" : alerts.stale || alerts.status === "stale" ? "行情已延迟，当前价格为最近一次收到的数据。" : enabled === false ? "价格警报已暂停，可在警报页重新开启。" : rangeMode ? "当日振幅 =（最高价 − 最低价）÷ 今日开盘价。" : "以北京时间 00:00 为当日涨跌幅基准。");
     text("alerts-module-updated", `Binance Spot · ${alerts.updatedAt ? `更新于 ${timestamp(alerts.updatedAt, true)}` : "尚未同步"}`);
+  }
+
+  function renderMeter(thresholds, current) {
+    // The meter shows today's move against the alert lines, which appear as ticks.
+    const meter = $("alerts-meter");
+    const scale = Math.max(...thresholds, current ?? 0, 0) * 1.2 || 1;
+    meter.querySelectorAll(".meter-tick").forEach((tick) => tick.remove());
+    for (const threshold of thresholds) {
+      const tick = document.createElement("span");
+      tick.className = "meter-tick";
+      tick.style.left = `${clamp(threshold / scale) * 100}%`;
+      meter.append(tick);
+    }
+    const lowest = thresholds.length ? Math.min(...thresholds) : null;
+    meter.dataset.level = current === null || lowest === null ? "none" : current >= lowest ? "hit" : current >= lowest * .75 ? "near" : "calm";
+    const fill = meter.querySelector(".meter-fill");
+    requestAnimationFrame(() => { fill.style.transform = `scaleX(${current === null ? 0 : clamp(current / scale)})`; });
   }
 
   function applyLinks(links = {}) {
@@ -282,6 +405,7 @@
       const statuses = [state.data.diet?.status, state.data.wallet?.status, state.data.alerts?.status];
       if (statuses.every((value) => value === "offline")) { status = "offline"; label = "项目未连接"; }
       else if (statuses.some((value) => value === "stale" || value === "offline")) { status = "stale"; label = "部分数据待同步"; }
+      else label = `已同步 ${timestamp(state.data.updatedAt || state.lastSuccess).slice(0, 5)}`;
     }
     $("connection").dataset.status = status;
     text("connection-text", label);
@@ -293,6 +417,7 @@
     const button = $("refresh");
     button.disabled = true;
     button.setAttribute("aria-busy", "true");
+    const started = performance.now();
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 12000);
     try {
@@ -326,9 +451,13 @@
       if (manual) text("announcer", "数据同步失败，请稍后重试。");
     } finally {
       clearTimeout(timeout);
-      state.refreshing = false;
-      button.disabled = false;
-      button.setAttribute("aria-busy", "false");
+      // A manual refresh keeps its spinner for one full turn so it never flickers.
+      const rest = manual ? Math.max(0, 600 - (performance.now() - started)) : 0;
+      setTimeout(() => {
+        state.refreshing = false;
+        button.disabled = false;
+        button.setAttribute("aria-busy", "false");
+      }, rest);
     }
   }
 
@@ -360,6 +489,12 @@
         if (current.hash !== target.hash) current.hash = target.hash;
       } else entry.iframe.src = url;
     } catch { entry.iframe.src = url; }
+  }
+
+  function hideOverlay(overlay) {
+    if (overlay.hidden) return;
+    if (reducedMotion.matches || !overlay.animate) { overlay.hidden = true; return; }
+    overlay.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 260, easing: "ease" }).finished.then(() => { overlay.hidden = true; }, () => { overlay.hidden = true; });
   }
 
   function loadFrame(key, reload = false) {
@@ -396,9 +531,9 @@
         if (current.origin !== location.origin || current.pathname !== requested.pathname || current.search !== requested.search) return;
       } catch { return; }
       clearTimeout(entry.timeout);
-      overlay.hidden = true;
+      hideOverlay(overlay);
       entry.loaded = true;
-      window.XHYMotion?.enter(wrapper);
+      window.XHYMotion?.enter(iframe, { y: 10, duration: 420 });
       if (key === "wallet") {
         setFinanceSection(entry, entry.pendingUrl);
         try {
@@ -441,7 +576,7 @@
       reveal.className = "button";
       reveal.type = "button";
       reveal.textContent = "继续查看";
-      reveal.addEventListener("click", () => { overlay.hidden = true; });
+      reveal.addEventListener("click", () => hideOverlay(overlay));
       actions.append(retry, open, reveal);
       overlay.append(actions);
     }, 15000);
@@ -489,11 +624,18 @@
     }
     if (changed) {
       window.XHYMotion?.cancelAll();
-      window.XHYMotion?.enter($(next === "overview" ? "overview-view" : "project-view"));
+      // Overview cards run their own staggered entrance whenever they are shown.
+      window.XHYMotion?.enter(document.querySelector(".page-heading"), { y: 6, duration: 360 });
+      if (next !== "overview") window.XHYMotion?.enter($("project-view"), { y: 10, duration: 420 });
     }
   }
 
-  $("theme-toggle").addEventListener("click", () => setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark"));
+  const header = $("site-header");
+  const markScrolled = () => { header.dataset.scrolled = String(scrollY > 4); };
+  addEventListener("scroll", markScrolled, { passive: true });
+  markScrolled();
+
+  $("theme-toggle").addEventListener("click", toggleTheme);
   preferredTheme.addEventListener("change", (event) => {
     let saved;
     try { saved = localStorage.getItem("xhy-theme"); } catch {}
@@ -506,6 +648,7 @@
     shift = button.dataset.shift === "winter" ? "winter" : "summer";
     try { localStorage.setItem("xhy-work-shift", shift); } catch {}
     updateClock();
+    moveShiftIndicator();
     text("announcer", `已切换${shift === "winter" ? "冬季 00:00 至 08:00" : "夏季 23:00 至 07:00"}工作班次，均为北京时间。`);
   });
   setTheme(document.documentElement.dataset.theme, false);
@@ -531,6 +674,7 @@
   });
   document.addEventListener("visibilitychange", () => { if (!document.hidden) { updateClock(); refresh(); } });
   updateClock();
+  moveShiftIndicator(false);
   setInterval(updateClock, 1000);
   renderWeek([]);
   navigate({ focus: false });

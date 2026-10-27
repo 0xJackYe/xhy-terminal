@@ -1,19 +1,19 @@
 /* Unified compact light/dark palette for the local Diet and Bitcoin apps.
    This is deliberately scoped to embedded/project documents, never the shell. */
 html[data-xhy-theme] {
-  --xhy-bg: #f5f5f7;
+  --xhy-bg: #f6f5f2;
   --xhy-panel: #ffffff;
-  --xhy-soft: #e9e9ed;
-  --xhy-text: #1d1d1f;
-  --xhy-muted: #5f5f67;
-  --xhy-line: #d9d9df;
-  --xhy-accent: #1d1d1f;
-  --xhy-accent-soft: #e9e9ed;
-  --xhy-button: #1d1d1f;
+  --xhy-soft: #eeece7;
+  --xhy-text: #191816;
+  --xhy-muted: #6d6a63;
+  --xhy-line: #e6e3dc;
+  --xhy-accent: #191816;
+  --xhy-accent-soft: #eeece7;
+  --xhy-button: #191816;
   --xhy-on-button: #ffffff;
-  --xhy-positive: #256443;
-  --xhy-negative: #a03536;
-  --xhy-shadow: #24232120;
+  --xhy-positive: #1d7a4b;
+  --xhy-negative: #b8322a;
+  --xhy-shadow: #19181620;
   --bg: var(--xhy-bg) !important;
   --paper: var(--xhy-bg) !important;
   --white: var(--xhy-panel) !important;
@@ -34,19 +34,19 @@ html[data-xhy-theme] {
   background: var(--xhy-bg) !important;
 }
 html[data-xhy-theme="dark"] {
-  --xhy-bg: #161617;
-  --xhy-panel: #1c1c1e;
-  --xhy-soft: #2c2c2e;
-  --xhy-text: #f5f5f7;
-  --xhy-muted: #b6b6bf;
-  --xhy-line: #44444b;
-  --xhy-accent: #f5f5f7;
-  --xhy-accent-soft: #2c2c2e;
-  --xhy-button: #f5f5f7;
-  --xhy-on-button: #1d1d1f;
-  --xhy-positive: #9bd6b0;
-  --xhy-negative: #ffa5a5;
-  --xhy-shadow: #00000055;
+  --xhy-bg: #0e0e0d;
+  --xhy-panel: #171715;
+  --xhy-soft: #21211e;
+  --xhy-text: #f2f0eb;
+  --xhy-muted: #a09d95;
+  --xhy-line: #2c2b28;
+  --xhy-accent: #f2f0eb;
+  --xhy-accent-soft: #21211e;
+  --xhy-button: #f2f0eb;
+  --xhy-on-button: #191816;
+  --xhy-positive: #5fcf95;
+  --xhy-negative: #ff8a7d;
+  --xhy-shadow: #00000066;
   color-scheme: dark;
 }
 /* The original BTC stylesheet declares tokens on body.dark as well as :root. */
@@ -58,7 +58,7 @@ html[data-xhy-theme] body {
   --green: var(--xhy-positive); --green-mid: var(--xhy-positive); --red: var(--xhy-negative);
   background: var(--xhy-bg) !important;
   color: var(--xhy-text) !important;
-  font-family: "Segoe UI", "Microsoft YaHei", Arial, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 /* Embedded documents size to their natural content. The shell owns scrolling;
    viewport-sized minimum heights would feed back into ResizeObserver. */
