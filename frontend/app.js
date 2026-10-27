@@ -127,8 +127,9 @@
     return new Intl.DateTimeFormat("zh-CN", { timeZone: zone, ...(includeDate ? { month: "2-digit", day: "2-digit" } : {}), hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }).format(date);
   }
 
-  function localDate(date = new Date()) {
-    return new Intl.DateTimeFormat("en-CA", { timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
+  // Diary days run on UTC+0 (they change at 08:00 Beijing time); clocks and market days stay on Beijing time.
+  function diaryDate(date = new Date()) {
+    return new Intl.DateTimeFormat("en-CA", { timeZone: "UTC", year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
   }
 
   function updateClock() {
@@ -162,7 +163,7 @@
     const totals = today.totals || {};
     const recorded = today.recorded === true || diet.recorded === true;
     setModuleStatus("diet", diet.status || "offline");
-    text("diet-date", (today.date || diet.date || localDate()).replaceAll("-", "."));
+    text("diet-date", `${(today.date || diet.date || diaryDate()).replaceAll("-", ".")} UTC`);
     animateNumber("diet-kcal", recorded ? totals.kcal : null);
     for (const key of ["protein", "carbs", "fat", "fiber"]) animateNumber(`diet-${key}`, recorded ? totals[key] : null, 1);
     renderMacroSplit(recorded ? totals : {});
@@ -223,12 +224,12 @@
   }
 
   function renderWeek(days) {
-    const today = localDate();
+    const today = diaryDate();
     const map = new Map(days.filter((day) => day && typeof day.date === "string").map((day) => [day.date, day]));
-    const end = new Date(`${today}T12:00:00+08:00`);
+    const end = new Date(`${today}T12:00:00Z`);
     const entries = Array.from({ length: 7 }, (_, index) => {
       const date = new Date(end.getTime() - (6 - index) * 86400000);
-      const key = localDate(date);
+      const key = diaryDate(date);
       return { date: key, recorded: false, ...(map.get(key) || {}) };
     });
     const max = Math.max(1, ...entries.filter((day) => day.recorded && finite(day.totals?.kcal)).map((day) => Number(day.totals.kcal)));

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "timezone": "Asia/Shanghai",
+  "timezone": "UTC",
   "updatedAt": null,
   "days": []
 }

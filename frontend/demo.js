@@ -2,7 +2,8 @@
 // /api/overview on the owner's computer; nothing here is personal data.
 const DAY = 86400000;
 const zone = "Asia/Shanghai";
-const localDate = (date) => new Intl.DateTimeFormat("en-CA", { timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
+// Diary days run on UTC+0, like the real diary.
+const diaryDate = (date) => new Intl.DateTimeFormat("en-CA", { timeZone: "UTC", year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
 
 const meals = [
   { id: "demo-breakfast", type: "breakfast", title: "燕麦牛奶碗", status: "eaten", kcal: 522 },
@@ -30,9 +31,9 @@ function chart(now) {
 export function demoOverview() {
   const now = Date.now();
   price = Math.max(open * .96, price + (Math.random() - .48) * 60);
-  const today = localDate(new Date(now));
+  const today = diaryDate(new Date(now));
   const days = weekKcal.map((kcal, index) => {
-    const date = localDate(new Date(now - (6 - index) * DAY));
+    const date = diaryDate(new Date(now - (6 - index) * DAY));
     return { date, recorded: kcal !== null, mealCount: kcal ? 3 : 0, totals: { kcal } };
   });
   const updatedAt = new Date(now).toISOString();

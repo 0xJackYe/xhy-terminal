@@ -42,6 +42,12 @@ class OverviewTests(unittest.TestCase):
         self.assertEqual(result["week"]["days"][4]["mealCount"], 1)
         self.assertIsNone(result["week"]["days"][0]["totals"]["kcal"])
 
+    def test_diary_day_changes_at_utc_midnight_not_beijing_midnight(self):
+        # 01:30 Beijing on 10-28 is still the 10-27 night shift; 08:00 Beijing starts 10-28.
+        self.assertEqual(server.diary_today(dt.datetime(2026, 10, 28, 1, 30, tzinfo=server.BEIJING)), dt.date(2026, 10, 27))
+        self.assertEqual(server.diary_today(dt.datetime(2026, 10, 28, 7, 59, tzinfo=server.BEIJING)), dt.date(2026, 10, 27))
+        self.assertEqual(server.diary_today(dt.datetime(2026, 10, 28, 8, 0, tzinfo=server.BEIJING)), dt.date(2026, 10, 28))
+
     def test_live_store_and_atomic_runtime_store_take_precedence_over_seed(self):
         live = dict(self.diary, days=[])
         with patch("server.safe_read", return_value={"diary": live}):

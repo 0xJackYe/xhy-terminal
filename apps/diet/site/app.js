@@ -1,4 +1,4 @@
-import { MEALS, NUTRIENTS, today, validDate, estimate, nutritionTotal, dayTotal, validateDiary, validateDay, mergeDays } from './lib.mjs';
+import { MEALS, NUTRIENTS, DIARY_TIMEZONE, today, validDate, estimate, nutritionTotal, dayTotal, validateDiary, validateDay, mergeDays } from './lib.mjs';
 import { setupQuickEntry } from './quick-entry.js';
 import { applyParsedMeals, undoParsedMeals } from './quick-merge.mjs';
 import { writeDrafts } from './draft-storage.mjs';
@@ -8,8 +8,8 @@ import { createSnapshotRefresh } from './diary-refresh.mjs';
 const $ = s => document.querySelector(s);
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const fmt = (n, digits = 0) => n == null ? '—' : n.toLocaleString('zh-CN', { maximumFractionDigits: digits });
-const dateObj = d => new Date(d + 'T12:00:00+08:00');
-const dateLabel = d => dateObj(d).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long', timeZone: 'Asia/Shanghai' });
+const dateObj = d => new Date(d + 'T12:00:00Z');
+const dateLabel = d => dateObj(d).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long', timeZone: DIARY_TIMEZONE });
 const shift = (d, n) => { const x = dateObj(d); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
 const storageKey = 'shiguang-drafts-v1';
 let canonical, catalog, drafts = [], days = [], selected = today(), view = 'diary', editing = null, editingDate = null;

@@ -72,8 +72,14 @@ def summarize_day(day, date):
                        "kcal": nutrient_total(meal.get("items", []))["kcal"]} for meal in meals]}
 
 
+def diary_today(now=None):
+    """Diary days run on UTC+0 (they change at 08:00 Beijing time), so a night
+    shift that crosses Beijing midnight stays on one diary day."""
+    return (now or dt.datetime.now(dt.timezone.utc)).astimezone(dt.timezone.utc).date()
+
+
 def diet_overview(config, today=None):
-    today = today or dt.datetime.now(BEIJING).date()
+    today = today or diary_today()
     try:
         live = safe_read(config.diet_port, "/api/diary")
         diary = live.get("diary") if live else None
