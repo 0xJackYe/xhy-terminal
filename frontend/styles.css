@@ -292,6 +292,17 @@ html:is([data-view="diet"], [data-view="wallet"]) .notice { margin-top: 10px; }
 .button:hover { border-color: var(--faint); }
 .button:active { transform: scale(.96); }
 
+/* Public demo copy: local-only actions are hidden and the app pages explain themselves. */
+.sync-status[data-status="demo"] .status-dot { background: var(--accent); }
+html[data-demo="true"] :is(#project-actions, .source-row a) { display: none !important; }
+.demo-frame { display: grid; place-items: center; }
+.demo-placeholder { max-width: 460px; padding: 32px; text-align: center; animation: card-in 600ms var(--ease-out) backwards; }
+.demo-placeholder h2 { margin: 4px 0 10px; font-size: 24px; letter-spacing: -.5px; }
+.demo-placeholder p { margin: 0 0 10px; color: var(--muted); font-size: 13.5px; line-height: 1.7; }
+.demo-placeholder .demo-kicker { margin: 0; color: var(--accent-text); font-family: var(--font-mono); font-size: 12px; }
+.demo-placeholder .demo-note { color: var(--faint); font-size: 12.5px; }
+.demo-placeholder .button { margin-top: 8px; }
+
 /* Theme change: a circular reveal from the toggle when View Transitions exist. */
 ::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
 ::view-transition-new(root) { z-index: 2; }

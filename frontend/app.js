@@ -20,6 +20,10 @@
   const preferredTheme = matchMedia("(prefers-color-scheme: dark)");
   const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
   const easeOut = "cubic-bezier(.22,1,.36,1)";
+  // Away from the owner's computer (the public Cloudflare copy) there is no
+  // local API, so the portal shows labelled sample data instead.
+  const demo = !/^(127\.0\.0\.1|localhost|\[::1\])$/.test(location.hostname);
+  document.documentElement.dataset.demo = String(demo);
 
   // Segmented controls (main navigation and work shift) share one sliding pill.
   function segmentIndicator(container, activeSelector) {
@@ -147,6 +151,7 @@
 
   function setSource(key, status, updatedAt) {
     const element = $(`${key}-source-state`);
+    if (demo) { element.dataset.status = "demo"; element.textContent = "示例数据"; text(`${key}-updated`, "公开站点不连接本机服务"); return; }
     element.dataset.status = status;
     element.textContent = status === "online" ? "连接正常" : status === "empty" ? "已连接 · 暂无记录" : statusLabels[status] || "未连接";
     text(`${key}-updated`, updatedAt ? `更新于 ${timestamp(updatedAt, true)}` : "尚未同步");
@@ -533,7 +538,7 @@
     const btcService = data.services?.btc || {};
     setSource("diet", dietService.status || data.diet?.status || "offline", data.diet?.updatedAt);
     setSource("btc", btcService.status || data.alerts?.status || data.wallet?.status || "offline", latestDate([data.wallet?.updatedAt, data.alerts?.updatedAt]));
-    text("last-sync", `总览同步于 ${timestamp(data.updatedAt || state.lastSuccess, true)} · 北京时间 · 每分钟自动刷新`);
+    text("last-sync", demo ? "公开演示站点：数据为示例，不是真实账户。真实数据只在本机终端显示。" : `总览同步于 ${timestamp(data.updatedAt || state.lastSuccess, true)} · 北京时间 · 每分钟自动刷新`);
     updateConnection();
     updateProjectHint();
   }
@@ -554,6 +559,7 @@
       else if (statuses.some((value) => value === "stale" || value === "offline")) { status = "stale"; label = "部分数据待同步"; }
       else label = `已同步 ${timestamp(state.data.updatedAt || state.lastSuccess).slice(0, 5)}`;
     }
+    if (demo && state.data && !state.failed) { status = "demo"; label = "演示数据"; }
     $("connection").dataset.status = status;
     text("connection-text", label);
   }
@@ -568,9 +574,13 @@
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 12000);
     try {
-      const response = await fetch("/api/overview", { headers: { Accept: "application/json" }, cache: "no-store", signal: controller.signal });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const data = await response.json();
+      let data;
+      if (demo) data = (await import("/demo.js")).demoOverview();
+      else {
+        const response = await fetch("/api/overview", { headers: { Accept: "application/json" }, cache: "no-store", signal: controller.signal });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        data = await response.json();
+      }
       if (!data || typeof data !== "object" || !["diet", "wallet", "alerts"].some((key) => data[key] && typeof data[key] === "object")) throw new Error("Invalid overview response");
       state.data = data;
       state.failed = false;
@@ -644,7 +654,39 @@
     overlay.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 260, easing: "ease" }).finished.then(() => { overlay.hidden = true; }, () => { overlay.hidden = true; });
   }
 
+  const demoNotes = {
+    diet: ["饮食日记", "按日历查看每天吃了什么，营养自动估算，也可以用 AI 对话记录或修改。"],
+    wallet: ["加密资产", "欧易、币安与离线钱包的合计持仓、定投成本与浮盈，以及比特币价格警报。"],
+  };
+  function loadDemoFrame(key) {
+    if (state.frames.has(key)) return;
+    const wrapper = document.createElement("div");
+    wrapper.className = "project-frame demo-frame";
+    const box = document.createElement("div");
+    box.className = "demo-placeholder";
+    const [title, description] = demoNotes[key];
+    const kicker = document.createElement("p");
+    kicker.className = "demo-kicker";
+    kicker.textContent = "本机功能";
+    const heading = document.createElement("h2");
+    heading.textContent = title;
+    const body = document.createElement("p");
+    body.textContent = description;
+    const note = document.createElement("p");
+    note.className = "demo-note";
+    note.textContent = "这部分直接读取私人数据和账户，只在主人的电脑上运行，公开站点不提供。";
+    const back = document.createElement("a");
+    back.className = "button";
+    back.href = "#overview";
+    back.textContent = "返回总览";
+    box.append(kicker, heading, body, note, back);
+    wrapper.append(box);
+    state.frames.set(key, { wrapper, iframe: null, timeout: null, loaded: true, pendingUrl: "" });
+    $("project-frames").append(wrapper);
+  }
+
   function loadFrame(key, reload = false) {
+    if (demo) { loadDemoFrame(key); return; }
     // Both finance routes own the same iframe, avoiding duplicate monitoring,
     // wallet requests, and independent tab states behind one visible workspace.
     const url = projectUrl(key);
@@ -811,7 +853,7 @@
   window.addEventListener("message", (event) => {
     if (event.origin !== location.origin) return;
     if (event.data?.type === "xhy:frame-height" && Number.isFinite(event.data.height)) {
-      const entry = [...state.frames.values()].find(item => event.source === item.iframe.contentWindow);
+      const entry = [...state.frames.values()].find(item => item.iframe && event.source === item.iframe.contentWindow);
       if (entry && event.data.height >= 1 && event.data.height <= 50000) {
         entry.iframe.style.setProperty("--xhy-frame-height", `${Math.ceil(event.data.height)}px`);
       }
