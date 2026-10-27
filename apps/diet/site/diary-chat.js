@@ -2,6 +2,8 @@ import { today, validDate } from './lib.mjs';
 import { createChatDateSessions } from './diary-chat-sessions.mjs';
 
 const $ = selector => document.querySelector(selector);
+export const hasPersistentDiary = persistence => persistence === 'local' || persistence === 'cloud';
+export const diaryStorageLabel = persistence => persistence === 'cloud' ? '云端日记' : persistence === 'local' ? '本机日记' : '浏览器草稿';
 
 /** Chat messages are plain text; only validated server snapshots reach the diary. */
 export function setupDiaryChat({ getState, applySnapshot, setBusy, refresh, syncDrafts, undo } = {}) {
@@ -39,17 +41,22 @@ export function setupDiaryChat({ getState, applySnapshot, setBusy, refresh, sync
   }
   function controls() {
     const state = getState();
-    submit.disabled = busy || state.persistence === 'unavailable';
+    const persistent = hasPersistentDiary(state.persistence);
+    submit.disabled = busy || !persistent;
     date.disabled = busy;
     submit.textContent = busy ? '正在处理…' : '发送';
     $('#diary-chat-refresh').disabled = busy;
-    $('#diary-chat-sync').disabled = busy || !state.draftDays.length || state.persistence === 'unavailable';
+    $('#diary-chat-sync').disabled = busy || !state.draftDays.length || !persistent;
     $('#diary-chat-sync').hidden = !state.draftDays.length;
     $('#diary-chat-undo').disabled = busy || !state.canUndo || !!state.draftDays.length;
     $('#diary-chat-clear').disabled = busy;
-    $('#diary-chat-storage').textContent = state.persistence === 'local'
-      ? `日记保存在本机 · ${state.draftDays.length ? `${state.draftDays.length} 天草稿待同步` : `已同步，版本 ${state.revision}`}`
+    $('#diary-chat-storage').textContent = persistent
+      ? `${state.persistence === 'cloud' ? '云端日记' : '日记保存在本机'} · ${state.draftDays.length ? `${state.draftDays.length} 天草稿待同步` : `已同步，版本 ${state.revision}`}`
       : '当前页面为浏览器草稿模式，请从个人总终端打开完整 AI 对话。';
+    const privacy = $('.chat-privacy');
+    if (privacy) privacy.textContent = persistent
+      ? `点击发送后，当前饮食记录、对话和食材参考会交由 DeepSeek 处理。修改通过校验后写入${diaryStorageLabel(state.persistence)}，可撤销最近一次保存。`
+      : '当前修改仅保存在浏览器草稿中。连接日记服务后可使用完整 AI 对话。';
   }
   async function action(callback) {
     if (busy) return;
@@ -86,7 +93,7 @@ export function setupDiaryChat({ getState, applySnapshot, setBusy, refresh, sync
     if (!validDate(date.value)) { status.textContent = '请选择有效的默认记录日期。'; return; }
     action(async () => {
       const state = getState();
-      if (state.blocked) throw new Error('本机草稿需要恢复，请先导出原始草稿，再导入有效备份。');
+      if (state.blocked) throw new Error('浏览器草稿需要恢复，请先导出原始草稿，再导入有效备份。');
       const content = input.value.trim();
       const payload = { text: content, recordDate: date.value, expectedRevision: state.revision,
         history: history.slice(-24), draftDays: state.draftDays };
@@ -104,7 +111,7 @@ export function setupDiaryChat({ getState, applySnapshot, setBusy, refresh, sync
         history.push({ role: 'user', content }, { role: 'assistant', content: result.reply });
         history = history.slice(-24); retry = null;
         if (input.value.trim() === content) input.value = '';
-        status.textContent = result.saved ? `已保存到本机日记${result.changes.length ? ` · ${result.changes.length} 项变更` : ''}。` : '已回复，日记内容未改动。';
+        status.textContent = result.saved ? `已保存到${diaryStorageLabel(result.persistence ?? getState().persistence)}${result.changes.length ? ` · ${result.changes.length} 项变更` : ''}。` : '已回复，日记内容未改动。';
         status.dataset.state = 'success';
       } catch (error) {
         if (error.name === 'AbortError') throw new Error('等待 AI 超时，输入已保留。可直接重新发送，系统会避免重复记录。');
@@ -117,7 +124,7 @@ export function setupDiaryChat({ getState, applySnapshot, setBusy, refresh, sync
     input.value = button.dataset.chatExample; input.focus();
   }));
   $('#diary-chat-refresh').addEventListener('click', () => action(async () => { await refresh(); retry = null; status.textContent = '已读取最新日记，输入和对话已保留。'; }));
-  $('#diary-chat-sync').addEventListener('click', () => action(async () => { await syncDrafts({ alreadyBusy: true }); status.textContent = '本机草稿已同步到日记。'; }));
+  $('#diary-chat-sync').addEventListener('click', () => action(async () => { await syncDrafts({ alreadyBusy: true }); status.textContent = getState().persistence === 'cloud' ? '浏览器草稿已同步到云端日记。' : '本机草稿已同步到日记。'; }));
   $('#diary-chat-undo').addEventListener('click', () => action(async () => {
     const result = await undo(); message('assistant', result.reply); history = []; retry = null; status.textContent = '已恢复最近一次修改前的日记。';
   }));

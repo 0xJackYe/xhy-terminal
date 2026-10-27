@@ -1,0 +1,17 @@
+{
+  "name": "xhy-cloud",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --experimental-sqlite --test tests/*.test.mjs && npm --prefix ../apps/diet test",
+    "build": "node build.mjs",
+    "pretest": "npm run build"
+  },
+  "dependencies": {
+    "decimal.js": "^10.6.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "wrangler": "^4.0.0"
+  }
+}

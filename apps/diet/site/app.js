@@ -2,7 +2,7 @@ import { MEALS, NUTRIENTS, today, validDate, estimate, nutritionTotal, dayTotal,
 import { setupQuickEntry } from './quick-entry.js';
 import { applyParsedMeals, undoParsedMeals } from './quick-merge.mjs';
 import { writeDrafts } from './draft-storage.mjs';
-import { setupDiaryChat } from './diary-chat.js';
+import { setupDiaryChat, hasPersistentDiary, diaryStorageLabel } from './diary-chat.js';
 import { createSnapshotRefresh } from './diary-refresh.mjs';
 
 const $ = s => document.querySelector(s);
@@ -40,7 +40,7 @@ function toast(message) { $('#toast').textContent = message; $('#toast').hidden 
 function commitDrafts(next, { recover = false } = {}) {
   if (persistentBusy) throw new Error('正在保存或与 AI 对话，请完成后再修改。');
   if (draftReadError && (!recover || (rawDraftBackup !== null && !rawBackupExported))) throw new Error('原始草稿尚未恢复。请先导出原始草稿，再导入有效的日记备份。');
-  const saved = writeDrafts(canonical.days, next, { storage: localStorage, key: storageKey, baseRevision: remote.persistence === 'unavailable' ? undefined : remote.revision });
+  const saved = writeDrafts(canonical.days, next, { storage: localStorage, key: storageKey, baseRevision: hasPersistentDiary(remote.persistence) ? remote.revision : undefined });
   drafts = saved.drafts; days = saved.days;
   if (recover) { draftReadError = false; rawDraftBackup = null; $('#draft-recovery').hidden = true; }
 }
@@ -50,8 +50,8 @@ function setPersistentBusy(value) {
   document.querySelectorAll('[data-record-method], #save-meal, [data-confirm]').forEach(button => { button.disabled = value; });
 }
 function updateSyncNote() {
-  $('#sync-note').textContent = remote.persistence === 'local'
-    ? drafts.length ? `${drafts.length} 天本机草稿待同步。继续与 AI 对话或点“同步本机草稿”会写入日记。` : '日记已保存到本机文件。AI 对话与表格修改使用同一本日记，最近一次保存可以撤销。'
+  $('#sync-note').textContent = hasPersistentDiary(remote.persistence)
+    ? drafts.length ? `${drafts.length} 天本机草稿待同步。继续与 AI 对话或点“同步本机草稿”会写入${remote.persistence === 'cloud' ? '云端日记' : '日记'}。` : `${remote.persistence === 'cloud' ? '云端日记已保存。' : '日记已保存到本机文件。'}AI 对话与表格修改使用同一本日记，最近一次保存可以撤销。`
     : '当前页面新增内容保存在浏览器草稿。完整 AI 对话请从个人总终端打开。';
   chatController?.update();
 }
@@ -63,7 +63,7 @@ async function applyServerSnapshot(result) {
     cacheFailure = true; draftReadError = true;
     try { rawDraftBackup = localStorage.getItem(storageKey); } catch { rawDraftBackup = null; }
     $('#draft-recovery').hidden = false; $('#export-raw-drafts').hidden = rawDraftBackup === null;
-    $('#draft-recovery-message').textContent = '日记已写入本机文件，但浏览器草稿缓存未能清理。请导出原始草稿备份后恢复存储权限，避免旧草稿覆盖最新日记。';
+    $('#draft-recovery-message').textContent = `日记已写入${result.persistence === 'cloud' ? '云端' : '本机文件'}，但浏览器草稿缓存未能清理。请导出原始草稿备份后恢复存储权限，避免旧草稿覆盖最新日记。`;
   }
   canonical = next; drafts = []; days = structuredClone(next.days);
   remote = { ...remote, revision: result.revision, persistence: result.persistence, canUndo: result.canUndo };
@@ -81,11 +81,11 @@ async function storeRequest(path, payload) {
   const response = await fetch(new URL(`./api/${path}`, document.baseURI), { method: 'POST', credentials: 'same-origin',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify(payload) });
   const result = await response.json().catch(() => null);
-  if (!response.ok || !result?.diary) throw new Error(result?.error?.message || '本机保存暂时失败，浏览器草稿已保留，请重试。');
+  if (!response.ok || !result?.diary) throw new Error(result?.error?.message || '日记保存暂时失败，浏览器草稿已保留，请重试。');
   return result;
 }
 async function syncDrafts({ alreadyBusy = false } = {}) {
-  if (!drafts.length || remote.persistence === 'unavailable') return;
+  if (!drafts.length || !hasPersistentDiary(remote.persistence)) return;
   if (draftReadError) throw new Error('请先导出并恢复原始草稿。');
   if (persistentBusy && !alreadyBusy) throw new Error('正在处理其他修改，请稍后同步。');
   if (!alreadyBusy) setPersistentBusy(true);
@@ -416,7 +416,7 @@ async function saveMeal(event) {
     await saveDraft({ date, title: previous?.title ?? '认真吃饭的一天', note: `${previous?.note ?? ''}${confirmed ? ` 补充：${MEALS[meal.type]}已在网站确认为吃过。` : ''}`, source: previous?.source ?? { label: '网站手动记录' }, meals: [meal] });
     formSession = false; formDirty = false;
     selected = date; calendarMonth = date.slice(0, 7); detailOpen = true;
-    switchView('diary', { replace: true }); showDayDetail(); toast(remote.persistence === 'local' ? '已保存到本机日记。' : '已保存到本机草稿。');
+    switchView('diary', { replace: true }); showDayDetail(); toast(`已保存到${diaryStorageLabel(remote.persistence)}。`);
   } catch (error) { toast(error.message); }
 }
 function renderCalendar() {
@@ -456,14 +456,14 @@ function returnFromRecord() {
 function exportDiary() {
   const payload = { ...canonical, updatedAt: new Date().toISOString(), days };
   const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }));
-  const a = document.createElement('a'); a.href = url; a.download = `食光-饮食日记-${today()}.json`; a.click(); setTimeout(() => URL.revokeObjectURL(url), 2000); toast('日记已导出，包含仓库记录与本机草稿。');
+  const a = document.createElement('a'); a.href = url; a.download = `食光-饮食日记-${today()}.json`; a.click(); setTimeout(() => URL.revokeObjectURL(url), 2000); toast('日记已导出，包含已保存日记与浏览器草稿。');
 }
 async function importDiary(event) {
   const file = event.target.files[0]; if (!file) return;
   try {
     if (file.size > 10 * 1024 * 1024) throw new Error('请导入 10MB 以内的日记文件。');
     const incoming = validateDiary(JSON.parse(await file.text()));
-    commitDrafts(mergeDays(drafts, incoming.days), { recover: true }); await syncDrafts(); setDate(days.at(-1)?.date ?? today()); switchView('diary'); showDayDetail(); toast(`已合并 ${incoming.days.length} 天${remote.persistence === 'local' ? '到本机日记' : '到本机草稿'}，同 ID 餐食更新，其余保留。`);
+    commitDrafts(mergeDays(drafts, incoming.days), { recover: true }); await syncDrafts(); setDate(days.at(-1)?.date ?? today()); switchView('diary'); showDayDetail(); toast(`已合并 ${incoming.days.length} 天到${diaryStorageLabel(remote.persistence)}，同 ID 餐食更新，其余保留。`);
   } catch (error) { toast(`导入未完成：${error.message}`); }
   event.target.value = '';
 }
@@ -523,7 +523,7 @@ function wire() {
     const url = URL.createObjectURL(new Blob([rawDraftBackup], { type: 'application/json' }));
     const link = document.createElement('a'); link.href = url; link.download = `食光-原始草稿-${today()}.json`; link.click();
     setTimeout(() => URL.revokeObjectURL(url), 2000); rawBackupExported = true;
-    $('#draft-recovery-message').textContent = '原始草稿已导出。现在可以导入一份有效日记备份，恢复本机保存。';
+    $('#draft-recovery-message').textContent = '原始草稿已导出。现在可以导入一份有效日记备份，恢复浏览器草稿保存。';
   });
   $('#import-input').addEventListener('change', importDiary);
   document.addEventListener('click', async event => {
@@ -555,7 +555,7 @@ async function init() {
       rawDraftBackup = localStorage.getItem(storageKey);
       if (rawDraftBackup) {
         const saved = validateDiary(JSON.parse(rawDraftBackup));
-        if (saved.days.length && Number.isSafeInteger(saved.baseRevision) && remote.persistence !== 'unavailable' && saved.baseRevision !== remote.revision) throw new Error('草稿基于旧版本');
+        if (saved.days.length && Number.isSafeInteger(saved.baseRevision) && hasPersistentDiary(remote.persistence) && saved.baseRevision !== remote.revision) throw new Error('草稿基于旧版本');
         validateDiary({ schemaVersion: 1, days: mergeDays(canonical.days, saved.days) });
         drafts = saved.days;
       }
@@ -573,7 +573,7 @@ async function init() {
         await applyServerSnapshot(result); return result;
       } });
     quickController = setupQuickEntry({ apply: async incoming => {
-      const token = applyQuickEntry(incoming); await syncDrafts(); return remote.persistence === 'unavailable' ? token : null;
+      const token = applyQuickEntry(incoming); await syncDrafts(); return hasPersistentDiary(remote.persistence) ? null : token;
     }, undo: undoQuickEntry, onBusy: busy => document.querySelectorAll('[data-record-method]').forEach(button => { button.disabled = busy; }) });
     prepareMealForm(); formSession = false; setRecordMethod('natural');
     restoreRoute();
@@ -581,7 +581,7 @@ async function init() {
     const refreshLatest = createSnapshotRefresh({
       read: readServerDiary,
       getRevision: () => remote.revision,
-      isSafe: () => remote.persistence === 'local' && document.visibilityState === 'visible'
+      isSafe: () => hasPersistentDiary(remote.persistence) && document.visibilityState === 'visible'
         && !persistentBusy && !draftReadError && !drafts.length && view !== 'record' && !formDirty,
       apply: async result => {
         canonical = result.diary; remote = { ...remote, ...result }; days = structuredClone(canonical.days);
