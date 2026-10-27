@@ -12,36 +12,63 @@ const meals = [
 ];
 const weekKcal = [1720, 1580, 1745, null, 1690, 1735, 1331];
 
-// The price drifts a little on every refresh so the page behaves like the live one.
+// The price drifts a little on every refresh and live tick so the page behaves like the live one.
 let price = 67420 + Math.random() * 400;
 const open = 66040.5;
+let dayHigh = Math.max(68120.5, price), dayLow = 65810.2;
+const STEP = 5 * 60000;
+const started = Date.now();
 
-function chart(now) {
+function move(size) {
+  price = Math.max(open * .96, price + (Math.random() - .48) * size);
+  dayHigh = Math.max(dayHigh, price);
+  dayLow = Math.min(dayLow, price);
+}
+
+// One walk per visit, bent to end at the opening price of the visit; later
+// refreshes extend it every five minutes instead of drawing a new one.
+const history = (() => {
   const points = [];
   let value = open;
   for (let i = 0; i <= 120; i++) {
     value += Math.sin(i / 9) * 38 + (Math.random() - .45) * 70;
-    points.push([now - (120 - i) * 5 * 60000, Math.round(value * 100) / 100]);
+    points.push([started - (120 - i) * STEP, value]);
   }
-  // Bend the walk so it ends exactly at the current price without a jump.
   const gap = price - points[points.length - 1][1];
   return points.map(([time, value], i) => [time, Math.round((value + gap * i / 120) * 100) / 100]);
+})();
+
+function chart(now) {
+  while (history[history.length - 1][0] + STEP <= now) history.push([history[history.length - 1][0] + STEP, Math.round(price * 100) / 100]);
+  return history.slice(-121);
+}
+
+const recent = [5, 2, 0].map((daysAgo, index) => ({
+  kind: "threshold", metric: "daily_change", threshold_pct: [3.5, 2.5, 2.5][index],
+  change_pct: [-3.52, 2.6, 2.51][index], price: [63120.2, 61001.2, 67698.4][index],
+  at_ms: started - daysAgo * DAY - (index + 1) * 3600000,
+}));
+const settings = { enabled: true, thresholds_pct: [2.5, 3.5, 5], metric: "daily_change" };
+
+// The same shape as the terminal's ?view=market stream, one tick at a time.
+export function demoMarket() {
+  move(14);
+  return {
+    market: { status: "live", price: Math.round(price * 100) / 100, change_pct: (price / open - 1) * 100, range_pct: (dayHigh - dayLow) / open * 100,
+      day_open: open, day_high: dayHigh, day_low: dayLow, event_ms: Date.now() },
+    settings, alerts: recent,
+  };
 }
 
 export function demoOverview() {
   const now = Date.now();
-  price = Math.max(open * .96, price + (Math.random() - .48) * 60);
+  move(60);
   const today = diaryDate(new Date(now));
   const days = weekKcal.map((kcal, index) => {
     const date = diaryDate(new Date(now - (6 - index) * DAY));
     return { date, recorded: kcal !== null, mealCount: kcal ? 3 : 0, totals: { kcal } };
   });
   const updatedAt = new Date(now).toISOString();
-  const recent = [5, 2, 0].map((daysAgo, index) => ({
-    kind: "threshold", metric: "daily_change", threshold_pct: [3.5, 2.5, 2.5][index],
-    change_pct: [-3.52, 2.6, 2.51][index], price: [63120.2, 61001.2, 67698.4][index],
-    at_ms: now - daysAgo * DAY - (index + 1) * 3600000,
-  }));
   return {
     updatedAt, timezone: zone, demo: true,
     services: { diet: { status: "online" }, btc: { status: "online" } },
@@ -70,9 +97,9 @@ export function demoOverview() {
       sources: [{ status: "connected" }, { status: "connected" }, { status: "connected" }],
     },
     alerts: {
-      status: "online", updatedAt, stale: false, price, dayOpen: open, dayHigh: Math.max(68120.5, price), dayLow: 65810.2,
-      changePct: (price / open - 1) * 100, rangePct: (Math.max(68120.5, price) - 65810.2) / open * 100,
-      enabled: true, thresholds: [2.5, 3.5, 5], metric: "daily_change", recent, chart: chart(now),
+      status: "online", updatedAt, stale: false, price: Math.round(price * 100) / 100, dayOpen: open, dayHigh, dayLow,
+      changePct: (price / open - 1) * 100, rangePct: (dayHigh - dayLow) / open * 100,
+      enabled: settings.enabled, thresholds: settings.thresholds_pct, metric: settings.metric, settings, recent, chart: chart(now),
     },
   };
 }

@@ -544,13 +544,23 @@ function wire() {
 }
 async function init() {
   try {
-    const responses = await Promise.all([fetch('./data/diary.json', { cache: 'no-cache' }), fetch('./data/foods.json', { cache: 'no-cache' })]);
-    if (responses.some(r => !r.ok)) throw new Error('数据文件读取失败');
-    canonical = validateDiary(await responses[0].json()); catalog = await responses[1].json();
-    try {
-      const response = await fetch(new URL('./api/diary', document.baseURI), { cache: 'no-store', credentials: 'same-origin' });
-      if (response.ok) { const snapshot = await response.json(); canonical = validateDiary(snapshot.diary); remote = { ...remote, ...snapshot }; }
-    } catch { /* Existing hosted diary keeps its browser-draft workflow when no durable API exists. */ }
+    // The durable diary comes from the local API. The seed file is only the fallback
+    // for a hosted copy without one, so it is not downloaded alongside the API copy.
+    const [foods, stored] = await Promise.all([
+      fetch('./data/foods.json', { cache: 'no-cache' }),
+      fetch(new URL('./api/diary', document.baseURI), { cache: 'no-store', credentials: 'same-origin' }).catch(() => null)
+    ]);
+    if (!foods.ok) throw new Error('数据文件读取失败');
+    catalog = await foods.json();
+    let snapshot = null;
+    try { if (stored?.ok) { snapshot = await stored.json(); validateDiary(snapshot.diary); } } catch { snapshot = null; /* Fall back to the seed below. */ }
+    if (snapshot) { canonical = snapshot.diary; remote = { ...remote, ...snapshot }; }
+    else {
+      // Existing hosted diary keeps its browser-draft workflow when no durable API exists.
+      const seed = await fetch('./data/diary.json', { cache: 'no-cache' });
+      if (!seed.ok) throw new Error('数据文件读取失败');
+      canonical = validateDiary(await seed.json());
+    }
     try {
       rawDraftBackup = localStorage.getItem(storageKey);
       if (rawDraftBackup) {

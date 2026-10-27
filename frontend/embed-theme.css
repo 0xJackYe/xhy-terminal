@@ -5,7 +5,7 @@ html[data-xhy-theme] {
   --xhy-panel: #ffffff;
   --xhy-soft: #eeece7;
   --xhy-text: #191816;
-  --xhy-muted: #6d6a63;
+  --xhy-muted: #5f5c55;
   --xhy-line: #e6e3dc;
   --xhy-accent: #191816;
   --xhy-accent-soft: #eeece7;
@@ -38,7 +38,7 @@ html[data-xhy-theme="dark"] {
   --xhy-panel: #171715;
   --xhy-soft: #21211e;
   --xhy-text: #f2f0eb;
-  --xhy-muted: #a09d95;
+  --xhy-muted: #b0ada5;
   --xhy-line: #2c2b28;
   --xhy-accent: #f2f0eb;
   --xhy-accent-soft: #21211e;

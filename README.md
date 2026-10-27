@@ -32,6 +32,12 @@ python launch.py
 
 打开页面时自动识别设备：手机（iPhone、Android 手机，或短边小于 600px 的触屏设备）显示手机界面，包括大标题、可横向滑动的时间条、底部悬浮标签栏和底部弹出的连接详情；电脑和 iPad 显示桌面界面。连接详情里的“界面”可切换为自动、手机或电脑，选择保存在当前浏览器；也可以在地址后加 `?ui=mobile`、`?ui=desktop` 或 `?ui=auto`。添加到 iPhone 主屏幕后以全屏方式打开。
 
+## 实时行情与快捷操作
+
+- 总览页的比特币价格、当日涨跌、区间和走势末端每秒随行情更新，卡片标题旁显示“实时”，浏览器标签页标题同步显示价格。数据流只含行情、警报设置和最近警报，不含整日走势（约 1 KB/秒）；离开总览或标签页隐藏 5 分钟后断开，回来自动重连。比特币终端自身的数据流在走势不变时只发送最新的点。
+- 电脑上按 ⌘K / Ctrl+K（或 `/`、`?`）打开命令面板，可按中文、英文或拼音首字母搜索页面和操作；`1` `2` `3` 切换页面，`R` 刷新总览，`T` 切换明暗。焦点在饮食日记或加密资产页面内时同样有效，输入文字时不触发。连接详情底部列出这些按键。
+- 饮食日记或比特币终端未运行时，总览顶部和对应页面显示“启动服务”按钮，一键在本机启动，恢复后页面自动重新加载。
+
 ## 公开演示站点（Cloudflare Pages）
 
 `frontend/` 同时部署为公开演示站点 https://xhy.pages.dev/ 。Cloudflare 项目已连接本仓库：推送到 `main` 即更新正式站点，其他分支生成预览地址。
@@ -57,6 +63,8 @@ python launch.py
 python -m unittest test_server test_cli -q
 cd apps/bitcoin
 python -m unittest test_btc_pnl_service test_btc_cost_tracker test_btc_cost_http test_btc_terminal_server test_combined_wallet_service -q
+node test_terminal_frontend.js
+node --test test_terminal_ui.js
 node test_combined_wallet_ui.js
 ```
 

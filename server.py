@@ -6,6 +6,7 @@ changes an alert rule, sends a notification, or calls a trading API.
 import argparse
 import concurrent.futures
 import datetime as dt
+import hashlib
 import http.client
 import json
 import math
@@ -195,6 +196,13 @@ def build_overview(config):
             "diet": diet, "wallet": wallet_overview(portfolio, combined), "alerts": alerts_overview(terminal)}
 
 
+def revalidated(content_type):
+    """Code, styles, images and fonts may be cached and revalidated by ETag. Pages
+    and data keep no-store: they can carry the diary, balances or the address."""
+    kind = content_type.split(";")[0].strip().lower()
+    return kind in ("text/css", "text/javascript", "application/javascript") or kind.startswith(("image/", "font/"))
+
+
 def probe_port(port):
     try:
         with socket.create_connection(("127.0.0.1", port), timeout=.25):
@@ -285,17 +293,25 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
     def respond(self, status, data, content_type="application/json; charset=utf-8", extra=None):
+        cache, etag = "no-store", None
+        if status == 200 and revalidated(content_type):
+            cache, etag = "no-cache", '"%s"' % hashlib.blake2b(data, digest_size=12).hexdigest()
+            if etag in {tag.strip().removeprefix("W/") for tag in self.headers.get("If-None-Match", "").split(",")}:
+                status, data = 304, b""
         self.send_response(status)
-        self.send_header("Content-Type", content_type)
-        self.send_header("Content-Length", str(len(data)))
-        self.send_header("Cache-Control", "no-store")
+        if status != 304:
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", cache)
+        if etag:
+            self.send_header("ETag", etag)
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "same-origin")
         self.send_header("X-Frame-Options", "SAMEORIGIN")
         for key, value in (extra or {}).items():
             self.send_header(key, value)
         self.end_headers()
-        if self.command != "HEAD":
+        if self.command != "HEAD" and data:
             try:
                 self.wfile.write(data)
             except OSError:

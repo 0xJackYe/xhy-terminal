@@ -164,6 +164,24 @@
     announce();
   }
 
+  // Portal shortcuts keep working while focus is inside an embedded project:
+  // ⌘K / Ctrl+K always, and 1 2 3 T / ? whenever no field is being typed in
+  // and the project has not used the key itself.
+  function connectShortcuts(doc) {
+    const win = doc.defaultView;
+    if (win.top === win || win.__xhyShortcuts) return;
+    win.__xhyShortcuts = true;
+    const typing = target => target instanceof win.Element && Boolean(target.closest("input, textarea, select, [contenteditable]:not([contenteditable='false'])"));
+    doc.addEventListener("keydown", event => {
+      const palette = (event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "k";
+      const single = !event.metaKey && !event.ctrlKey && !event.altKey && !event.isComposing && !event.repeat
+        && ["1", "2", "3", "t", "T", "/", "?"].includes(event.key) && !typing(event.target);
+      if ((!palette && !single) || event.defaultPrevented) return;
+      event.preventDefault();
+      win.top.postMessage({ type: "xhy:shortcut", key: palette ? "palette" : event.key.toLowerCase() }, win.location.origin);
+    });
+  }
+
   // Nested wallet content expands the finance document; that document then
   // announces its own new height to the shell. Only exact same-origin child
   // windows can resize their matching iframe.
@@ -202,6 +220,7 @@
       disableOptions(doc);
       connectDocumentHeight(doc);
       connectProjectMotion(doc);
+      connectShortcuts(doc);
     }
     if (!observed.has(doc)) {
       let queued = false;

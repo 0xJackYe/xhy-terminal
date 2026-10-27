@@ -9,7 +9,7 @@ import urllib.request
 from datetime import datetime, timezone
 from unittest.mock import patch
 
-from btc_terminal_server import OPTIONS_STATIC, TerminalServer, WalletProxy, ProxyError
+from btc_terminal_server import OPTIONS_STATIC, TerminalServer, WalletProxy, ProxyError, history_delta, market_view
 
 
 ADDRESS = "bc1q" + "a" * 38
@@ -220,6 +220,16 @@ class TerminalTests(unittest.TestCase):
             payload = next(line[6:] for line in lines if line.startswith(b"data: "))
             self.assertEqual(json.loads(payload)["settings"], self.monitor.settings)
 
+    def test_market_view_stream_omits_chart_history(self):
+        self.monitor.read = lambda: {"settings": self.monitor.settings, "market": {"price": 1.0}, "revision": 3,
+                                     "history": [{"time_ms": 1, "price": 1.0}], "alerts": [{"id": str(i)} for i in range(12)]}
+        with urllib.request.urlopen(self.url + "/api/terminal/events?view=market", timeout=2) as response:
+            lines = [response.readline() for _ in range(4)]
+            payload = json.loads(next(line[6:] for line in lines if line.startswith(b"data: ")))
+        self.assertNotIn("history", payload)
+        self.assertEqual(payload["market"], {"price": 1.0})
+        self.assertEqual([alert["id"] for alert in payload["alerts"]], [str(i) for i in range(4, 12)])
+
     def test_options_page_and_original_scripts_share_the_terminal_origin(self):
         status, headers, body = self.call("/options.html")
         self.assertEqual(status, 200)
@@ -273,6 +283,45 @@ class TerminalTests(unittest.TestCase):
         self.assertEqual(self.mutation("/api/market", {})[0], 405)
         self.assertEqual(self.mutation("/api/order", {})[0], 405)
         self.assertEqual(self.call("/api/account")[0], 404)
+
+
+class LiveStreamTests(unittest.TestCase):
+    @staticmethod
+    def point(minute, price):
+        return {"time_ms": minute * 60000 + 5000, "price": price}
+
+    def test_history_is_sent_once_then_only_its_newest_points(self):
+        first = [self.point(m, 100 + m) for m in range(3)]
+        sent, held = history_delta({"history": first, "revision": 1}, None)
+        self.assertEqual(sent["history"], first)
+        # The current minute moves: only that point travels.
+        moved = first[:2] + [self.point(2, 150)]
+        sent, held = history_delta({"history": moved}, held)
+        self.assertNotIn("history", sent)
+        self.assertEqual(sent["history_tail"], [self.point(2, 150)])
+        # A new minute starts: the finished minute and the new one travel.
+        grown = moved + [self.point(3, 160)]
+        sent, held = history_delta({"history": grown}, held)
+        self.assertEqual(sent["history_tail"], [self.point(2, 150), self.point(3, 160)])
+        self.assertEqual(held, grown)
+
+    def test_any_change_to_earlier_minutes_resends_the_full_history(self):
+        start = [self.point(m, 100) for m in range(4)]
+        _, held = history_delta({"history": start}, None)
+        for changed in (start[1:] + [self.point(4, 100)],           # oldest minute trimmed
+                        [self.point(0, 99)] + start[1:],            # an earlier minute corrected
+                        [],                                         # day rollover cleared it
+                        start + [self.point(4, 1), self.point(5, 1)]):  # two new minutes at once
+            sent, _ = history_delta({"history": changed}, held)
+            self.assertEqual(sent["history"], changed)
+            self.assertNotIn("history_tail", sent)
+        self.assertEqual(history_delta({"settings": {}}, held), ({"settings": {}}, held))
+
+    def test_market_view_keeps_quote_rules_and_recent_alerts_only(self):
+        value = {"market": {"price": 2}, "settings": {"enabled": True}, "revision": 9, "instance_id": "a",
+                 "server_time_ms": 5, "history": [1, 2], "alerts": list(range(20)), "storage_error": None}
+        self.assertEqual(market_view(value), {"market": {"price": 2}, "settings": {"enabled": True}, "revision": 9,
+                                              "instance_id": "a", "server_time_ms": 5, "alerts": list(range(12, 20))})
 
 
 class RelayTests(unittest.TestCase):

@@ -126,6 +126,8 @@ class ProxyTests(unittest.TestCase):
                     return
                 if self.path == "/api/raw":
                     data, kind = b'{"note":"/api/unchanged"}', "application/json"
+                elif self.path == "/app.js":
+                    data, kind = b"console.log('/api/terminal')", "text/javascript"
                 else:
                     data, kind = b'<script src="/app.js"></script><iframe src="/wallet.html"></iframe>', "text/html"
                 self.send_response(200)
@@ -178,6 +180,22 @@ class ProxyTests(unittest.TestCase):
         self.assertIn(b'src="/btc/wallet.html"', html)
         self.assertEqual(headers["X-Frame-Options"], "SAMEORIGIN")
         self.assertEqual(self.request("/diet/api/raw")[2], b'{"note":"/api/unchanged"}')
+
+    def test_code_is_revalidated_by_etag_and_pages_and_data_are_never_stored(self):
+        for path in ("/styles.css", "/diet/app.js"):
+            with self.subTest(path=path):
+                status, headers, body = self.request(path)
+                self.assertEqual((status, headers["Cache-Control"]), (200, "no-cache"))
+                self.assertTrue(body)
+                etag = headers["ETag"]
+                status, headers, body = self.request(path, headers={"If-None-Match": 'W/"stale", ' + etag})
+                self.assertEqual((status, body, headers["ETag"]), (304, b"", etag))
+                self.assertEqual(self.request(path, headers={"If-None-Match": '"stale"'})[0], 200)
+        for path in ("/", "/btc/", "/diet/api/raw"):
+            with self.subTest(path=path):
+                status, headers, _ = self.request(path)
+                self.assertEqual((status, headers["Cache-Control"]), (200, "no-store"))
+                self.assertNotIn("ETag", headers)
 
     def test_dynamic_js_and_css_roots_are_rewritten(self):
         source = b"fetch(`/api/chat/${id}`); new EventSource('/api/events'); import('/lib.mjs'); const url='https://example.com/api';"
