@@ -305,3 +305,11 @@
 :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-pnl { display: grid !important; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 10px; align-content: start; }
 :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-pnl > :not(label):not(select) { grid-column: 1 / -1; }
 :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-pnl > select { justify-self: start; }
+
+/* Stale-cache and refresh-failure notices add a red line to most panels after
+   any missed refresh; each panel's own timestamp already shows data age. Setup
+   prompts (not configured, not connected) stay visible. */
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(#combinedMessage, #btcCostMessage, .okx-message.error, .portfolio-message.error) { display: none !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(.combined-state, .btc-cost-state, .okx-state, .portfolio-state):is(.stale, .unavailable, .error) { display: none !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #cryptoPortfolioPanel:has(.portfolio-state.stale) .portfolio-message { display: none !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="wallet"] body .wallet-sync[data-state="error"], :root[data-xhy-embedded="true"][data-xhy-surface="wallet"] body .wallet-notes:has(> .wallet-sync[data-state="error"]:only-child) { display: none !important; }
