@@ -7,7 +7,7 @@
   const observed = new WeakMap();
   const connectedFrames = new WeakSet();
   const financeNavigations = new WeakSet();
-  const isProjectPath = path => /^\/(diet|btc)(\/|$)/.test(path) || path === "/travel.html";
+  const isProjectPath = path => /^\/(diet|btc)(\/|$)/.test(path) || /^\/travel(?:\.html)?$/.test(path);
   const project = isProjectPath(location.pathname);
   const validTheme = value => value === "dark" || value === "light";
   let currentTheme = "light";
@@ -177,7 +177,7 @@
     const isProject = embedded || isProjectPath(doc.location.pathname);
     if (isProject) {
       root.dataset.xhyTheme = theme;
-      root.dataset.xhySurface = doc.location.pathname === "/travel.html" ? "travel" : /^\/diet(?:\/|$)/.test(doc.location.pathname) ? "diet" : /\/wallet\.html$/.test(doc.location.pathname) ? "wallet" : "btc";
+      root.dataset.xhySurface = /^\/travel(?:\.html)?$/.test(doc.location.pathname) ? "travel" : /^\/diet(?:\/|$)/.test(doc.location.pathname) ? "diet" : /\/wallet\.html$/.test(doc.location.pathname) ? "wallet" : "btc";
       root.style.colorScheme = theme;
       if (doc.head && !doc.querySelector('link[data-xhy-embed-theme]')) {
         const sheet = doc.createElement("link");

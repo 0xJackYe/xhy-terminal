@@ -13,7 +13,7 @@
     overview: { title: "总览", description: "饮食、资产与比特币行情。" },
     diet: { title: "饮食日记", description: "按日期查看和记录饮食。", url: "/diet/" },
     wallet: { title: "加密资产", description: "持仓、走势与价格警报。", url: "/btc/#wallet" },
-    travel: { title: "快速出境", description: "附近机场、直飞时刻与入境准备。", url: "/travel.html" },
+    travel: { title: "快速出境", description: "附近机场、直飞时刻与入境准备。", url: "/travel" },
     alerts: { title: "价格警报", description: "比特币行情与价格提醒。", url: "/btc/#alerts" },
   };
   const state = { data: null, view: "overview", financeSection: "wallet", refreshing: false, failed: false, frames: new Map(), lastSuccess: null };
