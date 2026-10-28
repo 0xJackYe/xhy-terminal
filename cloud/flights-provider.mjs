@@ -143,7 +143,7 @@ export async function fetchAirportDepartures({ airport, from, to, apiKey, airpor
       metadata.query_windows.push({ from: new Date(begin).toISOString(), to: new Date(finish).toISOString(), from_local: fromLocal, to_local: toLocal });
       metadata.request_count++;
       let response;
-      try { response = await fetchImpl(url.toString(), { method: 'GET', headers: { Accept: 'application/json', 'X-RapidAPI-Key': apiKey, 'X-RapidAPI-Host': HOST }, signal: controller.signal, redirect: 'error' }); }
+      try { response = await fetchImpl.call(globalThis, url.toString(), { method: 'GET', headers: { Accept: 'application/json', 'X-RapidAPI-Key': apiKey, 'X-RapidAPI-Host': HOST }, signal: controller.signal, redirect: 'error' }); }
       catch { fail('PROVIDER_UNAVAILABLE', '暂时无法连接航班数据服务，请稍后重试。'); }
       if (response?.redirected || !response || typeof response.status !== 'number') fail('INVALID_PROVIDER_RESPONSE', '航班数据服务返回了无法核实的响应。');
       if (response.status === 429) {

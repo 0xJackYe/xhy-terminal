@@ -29,6 +29,21 @@ function safeError(code, secret = KEY) {
   };
 }
 
+test('runtime fetch retains the global receiver required by Cloudflare Workers', async () => {
+  let calls = 0;
+  const fetchImpl = async function (url, init) {
+    assert.equal(this, globalThis);
+    calls++;
+    assert.equal(new URL(url).origin, 'https://aerodatabox.p.rapidapi.com');
+    assert.equal(init.method, 'GET');
+    return Response.json({ departures: [row()] });
+  };
+  const result = await fetchAirportDepartures(args({ fetchImpl }));
+  assert.equal(calls, 1);
+  assert.equal(result.metadata.status, 'ok');
+  assert.equal(result.flights.length, 1);
+});
+
 test('airport UTC window becomes local minutes in one pinned, credential-header-only request', async () => {
   const calls = [], result = await fetchAirportDepartures(args({ fetchImpl: mock([row()], calls), airportsByIata: { KIX: JAPAN } }));
   assert.equal(calls.length, 1);
