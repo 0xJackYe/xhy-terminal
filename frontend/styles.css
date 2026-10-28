@@ -119,11 +119,13 @@ h1 { margin: 0; font-size: 40px; font-weight: 650; line-height: 1.1; letter-spac
 .sync-status[data-status="online"] .status-dot { background: var(--positive); }
 .sync-status[data-status="stale"] .status-dot { background: var(--amber); }
 .sync-status[data-status="offline"] .status-dot { background: var(--danger); }
-html[data-view="diet"] main, html[data-view="wallet"] main { padding-top: 28px; }
-html[data-view="diet"] .page-heading, html[data-view="wallet"] .page-heading { margin-bottom: 16px; }
+html[data-view="diet"] main, html[data-view="wallet"] main, html[data-view="travel"] main { padding-top: 28px; }
+html[data-view="diet"] .page-heading, html[data-view="wallet"] .page-heading, html[data-view="travel"] .page-heading { margin-bottom: 16px; }
 html[data-view="diet"] .eyebrow, html[data-view="wallet"] .eyebrow, html[data-view="diet"] .sync-status, html[data-view="wallet"] .sync-status { display: none; }
 html[data-view="diet"] h1, html[data-view="wallet"] h1 { font-size: 32px; letter-spacing: -.9px; }
 html[data-view="diet"] .page-description { display: none; }
+html[data-view="travel"] .eyebrow, html[data-view="travel"] .sync-status, html[data-view="travel"] .page-description { display: none; }
+html[data-view="travel"] h1 { font-size: 32px; letter-spacing: -.9px; }
 
 .notice { display: flex; gap: 10px; align-items: flex-start; margin: -8px 0 24px; padding: 12px 16px; border-radius: var(--radius-sm); background: var(--amber-soft); color: var(--amber); font-size: 13.5px; animation: drop-in var(--motion-base) var(--ease-out); }
 .notice::before { content: ""; width: 7px; height: 7px; margin-top: 7px; border-radius: 50%; background: currentColor; flex: none; }

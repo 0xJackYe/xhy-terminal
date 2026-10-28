@@ -6,6 +6,7 @@ import {handleMail,enqueueAlertMail,processMailQueue} from './mail.mjs';
 import {buildOverview} from './overview.mjs';
 import {diagnoseProviders,diagnoseReadOnlyAccounts} from './diagnostics.mjs';
 import {handleAnnualized,syncCapitalAccounts} from './annualized.mjs';
+import {handleTravel} from './flights.mjs';
 import {walletTemplate,walletCore,catalog,buildCommit} from './generated.mjs';
 const json=(body,status=200)=>new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}});
 function protect(response){const headers=new Headers(response.headers);headers.set('Cache-Control','no-store');headers.set('X-Content-Type-Options','nosniff');headers.set('Referrer-Policy','same-origin');headers.set('X-Frame-Options','SAMEORIGIN');return new Response(response.body,{status:response.status,statusText:response.statusText,headers});}
@@ -22,6 +23,7 @@ async function fetchHandler(request,env,ctx){
  if(path==='/api/cloud-diagnostics')return request.method==='GET'?json({public:await diagnoseProviders(),accounts:await diagnoseReadOnlyAccounts(env),sync:await getFinanceSnapshot(env,'sync_status')}):json({error:'只支持读取。'},405);
  if(path==='/api/overview'){if(request.method!=='GET')return json({error:'此接口只支持读取。'},405);return json(await buildOverview(env,context));}
  if(path==='/api/services/ensure')return request.method==='POST'?json({started:false,cloud:true}):json({error:'不支持此操作。'},405);
+ if(path.startsWith('/api/travel/'))return await handleTravel(request,env);
  if(path==='/diet'||path.startsWith('/diet/'))return await handleDiet(request,env,{owner:'terminal-owner',catalog});
  if(path==='/btc'||path==='/btc/options.html')return new Response(null,{status:308,headers:{Location:'/btc/'+(path.endsWith('options.html')?'#alerts':'')}});
  if(path.startsWith('/btc/api/')){const sub=withoutPrefix(request,'/btc');return await handleAnnualized(sub,env,context)||await handleMail(sub,env,context)||await handleMarket(sub,env,context)||await handleFinance(sub,env,context)||json({error:'接口不存在。'},404);}

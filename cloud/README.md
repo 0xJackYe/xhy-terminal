@@ -99,3 +99,30 @@ that script or overwrite the ledger. The scheduled task checks new C2C flows
 every 15 minutes, with duplicate and account-change protection; a newly seen
 non-USDT C2C purchase with an unknown original cost requires review instead
 of being counted as zero-cost capital.
+# 快速出境
+
+`/#travel` embeds a compact flight planner. Owner-authenticated endpoints are
+`GET/POST /api/travel/config` and `POST /api/travel/search`. The settings form stores
+a RapidAPI AeroDataBox key encrypted in D1 using the existing
+`CONFIG_ENCRYPTION_KEY`; it never returns the key. An `AERODATABOX_API_KEY` Worker
+secret is also supported. Location/passport defaults are encrypted owner data,
+not source-code constants. Browser geolocation is optional and stays in the page.
+
+The adapter reads departure boards with `withLeg=true`; every request covers at
+most 12 hours. It uses fixed provider hosts, refuses redirects, and returns
+schedule-only records. It does not provide ticket inventory, guarantee boarding,
+or buy tickets. The planner adds preparation, manually entered ground travel, and
+the user's international-airport arrival buffer to the scheduled departure time.
+Unknown traffic or arrival times remain unknown. Mainland China destinations,
+cancelled/departed flights and unverified legs are excluded. Passport policies
+are dated official references and must be rechecked before travel; Korea's Jeju
+exception is not applied to the whole country.
+
+Queries are manual, with a 15-minute airport/window cache and a shared request
+lock. There is no scheduled flight polling. The local UTC-calendar monthly cap
+is 180 airport calls (approximately 360 AeroDataBox units at 2 units per call).
+This is not the provider's billing-cycle meter; other uses of the same key and
+remaining provider quota must be checked in the provider account. Rate limits
+and authentication failures stop remaining airport calls. Results explicitly
+show the 12-hour coverage window, incomplete coverage and unconfirmed seats.
+Missing credentials return an empty list and real airline links, never demo data.

@@ -13,6 +13,7 @@
     overview: { title: "总览", description: "饮食、资产与比特币行情。" },
     diet: { title: "饮食日记", description: "按日期查看和记录饮食。", url: "/diet/" },
     wallet: { title: "加密资产", description: "持仓、走势与价格警报。", url: "/btc/#wallet" },
+    travel: { title: "快速出境", description: "附近机场、直飞时刻与入境准备。", url: "/travel.html" },
     alerts: { title: "价格警报", description: "比特币行情与价格提醒。", url: "/btc/#alerts" },
   };
   const state = { data: null, view: "overview", financeSection: "wallet", refreshing: false, failed: false, frames: new Map(), lastSuccess: null };
@@ -462,6 +463,7 @@
   }
 
   function projectStatus(key) {
+    if (key === "travel") return "online";
     if (!state.data) return state.failed ? "offline" : "loading";
     if (state.failed) return "stale";
     return key === "diet" ? state.data.services?.diet?.status || state.data.diet?.status : state.data.services?.btc?.status || state.data[key === "wallet" ? "wallet" : "alerts"]?.status;
@@ -591,7 +593,7 @@
     const key = location.hash.slice(1) || "overview";
     const route = Object.hasOwn(views, key) ? key : "overview";
     // Keep legacy #alerts and the overview's market links working within
-    // 加密资产, while the global navigation stays a three-item index.
+    // 加密资产, sharing one finance workspace.
     const next = route === "alerts" ? "wallet" : route;
     const changed = state.view !== next;
     if (route !== key) history.replaceState(null, "", `${location.pathname}${location.search}#${next}`);

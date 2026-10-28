@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark">
+  <title>快速出境 · XHY</title>
+  <script src="/theme-bridge.js" defer></script><link rel="stylesheet" href="/travel.css"><script src="/travel.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#travel-results">跳到查询结果</a>
+<main class="travel-page" id="travel-main">
+  <header class="travel-intro"><div><p class="eyebrow">出发准备</p><h1>快速出境</h1><p>从附近机场出发，比较来得及赶上的国际直飞候选。</p></div><div class="provider-heading"><span id="travel-provider" class="provider-state" role="status">正在读取数据源</span><p id="travel-attribution" class="field-note"></p></div></header>
+  <details class="provider-settings"><summary>航班数据设置</summary><form id="travel-settings-form" novalidate><div class="settings-controls"><label class="field" for="travel-api-key"><span>AeroDataBox · RapidAPI key</span><input id="travel-api-key" type="password" autocomplete="new-password" spellcheck="false" placeholder="仅提交到本终端后台，不在浏览器保存" aria-describedby="travel-settings-note"></label><button id="travel-save-key" class="primary-button" type="submit">保存数据源</button></div><p id="travel-settings-note" class="field-note">需自行<a href="https://aerodatabox.com/pricing" target="_blank" rel="noopener noreferrer">注册并选择免费套餐 ↗</a>。免费额度为每月 400 units；一次机场查询通常为 2 units。航班时刻不代表可售余票。</p><p id="travel-settings-status" class="form-status" role="status" aria-live="polite"></p></form></details>
+  <form id="travel-form" novalidate>
+    <fieldset class="origin-fieldset"><legend>从哪里出发</legend>
+      <div class="origin-search"><label class="field city-field" for="travel-city"><span>城市或机场</span><input id="travel-city" name="city" type="search" list="travel-cities" placeholder="输入城市、机场或三字代码" autocomplete="off" aria-describedby="airport-note"><datalist id="travel-cities"></datalist></label><button class="text-button locate-button" id="travel-locate" type="button">使用当前位置</button></div>
+      <p id="airport-note" class="field-note">定位只在本页筛选附近机场，不发送坐标；到机场时间为你的估计值，留空则不判断是否赶得上。</p>
+      <p id="travel-defaults-status" class="field-note"></p>
+      <p id="travel-location-status" class="field-note" role="status"></p>
+      <div id="travel-airports" class="airport-options" role="group" aria-label="选择出发机场及预计交通时间"><p class="empty-inline">读取机场列表中…</p></div>
+    </fieldset>
+    <div class="form-grid">
+      <label class="field" for="travel-date"><span>出发日期 · 北京时间</span><input id="travel-date" name="departure_date" type="date" required></label>
+      <label class="field" for="travel-ready"><span>出门前准备</span><span class="number-control"><input id="travel-ready" name="ready_minutes" type="number" min="0" max="1440" step="5" value="60" required><span>分钟</span></span></label>
+      <label class="field" for="travel-buffer"><span>国际航班提前到机场</span><span class="number-control"><input id="travel-buffer" name="international_buffer_minutes" type="number" min="60" max="480" step="15" value="180" required><span>分钟</span></span></label>
+      <label class="field" for="travel-sort"><span>优先比较</span><select id="travel-sort" name="sort"><option value="earliest_departure">最早起飞</option><option value="earliest_arrival">最早抵达</option><option value="price">已核实价格较低</option></select></label>
+      <label class="field" for="travel-passport"><span>护照国别</span><select id="travel-passport" name="passport_country"><option value="">请选择，不预判入境资格</option><option value="CN">中国普通护照</option><option value="other">其他国别护照</option></select></label>
+      <label class="field" for="travel-other-passport" id="travel-other-passport-field" hidden><span>护照国别二字代码</span><input id="travel-other-passport" type="text" maxlength="2" pattern="[A-Za-z]{2}" placeholder="例如 SG" autocomplete="off"></label>
+      <label class="field" for="travel-entry"><span>签证 / 入境条件</span><select id="travel-entry" name="entry_filter"><option value="all">全部候选，逐一核对</option><option value="easy_entry">仅免签 / 落地签候选</option></select></label>
+    </div>
+    <fieldset class="country-fieldset"><legend>目的地国家</legend><div id="travel-countries" class="country-options"></div><p class="field-note">不选即不限制目的地国家。免签、落地签和持签入境都须满足目的地与航空公司的实际要求。</p></fieldset>
+    <details id="travel-entry-notes" class="travel-notes entry-notes" hidden><summary>目的地入境说明与官方来源</summary><div id="travel-entry-note-list"></div></details>
+    <div class="form-actions"><p class="field-note">仅查询和跳转购票，不自动下单，也不收集证件号码。</p><button id="travel-submit" class="primary-button" type="submit" disabled>比较直飞方案</button></div>
+    <p id="travel-form-status" class="form-status" role="status" aria-live="polite"></p>
+  </form>
+  <section id="travel-results" class="travel-results" aria-labelledby="travel-results-title" tabindex="-1">
+    <div class="results-heading"><h2 id="travel-results-title">出发方案</h2><span id="travel-updated" class="field-note"></span></div>
+    <div id="travel-summary"><p class="empty-inline">选好出发机场和准备时间后，比较国际直飞方案。</p></div>
+    <div id="travel-flight-list" class="flight-list"></div>
+    <div id="travel-manual-links" class="manual-links" hidden></div>
+  </section>
+  <details class="travel-notes"><summary>怎样判断是否来得及</summary><p>最晚出门时间＝计划起飞时间－国际出发提前量－到机场交通时间。只按计划起飞判断，不借用延误时间来压缩准备。</p><p>机场时刻不等于可售余票。购买前请再次核对证件、入境资格、航班状态、值机与登机截止时间；以航空公司确认的订单和规则为准。</p></details>
+</main>
+</body>
+</html>
