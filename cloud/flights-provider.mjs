@@ -33,6 +33,13 @@ function instant(value, { utcOnly = false } = {}) {
   const result = Date.parse(value);
   return Number.isSafeInteger(result) ? result : null;
 }
+function providerInstant(value) {
+  // Actual AeroDataBox wire timestamps use one space instead of ISO's T.
+  // Normalize only this bounded date/time shape with an explicit offset;
+  // external query windows still go through the strict instant parser above.
+  const wire = typeof value === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})$/.test(value);
+  return instant(wire ? value.slice(0, 10) + 'T' + value.slice(11) : value);
+}
 function zone(value) {
   if (typeof value !== 'string' || value.length > 64 || value !== 'UTC' && !value.includes('/')) return null;
   try { new Intl.DateTimeFormat('en', { timeZone: value }).format(0); return value; } catch { return null; }
@@ -88,15 +95,15 @@ function normalizeFlight(raw, context) {
   if (sourceCountry && knownCountry && sourceCountry !== knownCountry) return null;
   const destinationCountry = sourceCountry ?? knownCountry;
   if (!destinationCountry || destinationCountry === 'CN') return null;
-  const departure = instant(raw.departure.scheduledTime?.utc);
+  const departure = providerInstant(raw.departure.scheduledTime?.utc);
   if (departure === null || departure < from || departure >= to || departure <= now) return null;
   const flightNumber = typeof raw.number === 'string' ? raw.number.trim().toUpperCase() : '';
   if (!/^[A-Z0-9]{2,3}\s?\d{1,5}[A-Z]?$/.test(flightNumber)) return null;
   const status = normalizedStatus(raw.status);
   if (['cancelled', 'cancelled_uncertain', 'gate_closed', 'departed', 'en_route', 'approaching', 'arrived', 'diverted'].includes(status)) return null;
-  const parsedArrival = instant(raw.arrival.scheduledTime?.utc);
+  const parsedArrival = providerInstant(raw.arrival.scheduledTime?.utc);
   const arrival = parsedArrival !== null && parsedArrival > departure && parsedArrival - departure <= 2 * 86_400_000 ? parsedArrival : null;
-  const revised = instant(raw.departure.revisedTime?.utc);
+  const revised = providerInstant(raw.departure.revisedTime?.utc);
   return {
     id: `aerodatabox:${airport.iata}:${destinationCode}:${flightNumber.replace(/\s/g, '')}:${departure}`,
     flight_number: flightNumber,

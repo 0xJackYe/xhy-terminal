@@ -90,6 +90,49 @@ test('UTC conversion crosses the Shanghai calendar date without treating UTC as 
   assert.equal(new URL(calls[0].url).pathname, '/flights/airports/iata/NKG/2026-10-30T00:30/2026-10-30T12:30');
 });
 
+test('real provider wire timestamps normalize only the separator and preserve offsets across a calendar date', async () => {
+  const raw = row({
+    departure: { scheduledTime: { utc: '2026-10-28 23:00Z', local: '2026-10-29 07:00+08:00' }, revisedTime: { utc: '2026-10-29 07:15:30+08:00' } },
+    arrival: { airport: { ...row().arrival.airport, countryCode: 'jp' }, scheduledTime: { utc: '2026-10-29 11:00+09:00' } },
+  });
+  const result = await fetchAirportDepartures(args({ from: '2026-10-28T22:00:00Z', to: '2026-10-29T10:00:00Z', now: Date.parse('2026-10-28T21:59:00Z'), fetchImpl: mock([raw]) }));
+  assert.equal(result.flights.length, 1);
+  assert.equal(result.flights[0].scheduled_departure, '2026-10-28T23:00:00.000Z');
+  assert.equal(result.flights[0].scheduled_arrival, '2026-10-29T02:00:00.000Z');
+  assert.equal(result.flights[0].estimated_departure, '2026-10-28T23:15:30.000Z');
+  assert.equal(result.flights[0].destination.country_code, 'JP');
+});
+
+test('wire departure with seconds survives while missing or naive arrival and revision remain unknown', async () => {
+  const raw = row({ departure: { scheduledTime: { utc: '2026-10-29 01:30:12Z' }, revisedTime: { utc: '2026-10-29 01:50' } } });
+  for (const scheduledTime of [undefined, { utc: '2026-10-29 04:00' }]) {
+    raw.arrival.scheduledTime = scheduledTime;
+    const result = await fetchAirportDepartures(args({ fetchImpl: mock([raw]) }));
+    assert.equal(result.flights.length, 1);
+    assert.equal(result.flights[0].scheduled_departure, '2026-10-29T01:30:12.000Z');
+    assert.equal(result.flights[0].scheduled_arrival, null);
+    assert.equal(result.flights[0].estimated_departure, null);
+  }
+});
+
+test('wire normalization rejects naive, ambiguous, malformed and invalid calendar values without relaxing query inputs', async () => {
+  const invalid = ['2026-10-29 01:30', '2026-10-29 01:30 CST', '2026-10-29 25:30Z', '2026-10-29 01:60Z', '2026-10-29 01:30+14:01', '2026-10-29  01:30Z', '2026-10-29\t01:30Z', '2026-10-29 01:30Z junk', ' 2026-10-29 01:30Z'];
+  const records = invalid.map(utc => row({ departure: { scheduledTime: { utc } } }));
+  const result = await fetchAirportDepartures(args({ fetchImpl: mock(records) }));
+  assert.equal(result.flights.length, 0);
+  assert.equal(result.metadata.excluded_count, records.length);
+  // Date.parse rolls February 30 into March 2, inside this valid window.
+  assert.equal(Date.parse('2026-02-30T01:30Z'), Date.parse('2026-03-02T01:30Z'));
+  const badCalendar = row({ departure: { scheduledTime: { utc: '2026-02-30 01:30Z' } }, arrival: { ...row().arrival, scheduledTime: { utc: '2026-03-02 04:00Z' } } });
+  const calendarResult = await fetchAirportDepartures(args({ from: '2026-03-02T00:00:00Z', to: '2026-03-02T12:00:00Z', now: Date.parse('2026-03-01T23:59:00Z'), fetchImpl: mock([badCalendar]) }));
+  assert.equal(calendarResult.flights.length, 0);
+  let calls = 0;
+  for (const patch of [{ from: '2026-10-29 00:00Z' }, { to: '2026-10-29 12:00+00:00' }]) {
+    await assert.rejects(fetchAirportDepartures(args({ ...patch, fetchImpl: async () => { calls++; } })), safeError('INVALID_PROVIDER_INPUT'));
+  }
+  assert.equal(calls, 0);
+});
+
 test('missing key returns an honest configuration state without making a request', async () => {
   let calls = 0;
   for (const apiKey of [undefined, null, '', '   ']) {

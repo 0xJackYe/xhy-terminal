@@ -196,6 +196,69 @@ test('provider 429 stops remaining airports and returns a bounded retry interval
   assert.equal(env.sqlite.prepare('SELECT count(*) AS n FROM travel_locks').get().n, 0);
 });
 
+test('whole-search budget retains partial airport results and shortens the last provider timeout', async t => {
+  const env = environment(t), calls = [], pauses = [], timeouts = [];
+  const selected = AIRPORTS.slice(0, 6).map(a => ({ iata: a.iata, travel_minutes: 60 }));
+  let wall = NOW;
+  const durations = [7000, 7000, 7000, 4700];
+  const nativeTimeout = globalThis.setTimeout;
+  globalThis.setTimeout = (callback, delay, ...args) => {
+    timeouts.push(delay); return nativeTimeout(callback, delay, ...args);
+  };
+  t.after(() => { globalThis.setTimeout = nativeTimeout; });
+  const response = await search(env, query({ airports: selected }), {
+    wallNow: () => wall,
+    pause: async ms => { pauses.push(ms); wall += ms; },
+    fetchImpl: async (url, init) => {
+      const index = calls.length;
+      calls.push({ url, init });
+      assert.ok(index < durations.length, 'remaining airports must not consume requests after the budget');
+      wall += durations[index];
+      return Response.json({ departures: [row()] });
+    },
+  });
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.equal(calls.length, 4);
+  assert.deepEqual(calls.map(c => new URL(c.url).pathname.split('/')[4]), selected.slice(0, 4).map(a => a.iata));
+  assert.deepEqual(timeouts, [8000, 8000, 8000, 4700]);
+  assert.deepEqual(pauses, [1100, 1100, 1100]);
+  assert.equal(wall - NOW, 29000);
+  assert.equal(data.provider.status, 'live');
+  assert.equal(data.flights.length, 4);
+  assert.deepEqual(new Set(data.flights.map(f => f.origin.iata)), new Set(selected.slice(0, 4).map(a => a.iata)));
+  assert.equal(data.recommendation, null);
+  assert.ok(data.earliest_candidate);
+  assert.match(data.warnings.join(' '), /查询时间已到.*剩余机场未查询/);
+  assert.equal(env.sqlite.prepare('SELECT requests FROM travel_usage').get().requests, 4);
+  assert.equal(env.sqlite.prepare('SELECT count(*) AS n FROM travel_cache').get().n, 4);
+  assert.equal(env.sqlite.prepare('SELECT count(*) AS n FROM travel_locks').get().n, 0);
+});
+
+test('a delayed inter-airport pause rechecks the budget before billing or starting another request', async t => {
+  const env = environment(t), calls = [], pauses = [];
+  let wall = NOW;
+  const response = await search(env, query({ airports: [{ iata: 'NKG', travel_minutes: 60 }, { iata: 'PVG', travel_minutes: 240 }] }), {
+    wallNow: () => wall,
+    // A stalled scheduler may resume much later than its requested delay.
+    pause: async ms => { pauses.push(ms); wall += 22000; },
+    fetchImpl: async (url, init) => {
+      calls.push({ url, init }); wall += 7000;
+      return Response.json({ departures: [row()] });
+    },
+  });
+  const data = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(calls.length, 1);
+  assert.deepEqual(pauses, [1100]);
+  assert.equal(wall - NOW, 29000);
+  assert.equal(data.provider.status, 'live');
+  assert.equal(data.flights.length, 1); assert.equal(data.flights[0].origin.iata, 'NKG');
+  assert.match(data.warnings.join(' '), /查询时间已到.*剩余机场未查询/);
+  assert.equal(env.sqlite.prepare('SELECT requests FROM travel_usage').get().requests, 1);
+  assert.equal(env.sqlite.prepare('SELECT count(*) AS n FROM travel_locks').get().n, 0);
+});
+
 test('request validation runs before network and rejects unsupported routes, dates, airports and huge bodies', async t => {
   const env = environment(t); let calls = 0;
   const fetchImpl = async () => { calls++; throw Error('Unexpected network'); };
