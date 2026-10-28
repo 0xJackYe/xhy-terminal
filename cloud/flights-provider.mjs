@@ -151,9 +151,12 @@ export async function fetchAirportDepartures({ airport, from, to, apiKey, airpor
       metadata.query_windows.push({ from: new Date(begin).toISOString(), to: new Date(finish).toISOString(), from_local: fromLocal, to_local: toLocal });
       metadata.request_count++;
       let response;
-      try { response = await fetchImpl.call(globalThis, url.toString(), { method: 'GET', headers: { Accept: 'application/json', 'X-RapidAPI-Key': apiKey, 'X-RapidAPI-Host': HOST }, signal: controller.signal, redirect: 'error' }); }
+      // Workers supports manual/follow, not redirect:error. Manual never forwards
+      // the credential to Location; every redirect is rejected explicitly below.
+      try { response = await fetchImpl.call(globalThis, url.toString(), { method: 'GET', headers: { Accept: 'application/json', 'X-RapidAPI-Key': apiKey, 'X-RapidAPI-Host': HOST }, signal: controller.signal, redirect: 'manual' }); }
       catch { fail('PROVIDER_UNAVAILABLE', '暂时无法连接航班数据服务，请稍后重试。'); }
       if (response?.redirected || !response || typeof response.status !== 'number') fail('INVALID_PROVIDER_RESPONSE', '航班数据服务返回了无法核实的响应。');
+      if (response.status >= 300 && response.status <= 399) fail('PROVIDER_REDIRECT', '航班数据服务返回重定向，已停止查询。', { upstreamStatus: response.status });
       if (response.status === 429) {
         const header = response.headers?.get('retry-after');
         const retry = typeof header === 'string' && /^\d{1,6}$/.test(header) ? Math.min(3600, Number(header)) : null;

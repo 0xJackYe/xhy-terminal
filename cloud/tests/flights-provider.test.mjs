@@ -55,7 +55,7 @@ test('airport UTC window becomes local minutes in one pinned, credential-header-
   for (const field of ['withCancelled', 'withCodeshared', 'withCargo', 'withPrivate', 'withLocation']) assert.equal(url.searchParams.get(field), 'false');
   assert(!address.includes(KEY));
   assert.equal(init.method, 'GET');
-  assert.equal(init.redirect, 'error');
+  assert.equal(init.redirect, 'manual');
   assert.equal(init.headers['X-RapidAPI-Key'], KEY);
   assert.equal(init.headers['X-RapidAPI-Host'], 'aerodatabox.p.rapidapi.com');
   assert(init.signal instanceof AbortSignal);
@@ -254,8 +254,29 @@ test('HTTP quota and credential errors expose fixed messages and sanitized retry
     assert.equal(error.status, 503); assert.equal(error.upstream_status, 429); assert.equal(error.retry_after_seconds, 120); return true;
   });
   for (const status of [401, 403]) await assert.rejects(fetchAirportDepartures(args({ fetchImpl: async () => new Response(KEY, { status }) })), safeError('PROVIDER_AUTH_FAILED'));
-  for (const status of [302, 500, 503]) await assert.rejects(fetchAirportDepartures(args({ fetchImpl: async () => new Response(KEY, { status }) })), safeError('PROVIDER_UNAVAILABLE'));
+  for (const status of [500, 503]) await assert.rejects(fetchAirportDepartures(args({ fetchImpl: async () => new Response(KEY, { status }) })), safeError('PROVIDER_UNAVAILABLE'));
   await assert.rejects(fetchAirportDepartures(args({ fetchImpl: async () => { throw new Error(`Rejected ${KEY}`); } })), safeError('PROVIDER_UNAVAILABLE'));
+});
+
+test('Workers-compatible manual redirect mode rejects an external redirect without following or exposing its credential', async () => {
+  const calls = [];
+  const workerFetch = async function (url, init) {
+    // The production runtime throws before any network call for redirect:error.
+    if (init.redirect === 'error') throw new TypeError('Unsupported redirect mode');
+    assert.equal(init.redirect, 'manual');
+    calls.push({ url, init });
+    assert.equal(new URL(url).origin, 'https://aerodatabox.p.rapidapi.com');
+    return new Response(KEY, { status: 302, headers: { Location: 'https://external.example/credential-target?api_key=' + KEY } });
+  };
+  await assert.rejects(fetchAirportDepartures(args({ fetchImpl: workerFetch })), error => {
+    safeError('PROVIDER_REDIRECT')(error);
+    assert.equal(error.upstream_status, 302);
+    assert(!JSON.stringify(error).includes('external.example'));
+    return true;
+  });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].init.headers['X-RapidAPI-Key'], KEY);
+  assert(!calls[0].url.includes(KEY));
 });
 
 test('HTTP diagnostic status is numeric while an upstream error body containing the key stays private', async () => {

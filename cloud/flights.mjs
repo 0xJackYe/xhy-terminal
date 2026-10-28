@@ -76,7 +76,7 @@ export async function handleTravel(request,env,options={}){
     try{const data=await airportFlights(env,AIRPORTS.find(a=>a.iata===chosen.iata),key,from,to,now,{...options,providerTimeoutMs:Math.min(8000,remaining-1000)});raw.push(...data.flights.map(f=>enrichFlight(f,query.passport_country)));successful++;if(data.cached)cacheCount++;}
     catch(error){
      const code=typeof error.code==='string'&&/^[A-Z_]{1,48}$/.test(error.code)?error.code:'LOCAL_PROCESSING_ERROR';
-     providerErrors.push({airport:chosen.iata,code,upstream_status:Number.isInteger(error.upstream_status)?error.upstream_status:null,error_name:/^[A-Za-z]{1,32}$/.test(error.name||'')?error.name:'Error',detail:code==='LOCAL_PROCESSING_ERROR'?String(error.message||'').split(key).join('[redacted]').replace(/[A-Za-z0-9._-]{40,}/g,'[redacted]').slice(0,180):null});
+     providerErrors.push({airport:chosen.iata,code,upstream_status:Number.isInteger(error.upstream_status)?error.upstream_status:null,error_name:/^[A-Za-z]{1,32}$/.test(error.name||'')?error.name:'Error'});
      errors.push(chosen.iata+'：'+(error.code==='LOCAL_QUOTA'?error.message:error.code==='PROVIDER_RATE_LIMITED'?'航班服务额度或频率受限，已停止其余机场查询。':error.code==='PROVIDER_TIMEOUT'?'航班源响应超时，请稍后重试。':'航班源未能返回可核实数据，请检查 Key、套餐权限或稍后重试。'));if(['LOCAL_QUOTA','PROVIDER_RATE_LIMITED','PROVIDER_AUTH_FAILED'].includes(error.code)){retryAfter=error.retry_after_seconds??null;break;}
     }
    }
