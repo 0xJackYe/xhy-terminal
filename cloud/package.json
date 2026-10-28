@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --experimental-sqlite --test tests/*.test.mjs && npm --prefix ../apps/diet test",
+    "test": "node --experimental-sqlite --test tests/*.test.mjs && npm --prefix ../apps/diet test && cd ../apps/bitcoin && node test_annualized_wallet_ui.js && node test_combined_wallet_ui.js",
     "build": "node build.mjs",
     "pretest": "npm run build"
   },

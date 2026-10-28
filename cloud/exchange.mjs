@@ -32,23 +32,26 @@ export function validateBinancePermissions(payload){
   }
   return {verified:true,read_only:true};
 }
-const okxPrivate=new Set(['/api/v5/account/config','/api/v5/account/balance','/api/v5/asset/balances','/api/v5/account/bills-archive']);
+const okxPrivate=new Set(['/api/v5/account/config','/api/v5/account/balance','/api/v5/asset/balances','/api/v5/account/bills-archive','/api/v5/asset/bills-history']);
 const okxPublic=new Set(['/api/v5/public/time','/api/v5/market/ticker','/api/v5/market/tickers','/api/v5/market/index-tickers','/api/v5/market/history-candles']);
-const binancePrivate=new Set(['/sapi/v1/account/apiRestrictions','/sapi/v1/asset/wallet/balance']);
+const binancePrivate=new Set(['/sapi/v1/account/apiRestrictions','/sapi/v1/asset/wallet/balance','/sapi/v1/c2c/orderMatch/listUserOrderHistory']);
 const binancePublic=new Set(['/api/v3/time']);
 function approvedParams(venue,path,params){
   if(Object.values(params).some(v=>!['string','number'].includes(typeof v)||String(v).length>100))return false;
   const allowed=venue==='okx'?{
     '/api/v5/account/config':[], '/api/v5/account/balance':[], '/api/v5/asset/balances':[],
     '/api/v5/account/bills-archive':['instType','begin','end','limit','after'],
+    '/api/v5/asset/bills-history':['type','limit','pagingType','after'],
     '/api/v5/public/time':[], '/api/v5/market/ticker':['instId'], '/api/v5/market/tickers':['instType'],
     '/api/v5/market/index-tickers':['instId'], '/api/v5/market/history-candles':['instId','bar','after','before','limit']
-  }:{'/api/v3/time':[],'/sapi/v1/account/apiRestrictions':['recvWindow'],'/sapi/v1/asset/wallet/balance':['needBalanceDetail','quoteAsset','recvWindow']};
+  }:{'/api/v3/time':[],'/sapi/v1/account/apiRestrictions':['recvWindow'],'/sapi/v1/asset/wallet/balance':['needBalanceDetail','quoteAsset','recvWindow'],'/sapi/v1/c2c/orderMatch/listUserOrderHistory':['tradeType','startTimestamp','endTimestamp','page','rows','recvWindow']};
   if(!allowed[path]||Object.keys(params).some(k=>!allowed[path].includes(k)))return false;
   if(params.instId&&!/^[A-Z0-9]{1,20}-[A-Z0-9]{1,20}$/.test(params.instId))return false;
   if(params.instType&&params.instType!=='SPOT')return false;
   if(params.bar&&params.bar!=='1m')return false;
-  for(const k of ['begin','end','after','before','limit','recvWindow'])if(params[k]!=null&&!/^\d{1,20}$/.test(String(params[k])))return false;
+  if(params.tradeType&&!['BUY','SELL'].includes(params.tradeType))return false;
+  if(path==='/api/v5/asset/bills-history'&&(!['116','117','118'].includes(String(params.type))||String(params.pagingType)!=='2'))return false;
+  for(const k of ['begin','end','after','before','limit','recvWindow','startTimestamp','endTimestamp','page','rows','pagingType'])if(params[k]!=null&&!/^\d{1,20}$/.test(String(params[k])))return false;
   return true;
 }
 export class ExchangeClient {

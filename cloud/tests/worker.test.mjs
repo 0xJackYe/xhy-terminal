@@ -29,7 +29,7 @@ async function environment(t) {
 
 test('all personal namespaces require the signed session despite forged owner headers', async t => {
   const { env, ctx, assets } = await environment(t);
-  const protectedRoutes = ['/api/overview', '/diet/api/diary', '/diet/data/diary.json', '/btc/api/terminal', '/btc/api/terminal/email', '/btc/api/wallet/combined'];
+  const protectedRoutes = ['/api/overview', '/diet/api/diary', '/diet/data/diary.json', '/btc/api/terminal', '/btc/api/terminal/email', '/btc/api/wallet/combined','/btc/api/wallet/annualized'];
   for (const path of protectedRoutes) {
     const response = await worker.fetch(new Request(ORIGIN + path, { headers: { 'oai-authenticated-user-id': 'terminal-owner' } }), env, ctx);
     assert.equal(response.status, 401, path); assert.equal((await response.json()).code, 'AUTH_REQUIRED');

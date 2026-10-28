@@ -1,6 +1,7 @@
 import {D,dec,txt,iso,beijingDate,normalizeBills,compareTrades,buildCostBook,appendCostBook,costView,positionView} from './cost-book.mjs';
 import {FinanceError,ExchangeClient,connectionIdentity,validateCredentials,encryptConfiguration,decryptConfiguration,normalizeOKX,normalizeBinance} from './exchange.mjs';
 import {preserveHistoricalPricePeriods} from './finance-price-periods.mjs';
+import {appendRemainingCapital} from './annualized-math.mjs';
 
 export const FINANCE_SCHEMA_SQL=`
 CREATE TABLE IF NOT EXISTS finance_kv (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_ms INTEGER NOT NULL);
@@ -21,6 +22,7 @@ async function credentials(env,venue){
   if(encrypted)return validateCredentials(await decryptConfiguration(encrypted,env.CONFIG_ENCRYPTION_KEY),venue);
   return validateCredentials(venue==='okx'?{api_key:env.OKX_API_KEY,secret_key:env.OKX_SECRET_KEY,passphrase:env.OKX_PASSPHRASE}:{api_key:env.BINANCE_API_KEY,secret_key:env.BINANCE_SECRET_KEY},venue);
 }
+export {credentials as readFinanceCredentials};
 function emptyOKX(connection=null,configured=false,error=null){return {configured,pending_credentials:false,missing_fields:configured?[]:['api_key','secret_key','passphrase'],refreshing:false,last_success_at:null,error,error_code:error?'needs_credentials':null,status:configured?'connecting':'needs_credentials',assets:[],summary:{},cash_valuation:null,history:[],connection_id:connection,permissions:{verified:false,read_only:null},refresh_interval_seconds:60,retry_in_seconds:0,consecutive_failures:0,history_error:null};}
 const emptyCost=(connection=null,error=publicMessages.needs_history)=>({status:'unavailable',refreshing:false,last_success_at:null,error,error_code:'needs_history',plan_daily_usdt:'20',coverage_complete:false,summary:null,today:null,recent_trades:[],connection_id:connection,refresh_interval_seconds:60,retry_in_seconds:0});
 const emptyPnL=(connection=null,error=publicMessages.needs_history)=>({status:'unavailable',estimated:true,currency:'USDT',method:'moving_weighted_average',focus:'long_term_unrealized',metrics:{},connection_id:connection,error,refresh_interval_seconds:60});
@@ -78,6 +80,7 @@ export function aggregatePortfolio(rows,sources,btcUSD,fx,now,binance){
 function quoteValid(rows,now,field){if(!Array.isArray(rows)||rows.length!==1||!dec(rows[0]?.[field]||'0').gt(0)||!Number.isSafeInteger(Number(rows[0].ts))||Math.abs(now-Number(rows[0].ts))>180000)throw new FinanceError('market_unavailable');return txt(rows[0][field]);}
 async function syncCost(env,client,account,now){
   let meta=await getFinanceSnapshot(env,'cost_meta'),book=await getFinanceSnapshot(env,'cost_book');
+  const previousCapital=await getFinanceSnapshot(env,'annualized_capital');
   if(!meta?.complete||meta.identity!==account)return {book:null,meta,error:{code:'needs_history',error:publicMessages.needs_history},recent:[]};
   if(now-meta.as_of_ms>85*86400000)return {book:null,meta,error:{code:'history_gap',error:publicMessages.history_gap},recent:[]};
   const start=Math.max(meta.coverage_start_ms,meta.as_of_ms-2*86400000),end=Math.floor(client.now()+client.offset);
@@ -104,7 +107,20 @@ async function syncCost(env,client,account,now){
   // coverage/book anchor advances only after every insert succeeds; a partial
   // insert is detected above and reconstructed on the next retry.
   for(let i=0;i<statements.length;i+=90)await env.DB.batch(statements.slice(i,i+90));
-  await env.DB.batch([putStatement(env,'cost_meta',meta,now),putStatement(env,'cost_book',book,now),putStatement(env,'historical_rates',rates,now)]);
+  const anchors=[putStatement(env,'cost_meta',meta,now),putStatement(env,'cost_book',book,now),putStatement(env,'historical_rates',rates,now)];
+  if(previousCapital?.identity===account&&previousCapital.trade_count<book.trade_count){
+    try{
+      let capitalUpdates=fresh;
+      if(previousCapital.trade_count!==book.trade_count-fresh.length){
+        const lagged=(await env.DB.prepare('SELECT record_json FROM finance_trades WHERE at_ms>=? ORDER BY at_ms, length(bill_id), bill_id LIMIT 1001').bind(previousCapital.last_at_ms).all()).results||[];
+        if(lagged.length>1000)throw new Error('dated_capital_needs_rebuild');
+        capitalUpdates=lagged.map(r=>JSON.parse(r.record_json)).filter(r=>r.at_ms>previousCapital.last_at_ms||r.at_ms===previousCapital.last_at_ms&&BigInt(r.bill_id)>BigInt(previousCapital.last_bill_id));
+      }
+      const capital=appendRemainingCapital(previousCapital,capitalUpdates,rates);
+      if(capital.trade_count===book.trade_count&&capital.last_bill_id===book.last_bill_id&&dec(capital.cost).eq(book.cost)&&dec(capital.inventory).eq(book.inventory))anchors.push(putStatement(env,'annualized_capital',{...capital,identity:account},now));
+    }catch{/* A cost-date mismatch cannot change the verified cost book. */}
+  }
+  await env.DB.batch(anchors);
   const recentRows=(await env.DB.prepare('SELECT record_json FROM finance_trades WHERE at_ms>=? ORDER BY at_ms, length(bill_id), bill_id').bind(Math.min(now-2*86400000,start)).all()).results||[];
   return {book,meta,recent:recentRows.map(r=>JSON.parse(r.record_json)),error:null,rates};
 }

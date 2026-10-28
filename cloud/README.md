@@ -67,3 +67,35 @@ cookie. `/api/cloud-diagnostics` is owner-only and checks fixed provider
 endpoints and read-only permissions without returning credentials. Browser
 audio needs an open page and the browser's normal audio permission; background
 notifications use the configured SMTP outbox.
+
+## Annualized historical returns
+
+`GET /btc/api/wallet/annualized` uses the same owner session as the wallet.
+Its two values are in USDT and represent historical estimates, not an interest
+rate promised by an exchange.
+
+- BTC: remaining-position XIRR. Each historical sale reduces the original
+  purchase cohorts proportionally, retaining their purchase dates. Their
+  remaining cost is reconciled to the existing moving-average cost book.
+  Daily buys update these cohorts with the cost book; realized sale proceeds
+  are excluded. Calendar-year figures retrospectively describe those same
+  current cohorts, using confirmed UTC+8 year-end candles.
+- Total portfolio: money-weighted XIRR of the recovered external C2C flows
+  and current portfolio value. Internal transfers and crypto-to-crypto trades
+  are not additional external investments. The scope and any original-order
+  conversion estimates remain explicit. A same-snapshot BTC-USDT/BTC-USD
+  cross quote converts the existing USD valuation to USDT.
+
+Both methods group cash-flow dates by Beijing calendar day and use a 365-day
+year. Multiple or non-verifiably unique XIRR roots produce an unavailable
+value. A failed provider read retains a dated, explicitly stale result.
+Missing historical total-portfolio valuations produce empty annual rows;
+current holdings are never used to invent past portfolio composition.
+
+The private initial derived-state exports and cash-flow audit stay in
+`.local/`. `prepare-annualized.mjs` prepares a CAS-guarded seed from private
+D1 exports and confirmed public year-boundary prices. Deployments do not run
+that script or overwrite the ledger. The scheduled task checks new C2C flows
+every 15 minutes, with duplicate and account-change protection; a newly seen
+non-USDT C2C purchase with an unknown original cost requires review instead
+of being counted as zero-cost capital.

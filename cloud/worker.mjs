@@ -5,6 +5,7 @@ import {handleMarket,syncMarket} from './market.mjs';
 import {handleMail,enqueueAlertMail,processMailQueue} from './mail.mjs';
 import {buildOverview} from './overview.mjs';
 import {diagnoseProviders,diagnoseReadOnlyAccounts} from './diagnostics.mjs';
+import {handleAnnualized,syncCapitalAccounts} from './annualized.mjs';
 import {walletTemplate,walletCore,catalog,buildCommit} from './generated.mjs';
 const json=(body,status=200)=>new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}});
 function protect(response){const headers=new Headers(response.headers);headers.set('Cache-Control','no-store');headers.set('X-Content-Type-Options','nosniff');headers.set('Referrer-Policy','same-origin');headers.set('X-Frame-Options','SAMEORIGIN');return new Response(response.body,{status:response.status,statusText:response.statusText,headers});}
@@ -23,7 +24,7 @@ async function fetchHandler(request,env,ctx){
  if(path==='/api/services/ensure')return request.method==='POST'?json({started:false,cloud:true}):json({error:'不支持此操作。'},405);
  if(path==='/diet'||path.startsWith('/diet/'))return await handleDiet(request,env,{owner:'terminal-owner',catalog});
  if(path==='/btc'||path==='/btc/options.html')return new Response(null,{status:308,headers:{Location:'/btc/'+(path.endsWith('options.html')?'#alerts':'')}});
- if(path.startsWith('/btc/api/')){const sub=withoutPrefix(request,'/btc');return await handleMail(sub,env,context)||await handleMarket(sub,env,context)||await handleFinance(sub,env,context)||json({error:'接口不存在。'},404);}
+ if(path.startsWith('/btc/api/')){const sub=withoutPrefix(request,'/btc');return await handleAnnualized(sub,env,context)||await handleMail(sub,env,context)||await handleMarket(sub,env,context)||await handleFinance(sub,env,context)||json({error:'接口不存在。'},404);}
  if(path==='/btc/wallet.html'){
    if(!['GET','HEAD'].includes(request.method))return json({error:'只支持读取。'},405);
    const snapshot=await getFinanceSnapshot(env,'chain_snapshot');if(!snapshot)return json({error:'链上快照正在恢复。'},503);
@@ -38,7 +39,7 @@ export default {
  async fetch(request,env,ctx){try{return protect(await fetchHandler(request,env,ctx));}catch{return protect(json({error:'云端服务暂时不可用，请稍后重试。'},503));}},
  async scheduled(event,env,ctx){ctx.waitUntil((async()=>{
    const market=await syncMarket(env).catch(()=>null);await newAlerts(env,market?.newAlerts).catch(()=>{});
-   await syncFinance(env).catch(()=>{});await processMailQueue(env).catch(()=>{});
+   await syncFinance(env).catch(()=>{});await syncCapitalAccounts(env).catch(()=>{});await processMailQueue(env).catch(()=>{});
    if(new Date(event.scheduledTime||Date.now()).getUTCMinutes()%30===0)await env.DB.prepare('DELETE FROM auth_attempts WHERE window_ms<?').bind(Date.now()-86400000).run();
  })());}
 };

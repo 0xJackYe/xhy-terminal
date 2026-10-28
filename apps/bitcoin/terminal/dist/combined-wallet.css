@@ -31,3 +31,16 @@
 .combined-lifetime-assumptions li+li{margin-top:3px}
 .combined-lifetime-dates{display:flex;flex-wrap:wrap;gap:3px 18px;color:var(--muted);margin:10px 0 0;font-size:10px}
 @media(max-width:740px){.combined-lifetime{padding:11px 0;margin-bottom:12px}.combined-lifetime-heading{gap:4px 9px}.combined-lifetime-state{margin-left:0}.combined-lifetime-metrics{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 12px}.combined-lifetime-metrics>div+div{padding-left:12px}.combined-lifetime-metrics>div:nth-child(3){border-left:0;padding-left:0}.combined-lifetime-metrics dd{font-size:20px}.combined-lifetime-details>summary{flex-wrap:wrap;gap:2px 8px}.combined-lifetime-details>summary>span:last-child{font-size:10px}.combined-lifetime-costs{grid-template-columns:1fr;gap:6px}.combined-lifetime-costs>div{display:flex;align-items:baseline;justify-content:space-between;gap:12px}.combined-lifetime-costs dd{margin:0}.combined-lifetime-dates{display:grid;gap:3px}}
+
+.combined-lifetime-metrics{grid-template-columns:repeat(6,minmax(0,1fr))}
+.combined-annual-metric small{display:block;color:var(--muted);font-size:10px;line-height:1.5;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.combined-annual-details{margin-bottom:3px}.combined-annual-details h4{margin:12px 0 6px;font-size:12px;font-weight:600;color:var(--text)}
+.combined-annual-method,.combined-annual-empty{margin:5px 0 8px;color:var(--muted);font-size:11px;line-height:1.6}
+.combined-annual-table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:11px;color:var(--text)}
+.combined-annual-table th,.combined-annual-table td{padding:7px 6px;border-bottom:1px solid var(--line);text-align:right;vertical-align:top;overflow-wrap:anywhere}
+.combined-annual-table th:first-child{width:48%;text-align:left}.combined-annual-table thead th{font-weight:400;color:var(--muted)}
+.combined-annual-table tbody th{font-weight:500}.combined-annual-table tbody td{font-family:var(--mono,monospace);font-variant-numeric:tabular-nums}
+.combined-annual-table small{display:block;margin-top:2px;color:var(--muted);font-size:10px;font-weight:400;line-height:1.5}
+.combined-annual-table .combined-annual-reason td{text-align:left;color:var(--muted);font-family:inherit;font-size:10px;padding-top:0}
+@media(max-width:1080px){.combined-lifetime-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}.combined-lifetime-metrics>div:nth-child(4){border-left:0;padding-left:0}}
+@media(max-width:740px){.combined-lifetime-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.combined-lifetime-metrics>div:nth-child(4){border-left:1px solid var(--line);padding-left:12px}.combined-lifetime-metrics>div:nth-child(odd){border-left:0;padding-left:0}.combined-annual-table th:first-child{width:44%}.combined-annual-table th,.combined-annual-table td{padding-left:3px;padding-right:3px}}
