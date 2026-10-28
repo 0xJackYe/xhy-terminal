@@ -67,17 +67,21 @@ export async function handleTravel(request,env,options={}){
   if(!lock)return json({error:'另一个航班查询正在进行，请稍后再试。'},429);
   try{
    const from=new Date(Math.floor(Math.max(now,Date.parse(query.earliest_departure))/1800000)*1800000).toISOString(),to=new Date(Date.parse(from)+12*3600000).toISOString();
-   const raw=[],errors=[];let successful=0,cacheCount=0,retryAfter=null;
+   const raw=[],errors=[],providerErrors=[];let successful=0,cacheCount=0,retryAfter=null;
    const wallNow=options.wallNow||Date.now,deadline=wallNow()+30000;
    for(const [index,chosen] of query.airports.entries()){
     if(deadline-wallNow()<2000){errors.push('查询时间已到，剩余机场未查询；请缩小机场范围后重试。');break;}
     if(index)await (options.pause||((ms)=>new Promise(resolve=>setTimeout(resolve,ms))))(1100);
     const remaining=deadline-wallNow();if(remaining<2000){errors.push('查询时间已到，剩余机场未查询；请缩小机场范围后重试。');break;}
     try{const data=await airportFlights(env,AIRPORTS.find(a=>a.iata===chosen.iata),key,from,to,now,{...options,providerTimeoutMs:Math.min(8000,remaining-1000)});raw.push(...data.flights.map(f=>enrichFlight(f,query.passport_country)));successful++;if(data.cached)cacheCount++;}
-    catch(error){errors.push(chosen.iata+'：'+(error.code==='LOCAL_QUOTA'?error.message:error.code==='PROVIDER_RATE_LIMITED'?'航班服务额度或频率受限，已停止其余机场查询。':error.code==='PROVIDER_TIMEOUT'?'航班源响应超时，请稍后重试。':'航班源未能返回可核实数据，请检查 Key、套餐权限或稍后重试。'));if(['LOCAL_QUOTA','PROVIDER_RATE_LIMITED','PROVIDER_AUTH_FAILED'].includes(error.code)){retryAfter=error.retry_after_seconds??null;break;}}
+    catch(error){
+     const code=typeof error.code==='string'&&/^[A-Z_]{1,48}$/.test(error.code)?error.code:'LOCAL_PROCESSING_ERROR';
+     providerErrors.push({airport:chosen.iata,code,upstream_status:Number.isInteger(error.upstream_status)?error.upstream_status:null,error_name:/^[A-Za-z]{1,32}$/.test(error.name||'')?error.name:'Error',detail:code==='LOCAL_PROCESSING_ERROR'?String(error.message||'').split(key).join('[redacted]').replace(/[A-Za-z0-9._-]{40,}/g,'[redacted]').slice(0,180):null});
+     errors.push(chosen.iata+'：'+(error.code==='LOCAL_QUOTA'?error.message:error.code==='PROVIDER_RATE_LIMITED'?'航班服务额度或频率受限，已停止其余机场查询。':error.code==='PROVIDER_TIMEOUT'?'航班源响应超时，请稍后重试。':'航班源未能返回可核实数据，请检查 Key、套餐权限或稍后重试。'));if(['LOCAL_QUOTA','PROVIDER_RATE_LIMITED','PROVIDER_AUTH_FAILED'].includes(error.code)){retryAfter=error.retry_after_seconds??null;break;}
+    }
    }
    const ranked=rankDepartures(raw,query,{now});
-   return json({...base,provider:provider(key,successful?'live':'error'),flights:ranked.results,recommendation:ranked.results.find(f=>f.planning.disposition==='actionable')||null,earliest_candidate:ranked.results.find(f=>f.planning.disposition!=='too_late')||null,window:{from,to},summary:ranked.summary,cached_airports:cacheCount,retry_after_seconds:retryAfter,warnings:[...errors,...ranked.summary.notices,'仅覆盖上述12小时时段和所选机场；数据源可能缺漏。没有候选不代表没有航班。','排序使用计划起飞时间，已加入准备、交通和提前到场时间。时刻表不代表余票；下单前到航空公司核实。','免签仍需满足入境条件并完成相关申报；政策链接提供官方核验入口。']});
+   return json({...base,provider:provider(key,successful?'live':'error'),flights:ranked.results,recommendation:ranked.results.find(f=>f.planning.disposition==='actionable')||null,earliest_candidate:ranked.results.find(f=>f.planning.disposition!=='too_late')||null,window:{from,to},summary:ranked.summary,cached_airports:cacheCount,provider_errors:providerErrors,retry_after_seconds:retryAfter,warnings:[...errors,...ranked.summary.notices,'仅覆盖上述12小时时段和所选机场；数据源可能缺漏。没有候选不代表没有航班。','排序使用计划起飞时间，已加入准备、交通和提前到场时间。时刻表不代表余票；下单前到航空公司核实。','免签仍需满足入境条件并完成相关申报；政策链接提供官方核验入口。']});
   }finally{await env.DB.prepare("DELETE FROM travel_locks WHERE name='search' AND until_ms=?").bind(now+45000).run();await env.DB.prepare('DELETE FROM travel_cache WHERE updated_ms<?').bind(now-86400000).run();}
  }catch(error){return json({error:error instanceof FlightInputError?error.message:'航班服务暂时不可用，请稍后重试。'},error instanceof FlightInputError?400:503);}
 }

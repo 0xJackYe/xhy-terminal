@@ -8,12 +8,13 @@ const SOURCE = Object.freeze({
 });
 
 export class FlightProviderError extends Error {
-  constructor(code, message, { status = 502, retryAfterSeconds = null } = {}) {
+  constructor(code, message, { status = 502, retryAfterSeconds = null, upstreamStatus = null } = {}) {
     super(message);
     this.name = 'FlightProviderError';
     this.code = code;
     this.status = status;
     this.retry_after_seconds = retryAfterSeconds;
+    this.upstream_status = Number.isInteger(upstreamStatus) && upstreamStatus >= 100 && upstreamStatus <= 599 ? upstreamStatus : null;
   }
 }
 
@@ -156,10 +157,10 @@ export async function fetchAirportDepartures({ airport, from, to, apiKey, airpor
       if (response.status === 429) {
         const header = response.headers?.get('retry-after');
         const retry = typeof header === 'string' && /^\d{1,6}$/.test(header) ? Math.min(3600, Number(header)) : null;
-        fail('PROVIDER_RATE_LIMITED', '航班数据服务额度或请求频率受限，请稍后重试。', { status: 503, retryAfterSeconds: retry });
+        fail('PROVIDER_RATE_LIMITED', '航班数据服务额度或请求频率受限，请稍后重试。', { status: 503, retryAfterSeconds: retry, upstreamStatus: response.status });
       }
-      if (response.status === 401 || response.status === 403) fail('PROVIDER_AUTH_FAILED', '航班数据服务凭证或套餐权限需检查。');
-      if (!response.ok) fail('PROVIDER_UNAVAILABLE', '航班数据服务暂时不可用，请稍后重试。');
+      if (response.status === 401 || response.status === 403) fail('PROVIDER_AUTH_FAILED', '航班数据服务凭证或套餐权限需检查。', { upstreamStatus: response.status });
+      if (!response.ok) fail('PROVIDER_UNAVAILABLE', '航班数据服务暂时不可用，请稍后重试。', { upstreamStatus: response.status });
       if (response.status === 204) continue;
       const size = response.headers?.get('content-length');
       if (size && (/^\d+$/.test(size) ? Number(size) > MAX_BYTES : true)) fail('INVALID_PROVIDER_RESPONSE', '航班数据服务响应超出可核实范围。');

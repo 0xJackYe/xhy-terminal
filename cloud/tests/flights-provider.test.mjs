@@ -251,11 +251,28 @@ test('duplicate airport-board rows are removed and results sort by scheduled rat
 test('HTTP quota and credential errors expose fixed messages and sanitized retry guidance only', async () => {
   await assert.rejects(fetchAirportDepartures(args({ fetchImpl: async () => new Response(KEY, { status: 429, headers: { 'retry-after': '120' } }) })), error => {
     safeError('PROVIDER_RATE_LIMITED')(error);
-    assert.equal(error.status, 503); assert.equal(error.retry_after_seconds, 120); return true;
+    assert.equal(error.status, 503); assert.equal(error.upstream_status, 429); assert.equal(error.retry_after_seconds, 120); return true;
   });
   for (const status of [401, 403]) await assert.rejects(fetchAirportDepartures(args({ fetchImpl: async () => new Response(KEY, { status }) })), safeError('PROVIDER_AUTH_FAILED'));
   for (const status of [302, 500, 503]) await assert.rejects(fetchAirportDepartures(args({ fetchImpl: async () => new Response(KEY, { status }) })), safeError('PROVIDER_UNAVAILABLE'));
   await assert.rejects(fetchAirportDepartures(args({ fetchImpl: async () => { throw new Error(`Rejected ${KEY}`); } })), safeError('PROVIDER_UNAVAILABLE'));
+});
+
+test('HTTP diagnostic status is numeric while an upstream error body containing the key stays private', async () => {
+  for (const status of [400, 401, 403, 500]) {
+    await assert.rejects(fetchAirportDepartures(args({ fetchImpl: async () => new Response(JSON.stringify({ message: `Upstream failed ${KEY}` }), { status }) })), error => {
+      safeError(status === 401 || status === 403 ? 'PROVIDER_AUTH_FAILED' : 'PROVIDER_UNAVAILABLE')(error);
+      assert.equal(error.upstream_status, status);
+      assert.equal(error.status, 502);
+      assert(!JSON.stringify(error).includes('Upstream failed'));
+      return true;
+    });
+  }
+  await assert.rejects(fetchAirportDepartures(args({ fetchImpl: async () => { throw new Error(KEY); } })), error => {
+    safeError('PROVIDER_UNAVAILABLE')(error);
+    assert.equal(error.upstream_status, null);
+    return true;
+  });
 });
 
 test('error envelopes, malformed bodies, oversized boards and unexpected schemas never become successful live data', async () => {
