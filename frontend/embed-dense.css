@@ -187,8 +187,22 @@
 :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #combinedBTC { font-size: 24px !important; }
 :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-pnl > strong { margin-top: 2px !important; font-size: 20px !important; }
 :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-lifetime { margin: 0 !important; padding: 6px 0 !important; }
-:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-lifetime-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; margin: 4px 0 2px !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-lifetime-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; row-gap: 6px !important; margin: 2px 0 0 !important; }
 :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-lifetime-metrics dd { font-size: 17px !important; }
+/* The two annualized returns share one line under the four cost figures, each
+   with its note; the two explanations sit side by side until one is opened. */
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-annual-metric { grid-column: span 2; display: flex; align-items: baseline; gap: 6px; padding-top: 5px; border-top: 1px solid var(--xhy-line); }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-annual-metric:nth-child(5) { border-left: 0 !important; padding-left: 0 !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-annual-metric dt { flex: none; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-annual-metric dd { flex: none; margin: 0 !important; font-size: 14px !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-annual-metric small { min-width: 0; margin: 0 !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-lifetime { display: flex; flex-wrap: wrap; column-gap: 18px; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-lifetime > :not(details) { flex: 1 0 100%; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-lifetime > details { flex: 1 1 0; min-width: 0; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-lifetime > details[open] { flex-basis: 100%; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-lifetime-details { margin: 0 !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-lifetime-details > summary { min-height: 22px !important; align-items: center !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-lifetime-details > summary > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-day-pnl { display: flex; align-items: baseline; gap: 8px; margin: 0 !important; }
 :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-day-pnl > strong { font-size: 15px !important; }
 :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-controls button { min-height: 26px !important; padding: 2px 7px !important; font-size: 11.5px !important; }
