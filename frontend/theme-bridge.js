@@ -7,7 +7,8 @@
   const observed = new WeakMap();
   const connectedFrames = new WeakSet();
   const financeNavigations = new WeakSet();
-  const project = /^\/(diet|btc)(\/|$)/.test(location.pathname);
+  const isProjectPath = path => /^\/(diet|btc)(\/|$)/.test(path) || /^\/travel(?:\.html)?$/.test(path);
+  const project = isProjectPath(location.pathname);
   const validTheme = value => value === "dark" || value === "light";
   let currentTheme = "light";
 
@@ -165,7 +166,7 @@
   }
 
   // Portal shortcuts keep working while focus is inside an embedded project:
-  // ⌘K / Ctrl+K always, and 1 2 3 T / ? whenever no field is being typed in
+  // ⌘K / Ctrl+K always, and 1 2 3 4 T / ? whenever no field is being typed in
   // and the project has not used the key itself.
   function connectShortcuts(doc) {
     const win = doc.defaultView;
@@ -175,7 +176,7 @@
     doc.addEventListener("keydown", event => {
       const palette = (event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "k";
       const single = !event.metaKey && !event.ctrlKey && !event.altKey && !event.isComposing && !event.repeat
-        && ["1", "2", "3", "t", "T", "/", "?"].includes(event.key) && !typing(event.target);
+        && ["1", "2", "3", "4", "t", "T", "/", "?"].includes(event.key) && !typing(event.target);
       if ((!palette && !single) || event.defaultPrevented) return;
       event.preventDefault();
       win.top.postMessage({ type: "xhy:shortcut", key: palette ? "palette" : event.key.toLowerCase() }, win.location.origin);
@@ -199,10 +200,10 @@
     try { if (doc.defaultView.location.origin !== location.origin) return; }
     catch { return; }
     const root = doc.documentElement;
-    const isProject = embedded || /^\/(diet|btc)(\/|$)/.test(doc.location.pathname);
+    const isProject = embedded || isProjectPath(doc.location.pathname);
     if (isProject) {
       root.dataset.xhyTheme = theme;
-      root.dataset.xhySurface = /^\/diet(?:\/|$)/.test(doc.location.pathname) ? "diet" : /\/wallet\.html$/.test(doc.location.pathname) ? "wallet" : "btc";
+      root.dataset.xhySurface = /^\/travel(?:\.html)?$/.test(doc.location.pathname) ? "travel" : /^\/diet(?:\/|$)/.test(doc.location.pathname) ? "diet" : /\/wallet\.html$/.test(doc.location.pathname) ? "wallet" : "btc";
       root.style.colorScheme = theme;
       if (doc.head && !doc.querySelector('link[data-xhy-embed-theme]')) {
         // embed-dense.css only applies inside the portal frame: it re-flows each

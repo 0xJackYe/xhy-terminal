@@ -1,0 +1,24 @@
+// One-time private import of the previously reconciled external C2C ledger.
+import {readFile,writeFile} from 'node:fs/promises';
+import {dirname,resolve} from 'node:path';
+import {fileURLToPath} from 'node:url';
+import {connectionIdentity} from './exchange.mjs';
+import {calculatePortfolioAnnualized} from './portfolio-annualized.mjs';
+import {dec} from './cost-book.mjs';
+const local=resolve(dirname(fileURLToPath(import.meta.url)),'.local');
+const read=async file=>JSON.parse((await readFile(resolve(local,file),'utf8')).replace(/^\uFEFF/,''));
+const audit=await read('portfolio-capital-audit.json'),context=Object.fromEntries((await read('annualized-seed-context.json'))[0].results.map(row=>[row.key,JSON.parse(row.value)]));
+const secrets=await read('runtime-secrets.json');
+const identity=await connectionIdentity({api_key:secrets.OKX_API_KEY,secret_key:secrets.OKX_SECRET_KEY});
+if(identity!==context.cost_meta.identity)throw new Error('The private export belongs to another account');
+const ledger={...audit,identity,binance_identity:await connectionIdentity({api_key:secrets.BINANCE_API_KEY,secret_key:secrets.BINANCE_SECRET_KEY}),wallet_address:secrets.WALLET_ADDRESS,scope:'c2c_known_flows',complete:false,seed_epoch:crypto.randomUUID(),last_checked_ms:Date.parse(audit.coverage.okx_source_as_of)};
+if(!Number.isSafeInteger(ledger.last_checked_ms))throw new Error('Missing original coverage cutoff');
+const verify=calculatePortfolioAnnualized({ledger,marketValueUsdt:'8000',asOfMs:Date.parse(context.btc_pnl.as_of)});
+if(verify.status!=='estimated'||dec(verify.net_invested_usdt).sub(audit.summary.combined_c2c.net_contributed_usdt).abs().gt('1e-60'))throw new Error('Capital reconciliation or unique-root check failed');
+const literal=text=>"'"+String(text).replaceAll("'","''")+"'",raw=JSON.stringify(ledger),statements=['CREATE TABLE portfolio_capital_seed_parts(part INTEGER PRIMARY KEY,value TEXT NOT NULL);'];
+for(let offset=0,part=0;offset<raw.length;offset+=12000,part++)statements.push(`INSERT INTO portfolio_capital_seed_parts(part,value) VALUES(${part},${literal(raw.slice(offset,offset+12000))});`);
+statements.push(`INSERT OR IGNORE INTO finance_kv(key,value,updated_ms) VALUES('portfolio_capital_ledger',(SELECT group_concat(value,'') FROM (SELECT value FROM portfolio_capital_seed_parts ORDER BY part)),${Date.now()});`);
+statements.push('DROP TABLE portfolio_capital_seed_parts;');
+if(statements.some(sql=>Buffer.byteLength(sql)>90000))throw new Error('Private seed SQL exceeds bounded size');
+await writeFile(resolve(local,'portfolio-capital-seed.sql'),statements.join('\n'));
+console.log(JSON.stringify({prepared:true,flows:ledger.flows.length,netInvestedUsdt:verify.net_invested_usdt,firstExternal:verify.first_investment_at}));

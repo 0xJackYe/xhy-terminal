@@ -31,6 +31,7 @@
     overview: { title: "总览", description: "饮食、资产与比特币行情。" },
     diet: { title: "饮食日记", description: "按日期查看和记录饮食。", url: "/diet/" },
     wallet: { title: "加密资产", description: "持仓、走势与价格警报。", url: "/btc/#wallet" },
+    travel: { title: "快速出境", description: "附近机场、直飞时刻与入境准备。", url: "/travel" },
     alerts: { title: "价格警报", description: "比特币行情与价格提醒。", url: "/btc/#alerts" },
   };
   const state = { data: null, view: "overview", financeSection: "wallet", refreshing: false, failed: false, frames: new Map(), lastSuccess: null };
@@ -38,9 +39,11 @@
   const preferredTheme = matchMedia("(prefers-color-scheme: dark)");
   const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
   const easeOut = "cubic-bezier(.22,1,.36,1)";
-  // Away from the owner's computer (the public Cloudflare copy) there is no
-  // local API, so the portal shows labelled sample data instead.
-  const demo = !/^(127\.0\.0\.1|localhost|\[::1\])$/.test(location.hostname);
+  // The same page runs on the owner's computer (with local services it can
+  // start) and on the cloud Worker (with its own backend). ?demo swaps in
+  // labelled sample data: a design preview that never reads an account.
+  const local = /^(127\.0\.0\.1|localhost|\[::1\])$/.test(location.hostname);
+  const demo = new URLSearchParams(location.search).has("demo");
   document.documentElement.dataset.demo = String(demo);
 
   // Segmented controls (main navigation and work shift) share one sliding pill.
@@ -195,7 +198,7 @@
 
   function setSource(key, status, updatedAt) {
     const element = $(`${key}-source-state`);
-    if (demo) { setData(element, "status", "demo"); text(element.id, "示例数据"); text(`${key}-updated`, "公开站点不连接本机服务"); return; }
+    if (demo) { setData(element, "status", "demo"); text(element.id, "示例数据"); text(`${key}-updated`, "演示模式不读取真实数据"); return; }
     setData(element, "status", status);
     text(element.id, status === "online" ? "连接正常" : status === "empty" ? "已连接 · 暂无记录" : statusLabels[status] || "未连接");
     text(`${key}-updated`, updatedAt ? `更新于 ${timestamp(updatedAt, true)}` : "尚未同步");
@@ -543,9 +546,13 @@
     thresholds.forEach((threshold, index) => setData(list.children[index], "hit", current !== null && current >= threshold));
   }
 
+  // Local snapshots list alerts oldest first and the cloud newest first, so rows go by time.
+  const newestAlerts = (alerts, count) => (Array.isArray(alerts) ? alerts : []).filter((alert) => alert && typeof alert === "object")
+    .sort((a, b) => (finite(b.at_ms) ? Number(b.at_ms) : 0) - (finite(a.at_ms) ? Number(a.at_ms) : 0)).slice(0, count);
+
   function renderRecentAlerts(recent, status) {
     const list = $("alerts-recent");
-    const rows = recent.filter((alert) => alert && typeof alert === "object").slice(-4).reverse();
+    const rows = newestAlerts(recent, 4);
     text("alerts-recent-count", recent.length ? `共 ${number(recent.length)} 条` : "");
     // Live ticks repeat the same alerts every second; rows change only with a new alert.
     const signature = JSON.stringify([rows.length ? "" : status === "offline", rows.map((alert) => [alert.at_ms, alert.kind, alert.metric, alert.threshold_pct, alert.change_pct, alert.range_pct, alert.price])]);
@@ -622,7 +629,7 @@
     const btcService = data.services?.btc || {};
     setSource("diet", dietService.status || data.diet?.status || "offline", data.diet?.updatedAt);
     setSource("btc", btcService.status || data.alerts?.status || data.wallet?.status || "offline", latestDate([data.wallet?.updatedAt, data.alerts?.updatedAt]));
-    text("last-sync", demo ? "公开演示站点：数据为示例，不是真实账户。真实数据只在本机终端显示。" : `总览同步于 ${timestamp(data.updatedAt || state.lastSuccess, true)} · 北京时间 · 每分钟自动刷新`);
+    text("last-sync", demo ? "演示模式：数据为示例，不是真实账户。去掉地址中的 ?demo 即显示真实数据。" : `总览同步于 ${timestamp(data.updatedAt || state.lastSuccess, true)} · 北京时间 · 每分钟自动刷新`);
     updateConnection();
     updateProjectHint();
   }
@@ -653,7 +660,7 @@
   // day change, range, alert meter and chart tip move every second between the
   // minute refreshes. The public demo simulates the same ticks.
   const live = { source: null, alerts: null, at: 0, retries: 0, retry: 0, idle: 0, demo: 0 };
-  const liveFresh = () => Boolean(live.alerts) && Date.now() - live.at < 8000;
+  const liveFresh = () => Boolean(live.alerts) && Date.now() - live.at < 15000;
   // The minute overview keeps its chart; fresher live fields win, except
   // empty ones (a feed still connecting must not erase the last known price).
   const withLive = (alerts = {}) => liveFresh() ? { ...alerts, ...Object.fromEntries(Object.entries(live.alerts).filter(([, value]) => value !== null && value !== undefined)) } : alerts;
@@ -667,7 +674,7 @@
       price: market.price, changePct: market.change_pct, rangePct: market.range_pct,
       dayOpen: market.day_open, dayHigh: market.day_high, dayLow: market.day_low,
       enabled: settings.enabled, thresholds: Array.isArray(settings.thresholds_pct) ? settings.thresholds_pct : [], metric: settings.metric, settings,
-      recent: Array.isArray(snapshot.alerts) ? snapshot.alerts.slice(-8) : [],
+      recent: newestAlerts(snapshot.alerts, 8),
     };
   }
 
@@ -739,7 +746,7 @@
   // overview then checks back until both answer.
   const recovery = { running: false, timer: 0 };
   function offlineServices() {
-    if (demo || !state.data?.services) return [];
+    if (demo || !local || !state.data?.services) return [];
     return [["diet", "饮食日记"], ["btc", "比特币终端"]].filter(([key]) => state.data.services[key]?.status === "offline").map(([, label]) => label);
   }
 
@@ -752,7 +759,8 @@
     if (notice.hidden === show) notice.hidden = !show;
     if (show) text("service-notice-text", message || (recovery.running ? `正在启动${missing.join("、") || "本机服务"}…` : `${missing.join("、")}未运行。`));
     for (const [key, entry] of state.frames) {
-      if (entry.failed) entry.message.textContent = message || (recovery.running ? `正在启动${serviceNames[key]}…` : `${serviceNames[key]}服务未运行。`);
+      if (!entry.failed) continue;
+      entry.message.textContent = startable(key) && (message || recovery.running) ? message || `正在启动${serviceNames[key]}…` : frameFailure(key, entry);
     }
     for (const button of document.querySelectorAll("[data-start-services]")) {
       button.disabled = recovery.running;
@@ -761,7 +769,7 @@
   }
 
   async function startServices() {
-    if (recovery.running || demo) return;
+    if (recovery.running || demo || !local) return;
     recovery.running = true;
     clearTimeout(recovery.timer);
     renderServiceNotice();
@@ -791,7 +799,7 @@
 
   function reloadFailedFrames() {
     for (const [key, entry] of state.frames) {
-      if (!entry.failed) continue;
+      if (!entry.failed || !startable(key)) continue;
       loadFrame(key, true);
       if (state.view === key) showOnlyFrame(key);
     }
@@ -852,6 +860,7 @@
   }
 
   function projectStatus(key) {
+    if (key === "travel") return "online";
     if (!state.data) return state.failed ? "offline" : "loading";
     if (state.failed) return "stale";
     return key === "diet" ? state.data.services?.diet?.status || state.data.diet?.status : state.data.services?.btc?.status || state.data[key === "wallet" ? "wallet" : "alerts"]?.status;
@@ -890,6 +899,7 @@
   const demoNotes = {
     diet: ["饮食日记", "按日历查看每天吃了什么，营养自动估算，也可以用 AI 对话记录或修改。"],
     wallet: ["加密资产", "欧易、币安与离线钱包的合计持仓、定投成本与浮盈，以及比特币价格警报。"],
+    travel: ["快速出境", "从附近机场出发，比较来得及赶上的国际直飞候选，并附入境说明。"],
   };
   function loadDemoFrame(key) {
     if (state.frames.has(key)) return;
@@ -900,14 +910,14 @@
     const [title, description] = demoNotes[key];
     const kicker = document.createElement("p");
     kicker.className = "demo-kicker";
-    kicker.textContent = "本机功能";
+    kicker.textContent = "演示模式";
     const heading = document.createElement("h2");
     heading.textContent = title;
     const body = document.createElement("p");
     body.textContent = description;
     const note = document.createElement("p");
     note.className = "demo-note";
-    note.textContent = "这部分直接读取私人数据和账户，只在主人的电脑上运行，公开站点不提供。";
+    note.textContent = "演示模式不打开真实项目；去掉地址中的 ?demo 即可使用。";
     const back = document.createElement("a");
     back.className = "button";
     back.href = "#overview";
@@ -953,13 +963,23 @@
         if (current.origin !== location.origin || current.pathname !== requested.pathname || current.search !== requested.search) return;
       } catch { return; }
       clearTimeout(entry.timeout);
-      // A stopped service comes back from the portal as a JSON error. Offer to
-      // start it rather than showing the raw response.
-      try { entry.failed = iframe.contentDocument.contentType === "application/json"; } catch { entry.failed = false; }
+      // A stopped local service, or an unavailable cloud backend, answers with a
+      // JSON error. Show its message and a way forward, not the raw response.
+      entry.failed = false;
+      entry.reason = "";
+      try {
+        const page = iframe.contentDocument;
+        if (page.contentType === "application/json") {
+          entry.failed = true;
+          const error = JSON.parse(page.body?.textContent || "null")?.error;
+          entry.reason = typeof error === "string" ? error : typeof error?.message === "string" ? error.message : "";
+        }
+      } catch { /* An unreadable error keeps the generic message. */ }
       if (entry.failed) {
         overlay.classList.add("is-slow");
         overlay.querySelector(".frame-loading-actions")?.remove();
-        overlay.append(frameActions(key, overlay, { start: true }));
+        const cloudOnly = local && key === "travel";
+        overlay.append(frameActions(key, overlay, { start: startable(key), retry: !cloudOnly, open: !cloudOnly, back: cloudOnly }));
         renderServiceNotice();
         return;
       }
@@ -984,7 +1004,7 @@
         } catch { /* The portal only embeds the same-origin finance project. */ }
       }
     });
-    const entry = { wrapper, iframe, message, timeout: null, loaded: false, failed: false, pendingUrl: url };
+    const entry = { wrapper, iframe, message, timeout: null, loaded: false, failed: false, reason: "", pendingUrl: url };
     state.frames.set(key, entry);
     wrapper.append(overlay, iframe);
     $("project-frames").append(wrapper);
@@ -996,8 +1016,13 @@
     iframe.src = url;
   }
 
-  const serviceNames = { diet: "饮食日记", wallet: "比特币终端" };
-  function frameActions(key, overlay, { start = false, reveal = false } = {}) {
+  const serviceNames = { diet: "饮食日记", wallet: "比特币终端", travel: "快速出境" };
+  // The diet and BTC services run on the owner's computer and can be started
+  // from here; the cloud runs everything itself.
+  const startable = (key) => local && !demo && key !== "travel";
+  // 快速出境 keeps its flight source and settings in the cloud database only.
+  const frameFailure = (key, entry) => local && key === "travel" ? "快速出境在云端终端中使用：航班数据源和出行设置保存在云端。" : entry.reason || `${serviceNames[key]}暂时无法打开。`;
+  function frameActions(key, overlay, { start = false, reveal = false, retry = true, open = true, back = false } = {}) {
     const actions = document.createElement("div");
     actions.className = "frame-loading-actions";
     const button = (label, onClick, className = "button") => {
@@ -1014,14 +1039,17 @@
       launch.disabled = recovery.running;
       actions.append(launch);
     }
-    actions.append(button("重试加载", () => { loadFrame(key, true); showOnlyFrame(key); }));
-    const open = document.createElement("a");
-    open.className = "button";
-    open.href = projectUrl(key);
-    open.target = "_blank";
-    open.rel = "noopener noreferrer";
-    open.textContent = "独立打开 ↗";
-    actions.append(open);
+    if (retry) actions.append(button("重试加载", () => { loadFrame(key, true); showOnlyFrame(key); }));
+    if (open) {
+      const link = document.createElement("a");
+      link.className = "button";
+      link.href = projectUrl(key);
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = "独立打开 ↗";
+      actions.append(link);
+    }
+    if (back) actions.append(Object.assign(document.createElement("a"), { className: "button", href: "#overview", textContent: "返回总览" }));
     if (reveal) actions.append(button("继续查看", () => hideOverlay(overlay)));
     return actions;
   }
@@ -1034,7 +1062,7 @@
     const key = location.hash.slice(1) || "overview";
     const route = Object.hasOwn(views, key) ? key : "overview";
     // Keep legacy #alerts and the overview's market links working within
-    // 加密资产, while the global navigation stays a three-item index.
+    // 加密资产, sharing one finance workspace.
     const next = route === "alerts" ? "wallet" : route;
     const changed = state.view !== next;
     if (route !== key) history.replaceState(null, "", `${location.pathname}${location.search}#${next}`);
@@ -1101,6 +1129,7 @@
     { title: "总览", hint: "饮食、资产与行情", keys: ["1"], terms: "overview home zonglan zl", run: () => go("overview") },
     { title: "饮食日记", hint: "按日期查看和记录", keys: ["2"], terms: "diet food meal yinshi ys riji", run: () => go("diet") },
     { title: "加密资产", hint: "持仓、走势与钱包", keys: ["3"], terms: "wallet assets crypto zichan zc qianbao", run: () => go("wallet") },
+    { title: "快速出境", hint: "附近机场与直飞时刻", keys: ["4"], terms: "travel flight airport plane chujing kuaisu cj ks feiji", run: () => go("travel") },
     { title: "价格警报", hint: "比特币行情与提醒", terms: "alerts price btc bitcoin jingbao jb hangqing", run: () => go("alerts") },
     { title: "刷新总览", keys: ["R"], terms: "refresh sync shuaxin sx", when: () => state.view === "overview", run: () => refresh(true) },
     { title: "重新加载当前项目", terms: "reload project chongxin jiazai", when: () => state.view !== "overview" && !demo, run: () => $("reload-project").click() },
@@ -1210,7 +1239,7 @@
   $("palette-open").title = `命令面板 · ${commandKey === "⌘" ? "⌘K" : "Ctrl+K"}`;
   const isPaletteKey = (event) => (event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "k";
   const typing = (target) => target instanceof Element && Boolean(target.closest("input, textarea, select, [contenteditable]:not([contenteditable='false'])"));
-  const shortcuts = { "1": () => go("overview"), "2": () => go("diet"), "3": () => go("wallet"), r: () => { if (state.view === "overview") refresh(true); }, t: toggleTheme, "/": openPalette, "?": openPalette };
+  const shortcuts = { "1": () => go("overview"), "2": () => go("diet"), "3": () => go("wallet"), "4": () => go("travel"), r: () => { if (state.view === "overview") refresh(true); }, t: toggleTheme, "/": openPalette, "?": openPalette };
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && syncMenu.open) { syncMenu.open = false; $("connection").focus(); return; }
     if (isPaletteKey(event)) { event.preventDefault(); openPalette(); return; }

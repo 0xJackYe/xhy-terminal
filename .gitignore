@@ -17,3 +17,11 @@ apps/bitcoin/terminal/wallet/wallet.html
 *.zip
 *.tar.gz
 *.tgz
+
+# Cloud builds and private migration material
+cloud/dist/
+cloud/generated.mjs
+cloud/.wrangler/
+cloud/.dev.vars*
+cloud/.local/
+cloud/*.sql

@@ -125,9 +125,9 @@ svg { flex: none; }
 
 /* Main */
 main { padding: 14px 0 16px; outline: none; }
-html:is([data-view="diet"], [data-view="wallet"]) main { padding: 0; }
+html:is([data-view="diet"], [data-view="wallet"], [data-view="travel"]) main { padding: 0; }
 .notice { display: flex; gap: 10px; align-items: flex-start; margin: 0 0 12px; padding: 9px 14px; border-radius: var(--radius-sm); background: var(--amber-soft); color: var(--amber); font-size: 12.5px; animation: drop-in var(--motion-base) var(--ease-out); }
-html:is([data-view="diet"], [data-view="wallet"]) .notice { margin-top: 10px; }
+html:is([data-view="diet"], [data-view="wallet"], [data-view="travel"]) .notice { margin-top: 10px; }
 .notice::before { content: ""; width: 7px; height: 7px; margin-top: 6px; border-radius: 50%; background: currentColor; flex: none; }
 @keyframes drop-in { from { opacity: 0; transform: translateY(-6px); } }
 .service-notice { align-items: center; padding: 5px 5px 5px 14px; }
@@ -438,7 +438,7 @@ kbd { display: inline-grid; place-items: center; min-width: 19px; height: 19px; 
 /* Large title, then content clear of the tab bar. */
 :root[data-ui="mobile"] main { padding: 0 0 calc(var(--tabbar-h) + 28px + env(safe-area-inset-bottom)); }
 :root[data-ui="mobile"] #page-title.sr-only { position: static; width: auto; height: auto; margin: 14px 0 12px; overflow: visible; clip: auto; white-space: normal; font-size: 32px; font-weight: 700; letter-spacing: -.8px; line-height: 1.1; animation: fade-in var(--motion-base) ease; }
-:root[data-ui="mobile"]:is([data-view="diet"], [data-view="wallet"]) #page-title.sr-only { margin: 10px 0 6px; font-size: 24px; }
+:root[data-ui="mobile"]:is([data-view="diet"], [data-view="wallet"], [data-view="travel"]) #page-title.sr-only { margin: 10px 0 6px; font-size: 24px; }
 :root[data-ui="mobile"] .notice { margin: 0 0 12px; }
 
 /* Overview: the live price first, then assets, then today's food. */

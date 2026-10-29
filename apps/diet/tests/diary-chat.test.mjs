@@ -8,8 +8,9 @@ import { applyChatOperations, runDiaryChat, validateChatInput, withDrafts } from
 import { createFileDiaryStore } from '../server/diary-store.mjs';
 import { handleRequest } from '../server/handler.mjs';
 import { dayTotal, estimate } from '../site/lib.mjs';
+import { createDiaryFixture } from './diary-fixture.mjs';
 
-const seed = JSON.parse(await readFile(new URL('../data/diary.json', import.meta.url), 'utf8'));
+const seed = createDiaryFixture();
 const catalog = JSON.parse(await readFile(new URL('../data/foods.json', import.meta.url), 'utf8'));
 const input = (text = '把10月24日午餐牛排改成200克生重') => ({ text, recordDate: '2026-10-26', requestId: randomUUID(), expectedRevision: 0, history: [], draftDays: [] });
 const steakDay = seed.days.find(day => day.date === '2026-10-24');

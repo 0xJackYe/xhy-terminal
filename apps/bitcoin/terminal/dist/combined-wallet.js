@@ -122,6 +122,44 @@
   function hasLifetimeMetrics(data) {
     return !!(data && data.metrics && ['average_cost','price_usdt','unrealized_net','unrealized_return_pct'].some(key=>decimal(data.metrics[key])));
   }
+  function connectionId(data) {
+    return data && typeof data.connection_id === 'string' && data.connection_id.length > 0 && data.connection_id.length < 200 ? data.connection_id : null;
+  }
+  function validAnnualized(data) {
+    return !!(data && typeof data === 'object' && !Array.isArray(data) && connectionId(data) &&
+      data.btc && typeof data.btc === 'object' && !Array.isArray(data.btc) &&
+      ['estimated','unavailable','stale'].includes(data.btc.status) &&
+      data.portfolio && typeof data.portfolio === 'object' && !Array.isArray(data.portfolio) &&
+      ['needs_cashflows','unavailable','estimated','stale','ambiguous'].includes(data.portfolio.status));
+  }
+  function annualValue(data) {
+    return data && ['estimated','stale'].includes(data.status) && decimal(data.annualized_return_pct) ? data.annualized_return_pct : null;
+  }
+  function annualYears(data) {
+    const rows = data && Array.isArray(data.years) ? data.years.filter(row=>row && typeof row==='object' && Number.isSafeInteger(row.year) && row.year>=1900 && row.year<=9999).slice(0,100) : [];
+    if (!rows.length) return '<p class="combined-annual-empty">'+escape(data && typeof data.reason==='string' ? data.reason.slice(0,600) : '逐年数据尚未完成核算。')+'</p>';
+    return '<table class="combined-annual-table"><thead><tr><th scope="col">年份 / 期间</th><th scope="col">期间收益</th><th scope="col">年化收益</th></tr></thead><tbody>'+rows.map(row=>{
+      const known=['estimated','stale'].includes(row.status),period=known?lifetimePercent(row.period_return_pct):'—',annual=known?lifetimePercent(row.annualized_return_pct):'—';
+      const dates=timestamp(row.start_at)!==null&&timestamp(row.end_at)!==null?beijing(row.start_at,false)+' — '+beijing(row.end_at,false):'';
+      const reason=typeof row.reason==='string'?row.reason.slice(0,600):'';
+      return '<tr><th scope="row">'+row.year+(row.partial_year===true?'<small>未满年</small>':'')+(dates?'<small>'+escape(dates)+'</small>':'')+'</th><td>'+escape(period)+'</td><td>'+escape(annual)+'</td></tr>'+(reason?'<tr class="combined-annual-reason"><td colspan="3">'+escape(reason)+'</td></tr>':'');
+    }).join('')+'</tbody></table>';
+  }
+  function annualDetails(data, cached) {
+    const btc=data&&data.btc,portfolio=data&&data.portfolio;
+    const assumptions=btc&&Array.isArray(btc.assumptions)?btc.assumptions.filter(value=>typeof value==='string').slice(0,8):[];
+    const portfolioNote=portfolio&&(typeof portfolio.method_note==='string'&&portfolio.method_note.trim()?portfolio.method_note:typeof portfolio.reason==='string'?portfolio.reason:'');
+    return '<p class="combined-annual-method">BTC 按每笔定投的投入日期核算当前剩余持仓 XIRR，不计已实现回款。年化为历史估算。</p>'+
+      (cached?'<p class="combined-annual-empty">当前为缓存结果，正在等待新一轮核算。</p>':'')+
+      '<h4>BTC · 现持仓 XIRR</h4>'+annualYears(btc)+'<h4>总加密资产'+(portfolio&&portfolio.method==='inception_cost_cagr_estimate'?' · 起点估算':'')+'</h4>'+
+      (portfolioNote?'<p class="combined-annual-method">'+escape(portfolioNote.slice(0,600))+'</p>':'')+
+      (portfolio&&decimal(portfolio.net_invested_usdt)?'<p class="combined-annual-method">已核对净投入 '+escape(exact(portfolio.net_invested_usdt,2,true))+' USDT'+(timestamp(portfolio.first_investment_at)!==null?' · 首次投入 '+escape(beijing(portfolio.first_investment_at,false)):'')+'</p>':'')+
+      (portfolio&&typeof portfolio.cost_basis_note==='string'?'<p class="combined-annual-method">'+escape(portfolio.cost_basis_note.slice(0,600))+'</p>':'')+
+      annualYears(portfolioNote?{...portfolio,reason:'逐年数据尚未完成核算。'}:portfolio)+
+      (assumptions.length?'<ul class="combined-lifetime-assumptions">'+assumptions.map(value=>'<li>'+escape(value.slice(0,600))+'</li>').join('')+'</ul>':'');
+  }
+  const ANNUAL_METRICS='<div class="combined-annual-metric"><dt>BTC 平均年化</dt><dd id="combinedBtcAnnualized">—</dd><small id="combinedBtcAnnualizedNote">正在核算</small></div><div class="combined-annual-metric"><dt>总加密资产平均年化</dt><dd id="combinedPortfolioAnnualized">—</dd><small id="combinedPortfolioAnnualizedNote">正在核算</small></div>';
+  const ANNUAL_DETAILS='<details class="combined-lifetime-details combined-annual-details"><summary><span>逐年回测</span><span id="combinedAnnualizedAt">按投入日期加权</span></summary><div id="combinedAnnualizedDetails"></div></details>';
   function lifetimeDetails(data) {
     const metrics = data && data.metrics || {}, assumptions = data && Array.isArray(data.assumptions) ? data.assumptions.filter(value=>typeof value === 'string'&&!/已实现|累计净盈亏|回本价/.test(value)).slice(0,8).map(value=>value.slice(0,600)) : [];
     if (!assumptions.some(value=>/移动加权平均/.test(value))) assumptions.push('按移动加权平均计算持仓买入均价；新增定投买入后自动更新。');
@@ -141,7 +179,7 @@
   }
   const MARKUP = '<div class="combined-heading"><div><h2 id="combinedTitle">比特币总持有</h2><span id="combinedState" class="combined-state" role="status">正在汇总</span></div><button id="combinedRefresh" type="button" class="text-button">刷新</button></div>'+
     '<p id="combinedMessage" class="combined-message" role="status" hidden></p><div class="combined-overview"><div class="combined-total"><span>欧易 + 离线钱包</span><strong id="combinedBTC">—</strong><small>BTC</small><p><span id="combinedCNY">—</span><span id="combinedUSD">—</span></p></div><div id="combinedSources" class="combined-sources"></div><div class="combined-pnl"><label for="combinedPnlPeriod">价格变动盈亏</label><select id="combinedPnlPeriod" aria-label="合计盈亏时间范围"><option value="today">今日</option><option value="week">近一周</option><option value="month">近一个月</option><option value="days90">近三个月</option></select><strong id="combinedPnl">—</strong><small id="combinedPnlNote">剔除转账 · 含汇率变动</small><small id="combinedPnlDates"></small></div></div>'+
-    '<section id="combinedLifetime" class="combined-lifetime" aria-labelledby="combinedLifetimeTitle"><div class="combined-lifetime-heading"><h3 id="combinedLifetimeTitle">长期持仓浮盈</h3><span class="combined-lifetime-method">USDT · 移动加权平均估算</span><span id="combinedLifetimeState" class="combined-lifetime-state" role="status">正在核算</span></div><dl class="combined-lifetime-metrics"><div><dt>持仓平均买入价</dt><dd id="combinedAverageCost">—</dd></div><div><dt>当前价格</dt><dd id="combinedSpotPrice">—</dd></div><div class="combined-lifetime-profit"><dt>持仓浮盈</dt><dd id="combinedUnrealizedNet">—</dd></div><div><dt>收益率</dt><dd id="combinedUnrealizedReturn">—</dd></div></dl><details class="combined-lifetime-details"><summary><span>计算说明</span><span id="combinedLifetimeCoverage"></span></summary><div id="combinedLifetimeDetails"></div></details></section>'+
+    '<section id="combinedLifetime" class="combined-lifetime" aria-labelledby="combinedLifetimeTitle"><div class="combined-lifetime-heading"><h3 id="combinedLifetimeTitle">长期持仓浮盈</h3><span class="combined-lifetime-method">USDT · 移动加权平均估算</span><span id="combinedLifetimeState" class="combined-lifetime-state" role="status">正在核算</span></div><dl class="combined-lifetime-metrics"><div><dt>持仓平均买入价</dt><dd id="combinedAverageCost">—</dd></div><div><dt>当前价格</dt><dd id="combinedSpotPrice">—</dd></div><div class="combined-lifetime-profit"><dt>持仓浮盈</dt><dd id="combinedUnrealizedNet">—</dd></div><div><dt>收益率</dt><dd id="combinedUnrealizedReturn">—</dd></div>'+ANNUAL_METRICS+'</dl>'+ANNUAL_DETAILS+'<details class="combined-lifetime-details"><summary><span>计算说明</span><span id="combinedLifetimeCoverage"></span></summary><div id="combinedLifetimeDetails"></div></details></section>'+
     '<div id="combinedGoal" class="combined-goal"></div><div class="combined-chart-head"><div><h3>合计余额走势</h3><div class="combined-day-pnl"><span>今日当前盈亏</span><strong id="combinedDayPnl">—</strong><small id="combinedDayPnlAt"></small></div></div><div class="combined-controls"><div role="group" aria-label="合计曲线计价"><button id="combinedModeCny" type="button" aria-pressed="true">人民币 CNY</button><button id="combinedModeUsd" type="button" aria-pressed="false">美元 USD</button><button id="combinedModeBtc" type="button" aria-pressed="false">比特币 BTC</button></div><div role="group" aria-label="合计曲线时间范围"><button id="combinedRangeToday" type="button" aria-pressed="false">今日</button><button id="combinedRange30" type="button" aria-pressed="false">30D</button><button id="combinedRange90" type="button" aria-pressed="false">90D</button><button id="combinedRangeAll" type="button" aria-pressed="true">全部</button></div></div></div>'+
     '<div id="combinedChart" class="combined-chart" tabindex="0" aria-label="合计走势，可用左右方向键查看快照"></div><p id="combinedChartReadout" class="combined-readout" aria-live="polite"></p><div class="combined-footer"><span id="combinedCoverage">等待可核实历史</span><span id="combinedUpdated">北京时间</span></div>';
   function mount(options = {}) {
@@ -151,7 +189,7 @@
     const fetcher = options.fetch || root.fetch.bind(root), setTimer = options.setTimeout || root.setTimeout.bind(root), clearTimer = options.clearTimeout || root.clearTimeout.bind(root), now = options.now || Date.now;
     const node = id=>document.getElementById(id);
     panel.classList.add('combined-wallet','card');panel.setAttribute('aria-labelledby','combinedTitle');panel.innerHTML=MARKUP;
-    let state=null,lifetime=null,lifetimeFailed=false,timer=null,read=null,disposed=false,pageActive=true,failed=false,mode='cny',range='all',selected=-1,sequence=0;
+    let state=null,lifetime=null,lifetimeFailed=false,annualized=null,annualizedFailed=false,annualizedLoading=true,timer=null,read=null,disposed=false,pageActive=true,failed=false,mode='cny',range='all',selected=-1,sequence=0;
     function active(){const page=node('walletPage');return !disposed&&pageActive&&!document.hidden&&(!page||!page.hidden);}
     function cancelTimer(){if(timer!==null)clearTimer(timer);timer=null;}
     function schedule(){cancelTimer();if(active())timer=setTimer(()=>{timer=null;load();},REFRESH_MS);}
@@ -184,6 +222,20 @@
       const count=lifetime&&lifetime.buy_count,first=lifetime&&(lifetime.first_buy_at||lifetime.first_trade_at),last=lifetime&&(lifetime.last_buy_at||lifetime.last_trade_at);
       node('combinedLifetimeCoverage').textContent=Number.isSafeInteger(count)&&count>=0?count.toLocaleString('zh-CN')+' 笔净买入'+(timestamp(first)!==null?' · '+beijing(first,false)+(timestamp(last)!==null?' 至 '+beijing(last,false):' 起'):''):kind==='loading'?'读取净买入账本中':kind==='unavailable'?'历史核算暂不可用，稍后自动重试':'';
       node('combinedLifetimeDetails').innerHTML=lifetimeDetails(lifetime);
+      renderAnnualized();
+    }
+    function renderAnnualized(){
+      const same=annualized&&connectionId(annualized)===connectionId(lifetime),data=same?annualized:null,cached=annualizedFailed||failed;
+      for(const[id,note,key]of[['combinedBtcAnnualized','combinedBtcAnnualizedNote','btc'],['combinedPortfolioAnnualized','combinedPortfolioAnnualizedNote','portfolio']]){
+        const entry=data&&data[key],raw=annualValue(entry),number=chartNumber(raw),value=node(id),caption=node(note);
+        value.textContent=lifetimePercent(raw);value.className=number===null||number===0?'':number<0?'negative':'positive';
+        const basis=key==='btc'?'现持仓 XIRR':entry&&entry.method==='inception_cost_cagr_estimate'?'起点估算':entry&&entry.method==='cashflow_xirr'?'资金加权 XIRR':'年化估算';
+        caption.textContent=raw!==null?basis+(cached||entry.status==='stale'?' · 缓存待更新':''):entry&&typeof entry.reason==='string'?entry.reason.slice(0,160):annualizedLoading?'正在核算':key==='portfolio'?'缺少完整历史出入金':'年化暂不可用，稍后重试';
+        caption.title=caption.textContent;
+      }
+      const at=data&&(data.as_of||data.btc.as_of);
+      node('combinedAnnualizedAt').textContent=timestamp(at)!==null?'截至 '+beijing(at)+' · 北京时间':'按投入日期加权';
+      node('combinedAnnualizedDetails').innerHTML=annualDetails(data,cached);
     }
     function render(){
       const status=health(state,now(),failed);node('combinedState').textContent=status.text;node('combinedState').className='combined-state '+status.kind;
@@ -206,6 +258,22 @@
       const sameConnection=typeof data.connection_id==='string'&&data.connection_id.length>0&&lifetime&&lifetime.connection_id===data.connection_id;
       lifetime=sameConnection&&hasLifetimeMetrics(lifetime)&&!hasLifetimeMetrics(data)&&data.status!=='fresh'?{...lifetime,status:'stale'}:data;
       lifetimeFailed=false;
+      if(!connectionId(data)||annualized&&connectionId(annualized)!==connectionId(data))annualized=null;
+    }
+    async function loadAnnualized(token){
+      const expected=connectionId(lifetime);annualizedLoading=true;annualizedFailed=false;
+      if(!expected){annualized=null;annualizedLoading=false;renderAnnualized();return;}
+      renderAnnualized();
+      try{
+        const response=await fetcher('/api/wallet/annualized',{method:'GET',credentials:'same-origin',cache:'no-store',headers:{Accept:'application/json'},signal:token.controller.signal});
+        const data=await response.json();
+        if(disposed||token.sequence!==sequence)return;
+        if(!response.ok)throw new Error('invalid-annualized-status');
+        if(!validAnnualized(data)){if(!connectionId(data)||connectionId(data)!==expected)annualized=null;throw new Error('invalid-annualized-status');}
+        if(connectionId(data)!==expected||connectionId(lifetime)!==expected){annualized=null;annualizedFailed=true;return;}
+        annualized=data;
+      }catch(_){if(!disposed&&token.sequence===sequence){annualizedFailed=true;if(!annualized||connectionId(annualized)!==expected||connectionId(lifetime)!==expected)annualized=null;}}
+      finally{if(!disposed&&token.sequence===sequence){annualizedLoading=false;renderAnnualized();}}
     }
     async function load(){
       if(!active()||read)return;
@@ -217,6 +285,7 @@
         if(!disposed&&token.sequence===sequence){
           state=data;failed=false;selected=-1;
           if(validLifetime(data.lifetime_pnl))acceptLifetime(data.lifetime_pnl);
+          else annualized=null;
           render();
           if(!validLifetime(data.lifetime_pnl)){
             try{
@@ -225,6 +294,7 @@
               if(!disposed&&token.sequence===sequence){acceptLifetime(pnlData);renderLifetime();}
             }catch(_){if(!disposed&&token.sequence===sequence){lifetimeFailed=true;renderLifetime();}}
           }
+          if(!disposed&&token.sequence===sequence)await loadAnnualized(token);
         }
       }catch(_){if(!disposed&&token.sequence===sequence){failed=true;render();}}
       finally{clearTimer(timeout);if(read===token)read=null;if(!disposed)node('combinedRefresh').disabled=false;schedule();}
@@ -258,5 +328,5 @@
     function destroy(){disposed=true;sequence++;cancelTimer();if(read)read.controller.abort();for(const[target,event,handler]of events)target.removeEventListener(event,handler);panel.__combinedController=null;}
     const controller={refresh:load,destroy};panel.__combinedController=controller;render();if(active())load();return controller;
   }
-  return {REFRESH_MS,REQUEST_TIMEOUT_MS,MAX_CHART_POINTS,decimal,exact,chartNumber,money,timestamp,beijing,points,geometry,renderChart,goal,renderGoal,renderSources,health,lifetimeAmount,lifetimePercent,validLifetime,lifetimeDetails,mount};
+  return {REFRESH_MS,REQUEST_TIMEOUT_MS,MAX_CHART_POINTS,decimal,exact,chartNumber,money,timestamp,beijing,points,geometry,renderChart,goal,renderGoal,renderSources,health,lifetimeAmount,lifetimePercent,validLifetime,lifetimeDetails,validAnnualized,annualValue,annualYears,annualDetails,mount};
 });

@@ -23,9 +23,9 @@ const SNAPSHOT = {ok:true,updated_at:'2030-03-01T12:00:00Z',stale:false,
     days90:{btc:null,usd:null,cny:null,reason:'转账历史未完整核实，暂不估算收益。',start_at:null,end_at:null}},
   coverage:{start_date:'2029-12-01',end_date:'2030-03-01',complete:true,note:'仅含已核实的共同覆盖历史；未将当前欧易余额回填。'},quotes:{btc_usd:'100000',usd_cny:'7.2'},goal_btc:'1'};
 const deferred = ()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return{promise,resolve,reject};};
-async function settle(){for(let i=0;i<12;i++)await Promise.resolve();}
+async function settle(){for(let i=0;i<24;i++)await Promise.resolve();}
 function harness(options={}){
-  const nodes=new Map(),timers=new Map(),requests=[],responses=[...(options.responses||[])];let nextTimer=0;
+  const nodes=new Map(),timers=new Map(),requests=[],annualRequests=[],responses=[...(options.responses||[])];let nextTimer=0;
   class Node{
     constructor(id){this.id=id;this.hidden=false;this.disabled=false;this.value='';this.textContent='';this.listeners={};this.attrs={};this._innerHTML='';this.classes=new Set();this.className='';this.classList={add:(...values)=>values.forEach(value=>this.classes.add(value))};}
     set innerHTML(value){this._innerHTML=value;for(const match of value.matchAll(/\bid="([^"]+)"/g))if(!nodes.has(match[1]))nodes.set(match[1],new Node(match[1]));}
@@ -39,10 +39,10 @@ function harness(options={}){
   const document=new Node('document');document.hidden=false;document.getElementById=id=>nodes.get(id)||null;
   const root=new Node('root');root.document=document;root.AbortController=class{constructor(){this.signal={aborted:false};}abort(){this.signal.aborted=true;}};
   const setTimeout=(fn,delay)=>{const id=++nextTimer;timers.set(id,{fn,delay});return id;},clearTimeout=id=>timers.delete(id);
-  async function fetch(url,init){requests.push({url,init});let value=responses.length?responses.shift():SNAPSHOT;if(typeof value==='function')value=value(requests[requests.length-1]);value=await value;if(value instanceof Error)throw value;return{ok:!value?.http_status||value.http_status<400,json:async()=>value?.http_status?value.data:value};}
+  async function fetch(url,init){if(url==='/api/wallet/annualized'){annualRequests.push({url,init});return{ok:false,json:async()=>({error:'This legacy backend has no annualized endpoint'})};}requests.push({url,init});let value=responses.length?responses.shift():SNAPSHOT;if(typeof value==='function')value=value(requests[requests.length-1]);value=await value;if(value instanceof Error)throw value;return{ok:!value?.http_status||value.http_status<400,json:async()=>value?.http_status?value.data:value};}
   const args={root,document,fetch,setTimeout,clearTimeout,now:()=>NOW},controller=api.mount(args);
   async function tick(delay=api.REFRESH_MS){const match=[...timers].find(([,item])=>item.delay===delay);assert.ok(match,'Expected timer '+delay);timers.delete(match[0]);match[1].fn();await settle();}
-  return{nodes,node:id=>nodes.get(id),timers,requests,responses,root,document,args,controller,tick,settle};
+  return{nodes,node:id=>nodes.get(id),timers,requests,annualRequests,responses,root,document,args,controller,tick,settle};
 }
 let count=0;
 async function check(name,fn){await fn();count++;console.log('OK '+name);}
