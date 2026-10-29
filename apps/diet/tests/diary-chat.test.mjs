@@ -92,7 +92,7 @@ test('多轮历史进DeepSeek，Key仅在上游Authorization；只读回复不�
   assert.equal(request.headers.Authorization, 'Bearer never-return-this-key');
   const body = JSON.parse(request.body); assert.equal(body.model, 'deepseek-flash');
   assert.deepEqual(body.messages.slice(1, 3), user.history); assert.equal(body.messages.at(-1).content, user.text);
-  assert.match(body.messages[0].content, /北京时间今天 2026-10-26/);
+  assert.match(body.messages[0].content, /按 UTC\+0 划分（北京时间 08:00 换日[^）]*），今天 2026-10-26/);
   assert.equal(JSON.stringify(result).includes('never-return-this-key'), false);
   assert.deepEqual(result.diary, seed); assert.equal(result.changes.length, 0);
 });

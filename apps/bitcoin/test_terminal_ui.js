@@ -145,6 +145,13 @@ test("a process restart accepts its new lower revision while same-process older 
   view.streams[0].receive(snapshot({instance_id:"process-B",revision:0,market:{...snapshot().market,price:72000}}));assert.equal(view.elements.get("priceValue").textContent,"81,000.00");
   view.streams[0].receive(snapshot({revision:105,market:{...snapshot().market,price:71000}}));assert.equal(view.elements.get("priceValue").textContent,"81,000.00");
 });
+test("stream snapshots that carry only the newest history points still update the live price",async()=>{
+  const view=mount();await view.ready();
+  const delta=snapshot({revision:101,market:{...snapshot().market,price:80500}});delete delta.history;delta.history_tail=[{time_ms:now,price:80500}];
+  view.streams[0].receive(delta);
+  assert.equal(view.elements.get("priceValue").textContent,"80,500.00");
+  assert.equal(view.elements.get("feedBadge").label.textContent==="连接已中断",false);
+});
 test("SSE disconnect marks cached data, and browser backcache restoration reconnects without reloading frames",async()=>{
   const view=mount(snapshot(),{hash:"#options"});await view.ready();view.streams[0].onerror();assert.equal(view.elements.get("feedBadge").label.textContent,"连接已中断");
   await view.emitRoot("pagehide",{persisted:true});assert.equal(view.streams[0].closed,true);

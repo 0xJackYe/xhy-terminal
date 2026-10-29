@@ -452,3 +452,5 @@ body.is-day-view .selected-date-row h2{font-size:21px;font-weight:600}
     .meal-disclosure[open]::details-content{height:auto;opacity:1}
   }
 }
+.month-day-kcal{display:block;font-size:11px;line-height:1.4;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.month-day.is-selected .month-day-kcal{color:inherit;opacity:.8}

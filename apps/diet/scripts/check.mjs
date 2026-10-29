@@ -8,7 +8,8 @@ const [diary, catalog] = await Promise.all([
 ]);
 
 validateDiary(diary);
-assert.equal(diary.timezone, 'Asia/Shanghai', '日记应使用北京时间');
+// New diaries record dates on UTC+0; diaries started earlier still carry their Beijing-time label.
+assert.ok(['UTC', 'Asia/Shanghai'].includes(diary.timezone), '日记时区应为 UTC（较早的日记为 Asia/Shanghai）');
 assert.equal(catalog.schemaVersion, 1, '食材库版本无效');
 assert.ok(Array.isArray(catalog.sources) && catalog.sources.length, '食材库需要营养来源');
 assert.ok(Array.isArray(catalog.foods) && catalog.foods.length, '食材库不能为空');

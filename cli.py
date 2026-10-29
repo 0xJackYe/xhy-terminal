@@ -73,8 +73,9 @@ def money(value, currency="$ "):
     return currency + number(value) if number(value) != "—" else "—"
 
 
-def today():
-    return dt.datetime.now(BEIJING).date().isoformat()
+def diary_today():
+    """Diary days run on UTC+0 (they change at 08:00 Beijing time)."""
+    return dt.datetime.now(dt.timezone.utc).date().isoformat()
 
 
 def date_value(value):
@@ -212,7 +213,7 @@ class Terminal:
         self.api, self.out = api, console
         self.settings = settings or {"theme": console.theme, "shift": "summer"}
         self.snapshot, self.history, self.pending = None, [], None
-        self.record_date = today()
+        self.record_date = diary_today()
         self.own_undo = None
 
     def preference(self, key, value):
@@ -255,7 +256,7 @@ class Terminal:
             day = diet.get("today") or {}
             totals = day.get("totals") or {}
             self.out.box("01 / 饮食日记  ·  " + STATUS.get(diet.get("status"), "未连接"), [
-                f"{diet.get('date') or today()}  ·  {number(day.get('mealCount'), 0)} 餐  ·  {number(totals.get('kcal'), 0)} kcal",
+                f"{diet.get('date') or diary_today()} UTC  ·  {number(day.get('mealCount'), 0)} 餐  ·  {number(totals.get('kcal'), 0)} kcal",
                 "蛋白质 " + number(totals.get("protein"), 1) + " g  /  碳水 " + number(totals.get("carbs"), 1) + " g  /  脂肪 " + number(totals.get("fat"), 1) + " g",
                 "过去七天已记录 " + number((diet.get("week") or {}).get("recordedDays"), 0) + " 天",
                 diet.get("error") or "用 /diet 日期查看，直接说话即可和饮食 AI 对话。",
@@ -474,7 +475,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="本机个人终端 CMD 客户端，与网页共用数据")
     parser.add_argument("--port", type=int, default=8780)
     parser.add_argument("--once", choices=("overview", "wallet", "alerts", "diet"), help="只读显示一次后退出")
-    parser.add_argument("--date", type=date_value, help="饮食默认日期 YYYY-MM-DD")
+    parser.add_argument("--date", type=date_value, help="饮食默认日期 YYYY-MM-DD（按 UTC+0 划分）")
     parser.add_argument("--theme", choices=("light", "dark"))
     parser.add_argument("--no-color", action="store_true", help="纯文本输出，不使用 ANSI 控制码")
     parser.add_argument("--no-start", action="store_true", help="只连接已有服务，供自动化或诊断")
@@ -488,7 +489,7 @@ def main(argv=None):
     console = Console(args.theme or settings["theme"], not args.no_color and not os.environ.get("NO_COLOR") and enable_ansi(sys.stdout))
     api = API(args.port)
     terminal = Terminal(api, console, settings)
-    terminal.record_date = args.date or today()
+    terminal.record_date = args.date or diary_today()
     try:
         if not args.no_start:
             from launch import ensure_portal
