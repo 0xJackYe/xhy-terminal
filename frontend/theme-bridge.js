@@ -166,7 +166,7 @@
   }
 
   // Portal shortcuts keep working while focus is inside an embedded project:
-  // ⌘K / Ctrl+K always, and 1 2 3 4 T / ? whenever no field is being typed in
+  // ⌘K / Ctrl+K always, and 1 2 3 T / ? whenever no field is being typed in
   // and the project has not used the key itself.
   function connectShortcuts(doc) {
     const win = doc.defaultView;
@@ -176,7 +176,7 @@
     doc.addEventListener("keydown", event => {
       const palette = (event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "k";
       const single = !event.metaKey && !event.ctrlKey && !event.altKey && !event.isComposing && !event.repeat
-        && ["1", "2", "3", "4", "t", "T", "/", "?"].includes(event.key) && !typing(event.target);
+        && ["1", "2", "3", "t", "T", "/", "?"].includes(event.key) && !typing(event.target);
       if ((!palette && !single) || event.defaultPrevented) return;
       event.preventDefault();
       win.top.postMessage({ type: "xhy:shortcut", key: palette ? "palette" : event.key.toLowerCase() }, win.location.origin);

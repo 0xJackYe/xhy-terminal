@@ -28,8 +28,7 @@
   const signed = (value, digits = 2) => finite(value) ? `${Number(value) > 0 ? "+" : ""}${fixed(value, digits)}` : "—";
   const clamp = (value, min = 0, max = 1) => Math.min(max, Math.max(min, value));
   const views = {
-    overview: { title: "总览", description: "饮食、资产与比特币行情。" },
-    diet: { title: "饮食日记", description: "按日期查看和记录饮食。", url: "/diet/" },
+    overview: { title: "总览", description: "资产与比特币行情。" },
     wallet: { title: "加密资产", description: "持仓、走势与价格警报。", url: "/btc/#wallet" },
     travel: { title: "快速出境", description: "附近机场、直飞时刻与入境准备。", url: "/travel" },
     alerts: { title: "价格警报", description: "比特币行情与价格提醒。", url: "/btc/#alerts" },
@@ -46,7 +45,7 @@
   const demo = new URLSearchParams(location.search).has("demo");
   document.documentElement.dataset.demo = String(demo);
 
-  // Segmented controls (main navigation and work shift) share one sliding pill.
+  // The main navigation's sliding pill.
   function segmentIndicator(container, activeSelector) {
     const pill = document.createElement("span");
     pill.className = "segment-indicator";
@@ -70,7 +69,6 @@
     return move;
   }
   const moveNavigationIndicator = segmentIndicator(document.querySelector(".navigation"), '[aria-current="page"]');
-  const moveShiftIndicator = segmentIndicator(document.querySelector(".shift-toggle"), '[aria-pressed="true"]');
 
   // Numbers ease between values instead of jumping; the first value appears directly.
   // A new value mid-tween continues from the number currently on screen.
@@ -105,9 +103,6 @@
     tweens.set(element, requestAnimationFrame(step));
   }
 
-  let shift = "summer";
-  try { if (localStorage.getItem("xhy-work-shift") === "winter") shift = "winter"; } catch {}
-
   function setTheme(theme, persist = true) {
     window.XHYMotion?.cancelAll();
     const next = theme === "dark" ? "dark" : "light";
@@ -135,23 +130,30 @@
     }).catch(() => {});
   }
 
+  // The night shift runs 23:00–07:00 Beijing time on Monday to Friday nights
+  // (09:00–17:00 in Denver while it keeps daylight time). A shift belongs to the
+  // day it starts: Friday's ends on Saturday morning, and Saturday and Sunday
+  // nights are free.
+  const SHIFT_START = 23 * 3600, SHIFT_END = 7 * 3600, DAY = 86400;
+  const workday = (day) => day >= 1 && day <= 5;
   function updateWorkSchedule(now) {
-    // Both shifts use Beijing time; GMT stays fixed at UTC+0 throughout the year.
     const beijing = new Date(now.getTime() + 8 * 3600000);
     const seconds = beijing.getUTCHours() * 3600 + beijing.getUTCMinutes() * 60 + beijing.getUTCSeconds();
-    const start = shift === "winter" ? 0 : 23 * 3600;
-    const end = shift === "winter" ? 8 * 3600 : 7 * 3600;
-    const working = start === 0 ? seconds < end : seconds >= start || seconds < end;
-    const remaining = working ? (end - seconds + 86400) % 86400 : (start - seconds + 86400) % 86400;
-    const hours = Math.floor(remaining / 3600);
-    const minutes = Math.floor(remaining % 3600 / 60);
-    text("work-status", working ? "工作中" : "休息时间");
-    text("work-countdown", `${working ? "距下班" : "距开工"} ${hours} 小时 ${String(minutes).padStart(2, "0")} 分`);
+    const day = beijing.getUTCDay();
+    const started = seconds >= SHIFT_START ? day : seconds < SHIFT_END ? (day + 6) % 7 : -1;
+    const working = started >= 0 && workday(started);
+    let remaining;
+    if (working) remaining = (SHIFT_END - seconds + DAY) % DAY;
+    else {
+      // The next shift starts at 23:00 on the first workday from today.
+      let ahead = seconds < SHIFT_START ? 0 : 1;
+      while (!workday((day + ahead) % 7)) ahead++;
+      remaining = ahead * DAY + SHIFT_START - seconds;
+    }
+    const days = Math.floor(remaining / DAY), hours = Math.floor(remaining % DAY / 3600), minutes = Math.floor(remaining % 3600 / 60);
+    text("work-status", working ? "工作中" : day === 0 || day === 6 ? "周末" : "休息时间");
+    text("work-countdown", `${working ? "距下班" : "距开工"} ${days ? `${days} 天 ${hours} 小时` : `${hours} 小时 ${String(minutes).padStart(2, "0")} 分`}`);
     setData($("work-dot"), "working", working);
-  }
-
-  function renderShift() {
-    for (const button of document.querySelectorAll("[data-shift]")) button.setAttribute("aria-pressed", String(button.dataset.shift === shift));
   }
 
   function timestamp(value, includeDate = false) {
@@ -161,19 +163,31 @@
     return dateFormat(includeDate ? "stamp-date" : "stamp", "zh-CN", { timeZone: zone, ...(includeDate ? { month: "2-digit", day: "2-digit" } : {}), hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }).format(date);
   }
 
-  // Diary days run on UTC+0 (they change at 08:00 Beijing time); clocks and market days stay on Beijing time.
-  function diaryDate(date = new Date()) {
-    return dateFormat("diary", "en-CA", { timeZone: "UTC", year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
-  }
-
+  // Header clocks. Denver follows its daylight-saving changes (UTC−6 in
+  // summer, UTC−7 in winter); New Delhi stays at UTC+5:30.
+  const clocks = [
+    { id: "clock", zone, name: "北京时间" },
+    { id: "gmt-clock", zone: "UTC", name: "格林尼治时间" },
+    { id: "denver-clock", zone: "America/Denver", name: "丹佛时间" },
+    { id: "delhi-clock", zone: "Asia/Kolkata", name: "新德里时间" },
+  ];
+  let titledMinute = -1;
   // The clock text is itself a valid time string, so <time> needs no
-  // per-second datetime attribute; dates and titles change once a day.
+  // per-second datetime attribute; dates and titles change at most once a minute.
   function updateClock() {
     const now = new Date();
-    text("clock", dateFormat("clock", "zh-CN", { timeZone: zone, hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" }).format(now));
-    text("gmt-clock", dateFormat("gmt", "en-GB", { timeZone: "UTC", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" }).format(now));
-    const gmtTitle = `${dateFormat("gmt-date", "zh-CN", { timeZone: "UTC", year: "numeric", month: "2-digit", day: "2-digit" }).format(now)} · 格林尼治时间 UTC+0`;
-    if ($("gmt-clock").title !== gmtTitle) $("gmt-clock").title = gmtTitle;
+    for (const clock of clocks) text(clock.id, dateFormat(`time-${clock.zone}`, "en-GB", { timeZone: clock.zone, hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" }).format(now));
+    const minute = Math.floor(now.getTime() / 60000);
+    if (minute !== titledMinute) {
+      titledMinute = minute;
+      for (const clock of clocks) {
+        const date = dateFormat(`date-${clock.zone}`, "zh-CN", { timeZone: clock.zone, month: "long", day: "numeric", weekday: "short" }).format(now);
+        const offset = dateFormat(`offset-${clock.zone}`, "en-US", { timeZone: clock.zone, timeZoneName: "shortOffset" }).formatToParts(now).find((part) => part.type === "timeZoneName")?.value.replace("GMT", "UTC") || "";
+        const title = `${clock.name} · ${date} · ${offset === "UTC" ? "UTC+0" : offset}`;
+        const element = $(clock.id).parentElement;
+        if (element.title !== title) element.title = title;
+      }
+    }
     text("today", dateFormat("today", "zh-CN", { timeZone: zone, month: "long", day: "numeric", weekday: "short" }).format(now));
     updateWorkSchedule(now);
     watchLive();
@@ -204,128 +218,6 @@
     text(`${key}-updated`, updatedAt ? `更新于 ${timestamp(updatedAt, true)}` : "尚未同步");
   }
 
-  function renderDiet(diet = {}) {
-    const today = diet.today || {};
-    const totals = today.totals || {};
-    const recorded = today.recorded === true || diet.recorded === true;
-    setModuleStatus("diet", diet.status || "offline");
-    text("diet-date", `${(today.date || diet.date || diaryDate()).replaceAll("-", ".")} UTC`);
-    animateNumber("diet-kcal", recorded ? totals.kcal : null);
-    for (const key of ["protein", "carbs", "fat", "fiber"]) animateNumber(`diet-${key}`, recorded ? totals[key] : null, 1);
-    renderMacroSplit(recorded ? totals : {});
-    let context = recorded ? `${number(today.mealCount)} 餐已记录${finite(today.itemCount) ? ` · ${number(today.itemCount)} 项食物` : ""}` : "今天还没有饮食记录";
-    if (diet.status === "offline") context = recorded ? "显示最近保存的饮食记录" : "暂时无法读取饮食记录";
-    text("diet-context", context);
-    const week = diet.week || {};
-    const weekDays = Array.isArray(week.days) ? week.days : [];
-    const recordedKcal = weekDays.filter((day) => day?.recorded && finite(day.totals?.kcal)).map((day) => Number(day.totals.kcal));
-    const average = recordedKcal.length ? recordedKcal.reduce((sum, value) => sum + value, 0) / recordedKcal.length : null;
-    text("diet-week-summary", finite(week.recordedDays) ? `${number(week.recordedDays)}/7 天${finite(average) ? ` · 日均 ${number(average)} kcal` : ""}` : "暂无记录");
-    renderWeek(weekDays);
-    renderMeals(recorded && Array.isArray(today.meals) ? today.meals : [], diet.status);
-    text("diet-note", diet.status === "offline" ? "饮食服务暂未连接，可刷新或独立打开日记。" : "");
-    $("diet-note").hidden = diet.status !== "offline";
-    text("diet-module-updated", `Diet · ${diet.updatedAt ? `更新于 ${timestamp(diet.updatedAt, true)}` : "尚未同步"}`);
-  }
-
-  const mealNames = { breakfast: "早餐", lunch: "午餐", dinner: "晚餐", snack: "加餐" };
-  function renderMeals(meals, status) {
-    const list = $("diet-meals");
-    // Rows are rebuilt only when the meals change, so the minute refresh does
-    // not replay their entrance.
-    const signature = JSON.stringify([status, meals.map((meal) => [meal?.type, meal?.title, meal?.kcal])]);
-    if (list.dataset.signature === signature) return;
-    list.dataset.signature = signature;
-    list.replaceChildren();
-    meals.forEach((meal, index) => {
-      const row = document.createElement("li");
-      row.style.setProperty("--d", index);
-      const type = document.createElement("span");
-      type.className = "meal-type";
-      type.textContent = mealNames[meal?.type] || "餐食";
-      const title = document.createElement("span");
-      title.className = "meal-title";
-      title.textContent = typeof meal?.title === "string" ? meal.title : "";
-      title.title = title.textContent;
-      const kcal = document.createElement("span");
-      kcal.className = "meal-kcal";
-      kcal.textContent = finite(meal?.kcal) ? `${number(meal.kcal)} kcal` : "—";
-      row.append(type, title, kcal);
-      list.append(row);
-    });
-    if (!meals.length) {
-      const empty = document.createElement("li");
-      empty.className = "inline-empty";
-      empty.textContent = status === "offline" ? "饮食服务未连接" : "今天还没有记录餐食";
-      list.append(empty);
-    }
-    text("diet-meal-total", meals.length ? `${number(meals.length)} 餐` : "");
-  }
-
-  function renderMacroSplit(totals) {
-    // Energy share: protein and carbohydrate 4 kcal/g, fat 9 kcal/g.
-    const energy = { protein: Number(totals.protein) * 4, carbs: Number(totals.carbs) * 4, fat: Number(totals.fat) * 9 };
-    const valid = Object.values(energy).every((value) => Number.isFinite(value) && value >= 0);
-    const sum = valid ? energy.protein + energy.carbs + energy.fat : 0;
-    const split = $("diet-split");
-    split.dataset.empty = String(!sum);
-    for (const segment of split.children) {
-      segment.style.width = sum ? `calc((100% - 6px) * ${energy[segment.dataset.macro] / sum})` : "";
-    }
-  }
-
-  function renderWeek(days) {
-    const today = diaryDate();
-    const map = new Map(days.filter((day) => day && typeof day.date === "string").map((day) => [day.date, day]));
-    const end = new Date(`${today}T12:00:00Z`);
-    const entries = Array.from({ length: 7 }, (_, index) => {
-      const date = new Date(end.getTime() - (6 - index) * 86400000);
-      const key = diaryDate(date);
-      return { date: key, recorded: false, ...(map.get(key) || {}) };
-    });
-    const max = Math.max(1, ...entries.filter((day) => day.recorded && finite(day.totals?.kcal)).map((day) => Number(day.totals.kcal)));
-    const chart = $("diet-week");
-    // Columns are created once and then updated in place so bars ease to new heights.
-    if (chart.children.length !== 7) {
-      chart.replaceChildren(...entries.map((_, index) => {
-        const column = document.createElement("div");
-        column.className = "week-day";
-        column.setAttribute("aria-hidden", "true");
-        column.style.setProperty("--d", index);
-        const value = document.createElement("span");
-        value.className = "week-value";
-        const track = document.createElement("div");
-        track.className = "week-bar-track";
-        const bar = document.createElement("div");
-        bar.className = "week-bar";
-        track.append(bar, value);
-        const caption = document.createElement("span");
-        caption.className = "week-label";
-        column.append(track, caption);
-        return column;
-      }));
-    }
-    const descriptions = [];
-    entries.forEach((day, index) => {
-      const column = chart.children[index];
-      const hasValue = day.recorded === true && finite(day.totals?.kcal);
-      const label = `${day.date.slice(5).replace("-", "/")} ${hasValue ? `${number(day.totals.kcal)} kcal` : "未记录"}`;
-      descriptions.push(label);
-      setData(column, "today", day.date === today);
-      setData(column, "recorded", hasValue);
-      if (column.title !== label) column.title = label;
-      const value = column.querySelector(".week-value"), caption = column.querySelector(".week-label");
-      const valueText = hasValue ? number(day.totals.kcal) : "", captionText = day.date === today ? "今天" : day.date.slice(5).replace("-", "/");
-      if (value.textContent !== valueText) value.textContent = valueText;
-      if (caption.textContent !== captionText) caption.textContent = captionText;
-      const scale = hasValue ? Math.max(.03, Number(day.totals.kcal) / max) : 0;
-      const bar = column.querySelector(".week-bar");
-      requestAnimationFrame(() => { setStyle(bar, "transform", `scaleY(${scale})`); setStyle(column, "--h", String(scale)); });
-    });
-    const description = `过去七天热量摄入：${descriptions.join("；")}`;
-    if (chart.getAttribute("aria-label") !== description) chart.setAttribute("aria-label", description);
-  }
-
   function renderWallet(wallet = {}) {
     setModuleStatus("wallet", wallet.status || "offline");
     animateNumber("wallet-usd", wallet.totalUsd, 2, { cents: true });
@@ -334,7 +226,7 @@
     text("wallet-btc-label", `BTC 实际持仓${finite(wallet.btcHoldings) && wallet.btcHoldingsStale ? " · 已延迟" : ""}`);
     const list = $("wallet-assets");
     const assets = (Array.isArray(wallet.assets) ? wallet.assets : []).filter((asset) => asset && typeof asset.ccy === "string" && finite(asset.usd_value));
-    const visible = assets.slice(0, 6);
+    const visible = assets.slice(0, 8);
     renderPnl(wallet.pnl);
     renderLocations(Array.isArray(wallet.locations) ? wallet.locations : [], wallet);
     text("wallet-asset-count", assets.length ? `${number(assets.length)} 种${assets.length > visible.length ? ` · 显示前 ${visible.length}` : ""}` : "");
@@ -606,28 +498,24 @@
   }
 
   function applyLinks(links = {}) {
-    for (const key of ["diet", "wallet", "alerts"]) {
+    for (const key of ["wallet", "alerts"]) {
       if (typeof links[key] !== "string") continue;
       // Keep all embedded project routes on this origin; credentials never enter the client.
       try {
         const url = new URL(links[key], location.origin);
-        if (url.origin === location.origin && /^\/(diet|btc)(\/|$)/.test(url.pathname)) views[key].url = url.pathname + url.search + url.hash;
+        if (url.origin === location.origin && /^\/btc(\/|$)/.test(url.pathname)) views[key].url = url.pathname + url.search + url.hash;
       } catch { /* Keep the working default route. */ }
     }
-    $("diet-source-link").href = views.diet.url;
     $("btc-source-link").href = views.alerts.url;
     if (state.view !== "overview") $("open-project").href = projectUrl(state.view);
   }
 
   function renderOverview(data) {
     applyLinks(data.links);
-    renderDiet(data.diet);
     renderWallet(data.wallet);
     renderAlerts(withLive(data.alerts));
     renderServiceNotice();
-    const dietService = data.services?.diet || data.diet || {};
     const btcService = data.services?.btc || {};
-    setSource("diet", dietService.status || data.diet?.status || "offline", data.diet?.updatedAt);
     setSource("btc", btcService.status || data.alerts?.status || data.wallet?.status || "offline", latestDate([data.wallet?.updatedAt, data.alerts?.updatedAt]));
     text("last-sync", demo ? "演示模式：数据为示例，不是真实账户。去掉地址中的 ?demo 即显示真实数据。" : `总览同步于 ${timestamp(data.updatedAt || state.lastSuccess, true)} · 北京时间 · 每分钟自动刷新`);
     updateConnection();
@@ -645,7 +533,7 @@
     if (state.failed) { status = state.data ? "stale" : "offline"; label = state.data ? "同步已中断" : "暂时无法同步"; }
     else if (!state.data) { status = "loading"; label = "正在同步"; }
     else {
-      const statuses = [state.data.diet?.status, state.data.wallet?.status, state.data.alerts?.status];
+      const statuses = [state.data.wallet?.status, state.data.alerts?.status];
       if (statuses.every((value) => value === "offline")) { status = "offline"; label = "项目未连接"; }
       else if (statuses.some((value) => value === "stale" || value === "offline")) { status = "stale"; label = "部分数据待同步"; }
       else label = `已同步 ${timestamp(state.data.updatedAt || state.lastSuccess).slice(0, 5)}`;
@@ -747,7 +635,7 @@
   const recovery = { running: false, timer: 0 };
   function offlineServices() {
     if (demo || !local || !state.data?.services) return [];
-    return [["diet", "饮食日记"], ["btc", "比特币终端"]].filter(([key]) => state.data.services[key]?.status === "offline").map(([, label]) => label);
+    return state.data.services.btc?.status === "offline" ? ["比特币终端"] : [];
   }
 
   // The overview shows a notice; a project page whose service is down says the
@@ -822,7 +710,7 @@
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         data = await response.json();
       }
-      if (!data || typeof data !== "object" || !["diet", "wallet", "alerts"].some((key) => data[key] && typeof data[key] === "object")) throw new Error("Invalid overview response");
+      if (!data || typeof data !== "object" || !["wallet", "alerts"].some((key) => data[key] && typeof data[key] === "object")) throw new Error("Invalid overview response");
       state.data = data;
       state.failed = false;
       state.lastSuccess = new Date().toISOString();
@@ -834,14 +722,11 @@
       text("global-notice", state.data ? "总览暂时无法同步，当前保留最近一次显示的数据。可重试刷新，或打开对应项目。" : "暂时无法读取项目数据。可重试刷新，或打开对应项目检查连接。");
       $("global-notice").hidden = false;
       if (!state.data) {
-        renderDiet({ status: "offline" });
         renderWallet({ status: "offline" });
         renderAlerts({ status: "offline" });
-        setSource("diet", "offline", null);
         setSource("btc", "offline", null);
       } else {
-        for (const key of ["diet", "wallet", "alerts"]) setModuleStatus(key, "stale");
-        setSource("diet", "stale", state.data.diet?.updatedAt);
+        for (const key of ["wallet", "alerts"]) setModuleStatus(key, "stale");
         setSource("btc", "stale", latestDate([state.data.wallet?.updatedAt, state.data.alerts?.updatedAt]));
       }
       updateConnection();
@@ -863,7 +748,7 @@
     if (key === "travel") return "online";
     if (!state.data) return state.failed ? "offline" : "loading";
     if (state.failed) return "stale";
-    return key === "diet" ? state.data.services?.diet?.status || state.data.diet?.status : state.data.services?.btc?.status || state.data[key === "wallet" ? "wallet" : "alerts"]?.status;
+    return state.data.services?.btc?.status || state.data[key === "wallet" ? "wallet" : "alerts"]?.status;
   }
 
   function updateProjectHint() {
@@ -897,7 +782,6 @@
   }
 
   const demoNotes = {
-    diet: ["饮食日记", "按日历查看每天吃了什么，营养自动估算，也可以用 AI 对话记录或修改。"],
     wallet: ["加密资产", "欧易、币安与离线钱包的合计持仓、定投成本与浮盈，以及比特币价格警报。"],
     travel: ["快速出境", "从附近机场出发，比较来得及赶上的国际直飞候选，并附入境说明。"],
   };
@@ -1016,9 +900,9 @@
     iframe.src = url;
   }
 
-  const serviceNames = { diet: "饮食日记", wallet: "比特币终端", travel: "快速出境" };
-  // The diet and BTC services run on the owner's computer and can be started
-  // from here; the cloud runs everything itself.
+  const serviceNames = { wallet: "比特币终端", travel: "快速出境" };
+  // The BTC service runs on the owner's computer and can be started from here;
+  // the cloud runs everything itself.
   const startable = (key) => local && !demo && key !== "travel";
   // 快速出境 keeps its flight source and settings in the cloud database only.
   const frameFailure = (key, entry) => local && key === "travel" ? "快速出境在云端终端中使用：航班数据源和出行设置保存在云端。" : entry.reason || `${serviceNames[key]}暂时无法打开。`;
@@ -1126,17 +1010,15 @@
   // single keys for the common ones. Shortcuts never fire while typing.
   const go = (key) => { location.hash = key; };
   const commands = [
-    { title: "总览", hint: "饮食、资产与行情", keys: ["1"], terms: "overview home zonglan zl", run: () => go("overview") },
-    { title: "饮食日记", hint: "按日期查看和记录", keys: ["2"], terms: "diet food meal yinshi ys riji", run: () => go("diet") },
-    { title: "加密资产", hint: "持仓、走势与钱包", keys: ["3"], terms: "wallet assets crypto zichan zc qianbao", run: () => go("wallet") },
-    { title: "快速出境", hint: "附近机场与直飞时刻", keys: ["4"], terms: "travel flight airport plane chujing kuaisu cj ks feiji", run: () => go("travel") },
+    { title: "总览", hint: "资产与行情", keys: ["1"], terms: "overview home zonglan zl", run: () => go("overview") },
+    { title: "加密资产", hint: "持仓、走势与钱包", keys: ["2"], terms: "wallet assets crypto zichan zc qianbao", run: () => go("wallet") },
+    { title: "快速出境", hint: "附近机场与直飞时刻", keys: ["3"], terms: "travel flight airport plane chujing kuaisu cj ks feiji", run: () => go("travel") },
     { title: "价格警报", hint: "比特币行情与提醒", terms: "alerts price btc bitcoin jingbao jb hangqing", run: () => go("alerts") },
     { title: "刷新总览", keys: ["R"], terms: "refresh sync shuaxin sx", when: () => state.view === "overview", run: () => refresh(true) },
     { title: "重新加载当前项目", terms: "reload project chongxin jiazai", when: () => state.view !== "overview" && !demo, run: () => $("reload-project").click() },
     { title: "在新窗口打开当前项目", terms: "open window dakai xinchuangkou", when: () => state.view !== "overview" && !demo, run: () => window.open(projectUrl(state.view), "_blank", "noopener") },
     { title: "启动本机服务", hint: () => `${offlineServices().join("、")}未运行`, terms: "start services launch qidong fuwu", when: () => offlineServices().length > 0 && !recovery.running, run: startServices },
     { title: () => document.documentElement.dataset.theme === "dark" ? "切换到白天模式" : "切换到黑夜模式", keys: ["T"], terms: "theme dark light mode zhuti heiye baitian", run: toggleTheme },
-    { title: () => `切换到${shift === "winter" ? "夏季 23–07" : "冬季 00–08"} 班次`, hint: "北京时间", terms: "shift work schedule banci", run: () => document.querySelector(`[data-shift="${shift === "winter" ? "summer" : "winter"}"]`).click() },
     { title: "连接详情", terms: "connection sync status lianjie xiangqing", run: () => { syncMenu.open = true; } },
     { title: "切换到手机界面", terms: "ui mobile phone jiemian shouji", when: () => document.documentElement.dataset.ui !== "mobile", run: () => chooseUi("mobile") },
     { title: "切换到电脑界面", terms: "ui desktop computer jiemian diannao", when: () => document.documentElement.dataset.ui !== "desktop", run: () => chooseUi("desktop") },
@@ -1239,7 +1121,7 @@
   $("palette-open").title = `命令面板 · ${commandKey === "⌘" ? "⌘K" : "Ctrl+K"}`;
   const isPaletteKey = (event) => (event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "k";
   const typing = (target) => target instanceof Element && Boolean(target.closest("input, textarea, select, [contenteditable]:not([contenteditable='false'])"));
-  const shortcuts = { "1": () => go("overview"), "2": () => go("diet"), "3": () => go("wallet"), "4": () => go("travel"), r: () => { if (state.view === "overview") refresh(true); }, t: toggleTheme, "/": openPalette, "?": openPalette };
+  const shortcuts = { "1": () => go("overview"), "2": () => go("wallet"), "3": () => go("travel"), r: () => { if (state.view === "overview") refresh(true); }, t: toggleTheme, "/": openPalette, "?": openPalette };
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && syncMenu.open) { syncMenu.open = false; $("connection").focus(); return; }
     if (isPaletteKey(event)) { event.preventDefault(); openPalette(); return; }
@@ -1258,14 +1140,6 @@
   });
   window.addEventListener("storage", (event) => {
     if (event.key === "xhy-theme") setTheme(event.newValue === "light" || event.newValue === "dark" ? event.newValue : preferredTheme.matches ? "dark" : "light", false);
-  });
-  for (const button of document.querySelectorAll("[data-shift]")) button.addEventListener("click", () => {
-    shift = button.dataset.shift === "winter" ? "winter" : "summer";
-    try { localStorage.setItem("xhy-work-shift", shift); } catch {}
-    renderShift();
-    updateClock();
-    moveShiftIndicator();
-    text("announcer", `已切换${shift === "winter" ? "冬季 00:00 至 08:00" : "夏季 23:00 至 07:00"}工作班次，均为北京时间。`);
   });
   setTheme(document.documentElement.dataset.theme, false);
   $("refresh").addEventListener("click", () => refresh(true));
@@ -1291,10 +1165,7 @@
       const key = String(event.data.key);
       if (key === "palette") openPalette();
       else if (!palette.open && Object.hasOwn(shortcuts, key)) shortcuts[key]();
-      return;
     }
-    const dietFrame = state.frames.get("diet")?.iframe;
-    if (dietFrame && event.source === dietFrame.contentWindow && event.data?.type === "xhy:diary-updated") refresh();
   });
   document.addEventListener("visibilitychange", () => {
     tick();
@@ -1308,10 +1179,7 @@
     refresh();
     startLive();
   });
-  renderShift();
   tick();
-  moveShiftIndicator(false);
-  renderWeek([]);
   navigate({ focus: false });
   refresh();
   setInterval(() => { if (!document.hidden) refresh(); }, 60000);

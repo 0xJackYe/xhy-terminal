@@ -1,16 +1,7 @@
-// Sample data for the public copy of the portal. The real overview comes from
-// /api/overview on the owner's computer; nothing here is personal data.
+// Sample data for the ?demo preview of the portal. The real overview comes from
+// /api/overview; nothing here is personal data.
 const DAY = 86400000;
 const zone = "Asia/Shanghai";
-// Diary days run on UTC+0, like the real diary.
-const diaryDate = (date) => new Intl.DateTimeFormat("en-CA", { timeZone: "UTC", year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
-
-const meals = [
-  { id: "demo-breakfast", type: "breakfast", title: "燕麦牛奶碗", status: "eaten", kcal: 522 },
-  { id: "demo-lunch", type: "lunch", title: "鸡胸肉米饭", status: "eaten", kcal: 631 },
-  { id: "demo-snack", type: "snack", title: "水果坚果", status: "eaten", kcal: 178 },
-];
-const weekKcal = [1720, 1580, 1745, null, 1690, 1735, 1331];
 
 // The price drifts a little on every refresh and live tick so the page behaves like the live one.
 let price = 67420 + Math.random() * 400;
@@ -63,21 +54,10 @@ export function demoMarket() {
 export function demoOverview() {
   const now = Date.now();
   move(60);
-  const today = diaryDate(new Date(now));
-  const days = weekKcal.map((kcal, index) => {
-    const date = diaryDate(new Date(now - (6 - index) * DAY));
-    return { date, recorded: kcal !== null, mealCount: kcal ? 3 : 0, totals: { kcal } };
-  });
   const updatedAt = new Date(now).toISOString();
   return {
     updatedAt, timezone: zone, demo: true,
-    services: { diet: { status: "online" }, btc: { status: "online" } },
-    diet: {
-      status: "online", updatedAt, date: today, recorded: true,
-      today: { date: today, recorded: true, mealCount: 3, itemCount: 10, meals,
-        totals: { kcal: 1331, protein: 78.6, carbs: 158.1, fat: 45.4, fiber: 18 } },
-      week: { recordedDays: 6, days },
-    },
+    services: { btc: { status: "online" } },
     wallet: {
       status: "online", updatedAt, complete: true, stale: false,
       totalUsd: 49432.17, totalCny: 351957, btcHoldings: 0.61234567, btcHoldingsStale: false,
