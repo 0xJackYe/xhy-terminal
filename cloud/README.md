@@ -2,7 +2,7 @@
 
 The production terminal runs in `xhy-terminal`, a Cloudflare Worker with Static
 Assets, D1 and a one-minute scheduled task. It does not need the Windows PC to
-remain on. The short `x-5tv.pages.dev` address is a Pages service-binding proxy
+remain on. The primary `xhyc.pages.dev` address is a Pages service-binding proxy
 to the same Worker, so a Worker release updates both addresses immediately.
 
 ## GitHub deployment
@@ -44,9 +44,19 @@ initial SQL is for a new, empty database only; do not rerun it over production.
 Existing access, session and encryption secrets are reused when preparing an
 export again. Do not commit or copy private runtime data into `dist/`.
 
-To publish the stable Pages proxy separately, run the Pages deploy command from
-`alias-deploy/`; its `BACKEND` binding points at the production Worker. The
-proxy contains no account credentials or diary data.
+To publish the stable Pages entrance separately, run this from `alias-deploy/`:
+
+```powershell
+node ../node_modules/wrangler/bin/wrangler.js pages deploy ../alias --project-name xhyc --branch main --force
+```
+
+This Wrangler version otherwise converts Pages commands into standalone Worker
+deployments. Here `--force` explicitly selects the classic Pages deployment so
+the entrance remains `xhyc.pages.dev`. Its `BACKEND` service binding forwards
+each request to `xhy-terminal`, including frontend assets and all API paths.
+It contains no account credentials, diary data or duplicate scheduled tasks.
+The existing Workers Builds integration publishes `main` automatically; this
+entrance sees each resulting production release without copying frontend files.
 
 ## Data freshness
 
