@@ -49,6 +49,16 @@
     for (let i = 0; i < maxPoints; i++) result.push(unique[Math.round(i * (unique.length - 1) / (maxPoints - 1))]);
     return result;
   }
+  // Live stream snapshots after the first carry only history_tail: the newest
+  // per-minute points, starting with the minute being updated. Everything from
+  // that minute on is replaced; earlier minutes are kept as they are.
+  function mergeHistoryTail(history, tail) {
+    const base = Array.isArray(history) ? history : [];
+    const points = Array.isArray(tail) ? tail.filter(p => p && finite(p.time_ms)) : [];
+    if (!points.length) return base.slice();
+    const from = Math.floor(points[0].time_ms / 60000);
+    return base.filter(p => p && finite(p.time_ms) && Math.floor(p.time_ms / 60000) < from).concat(points);
+  }
   function chartGeometry(history) {
     const points = chartPoints(history);
     if (!points.length) return null;
@@ -186,7 +196,7 @@
       } finally {timers.clearTimeout(timer);}
     };
   }
-  const helpers = {beijingTime,marketHealth,clockPresentation,chartPoints,chartGeometry,validateSettings,eligibleNotifications,walletMessageAction,pageFromHash,createPageRouter,optionsMessageAction,soundLabel,createAudioPreview,createJSONRequester,fmtPrice,fmtPct};
+  const helpers = {beijingTime,marketHealth,clockPresentation,chartPoints,mergeHistoryTail,chartGeometry,validateSettings,eligibleNotifications,walletMessageAction,pageFromHash,createPageRouter,optionsMessageAction,soundLabel,createAudioPreview,createJSONRequester,fmtPrice,fmtPct};
   if (typeof module !== 'undefined' && module.exports) module.exports = helpers;
   if (typeof document === 'undefined') return;
 
@@ -307,6 +317,7 @@
       retiredInstances.add(previousInstance);
       if (retiredInstances.size > 16) retiredInstances.delete(retiredInstances.values().next().value);
     }
+    if (!Array.isArray(data.history) && Array.isArray(data.history_tail)) data = {...data, history: mergeHistoryTail(snapshot && snapshot.history, data.history_tail)};
     if (finite(data.server_time_ms)) offsetMs = data.server_time_ms - Date.now();
     const alerts = Array.isArray(data.alerts) ? data.alerts : [];
     if (!hydrated) {alerts.forEach(a=>{if(a&&typeof a.id==='string')seenAlerts.add(a.id);});hydrated=true;} else eligibleNotifications(alerts,seenAlerts,serverNow()).forEach(notify);

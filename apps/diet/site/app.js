@@ -1,4 +1,4 @@
-import { MEALS, NUTRIENTS, today, validDate, estimate, nutritionTotal, dayTotal, validateDiary, validateDay, mergeDays } from './lib.mjs';
+import { MEALS, NUTRIENTS, DIARY_TIMEZONE, today, validDate, estimate, nutritionTotal, dayTotal, validateDiary, validateDay, mergeDays } from './lib.mjs';
 import { setupQuickEntry } from './quick-entry.js';
 import { applyParsedMeals, undoParsedMeals } from './quick-merge.mjs';
 import { writeDrafts } from './draft-storage.mjs';
@@ -8,8 +8,8 @@ import { createSnapshotRefresh } from './diary-refresh.mjs';
 const $ = s => document.querySelector(s);
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const fmt = (n, digits = 0) => n == null ? '—' : n.toLocaleString('zh-CN', { maximumFractionDigits: digits });
-const dateObj = d => new Date(d + 'T12:00:00+08:00');
-const dateLabel = d => dateObj(d).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long', timeZone: 'Asia/Shanghai' });
+const dateObj = d => new Date(d + 'T12:00:00Z');
+const dateLabel = d => dateObj(d).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long', timeZone: DIARY_TIMEZONE });
 const shift = (d, n) => { const x = dateObj(d); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
 const storageKey = 'shiguang-drafts-v1';
 let canonical, catalog, drafts = [], days = [], selected = today(), view = 'diary', editing = null, editingDate = null;
@@ -432,7 +432,7 @@ function renderCalendar() {
     const planned = day?.meals.filter(m => m.status === 'planned').length ?? 0;
     const active = detailOpen && date === selected;
     const description = [eaten ? `${eaten}餐已吃` : '', planned ? `${planned}餐计划` : ''].filter(Boolean).join('，') || '未记录';
-    return `<button type="button" class="month-day ${active ? 'is-selected' : ''} ${eaten || planned ? 'has-record' : ''} ${date === today() ? 'is-today' : ''}" data-calendar-date="${date}" aria-controls="day-detail" aria-label="${date} ${description}"><span class="month-day-number">${i + 1}</span><span class="month-day-meta">${eaten ? `${eaten}餐已吃` : planned ? `${planned}餐计划` : ''}</span></button>`;
+    return `<button type="button" class="month-day ${active ? 'is-selected' : ''} ${eaten || planned ? 'has-record' : ''} ${date === today() ? 'is-today' : ''}" data-calendar-date="${date}" aria-controls="day-detail" aria-label="${date} ${description}"><span class="month-day-number">${i + 1}</span><span class="month-day-meta">${eaten ? `${eaten}餐已吃` : planned ? `${planned}餐计划` : ''}</span>${eaten && dayTotal(day).kcal != null ? `<span class="month-day-kcal">${fmt(dayTotal(day).kcal)}<small> kcal</small></span>` : ''}</button>`;
   }).join('');
 }
 function changeMonth(offset) {
@@ -544,13 +544,23 @@ function wire() {
 }
 async function init() {
   try {
-    const responses = await Promise.all([fetch('./data/diary.json', { cache: 'no-cache' }), fetch('./data/foods.json', { cache: 'no-cache' })]);
-    if (responses.some(r => !r.ok)) throw new Error('数据文件读取失败');
-    canonical = validateDiary(await responses[0].json()); catalog = await responses[1].json();
-    try {
-      const response = await fetch(new URL('./api/diary', document.baseURI), { cache: 'no-store', credentials: 'same-origin' });
-      if (response.ok) { const snapshot = await response.json(); canonical = validateDiary(snapshot.diary); remote = { ...remote, ...snapshot }; }
-    } catch { /* Existing hosted diary keeps its browser-draft workflow when no durable API exists. */ }
+    // The durable diary comes from the local API. The seed file is only the fallback
+    // for a hosted copy without one, so it is not downloaded alongside the API copy.
+    const [foods, stored] = await Promise.all([
+      fetch('./data/foods.json', { cache: 'no-cache' }),
+      fetch(new URL('./api/diary', document.baseURI), { cache: 'no-store', credentials: 'same-origin' }).catch(() => null)
+    ]);
+    if (!foods.ok) throw new Error('数据文件读取失败');
+    catalog = await foods.json();
+    let snapshot = null;
+    try { if (stored?.ok) { snapshot = await stored.json(); validateDiary(snapshot.diary); } } catch { snapshot = null; /* Fall back to the seed below. */ }
+    if (snapshot) { canonical = snapshot.diary; remote = { ...remote, ...snapshot }; }
+    else {
+      // Existing hosted diary keeps its browser-draft workflow when no durable API exists.
+      const seed = await fetch('./data/diary.json', { cache: 'no-cache' });
+      if (!seed.ok) throw new Error('数据文件读取失败');
+      canonical = validateDiary(await seed.json());
+    }
     try {
       rawDraftBackup = localStorage.getItem(storageKey);
       if (rawDraftBackup) {

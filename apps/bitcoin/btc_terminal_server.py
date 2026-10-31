@@ -94,6 +94,37 @@ def replay_recent_email_alerts(monitor, email_service, now_ms=None):
             pass
 
 
+# Fields the portal overview reads from the live stream (?view=market).
+MARKET_VIEW_KEYS = ("market", "settings", "revision", "instance_id", "server_time_ms")
+
+
+def market_view(value):
+    """The live quote, alert rules and recent alerts, without the chart history."""
+    view = {key: value[key] for key in MARKET_VIEW_KEYS if key in value}
+    view["alerts"] = (value.get("alerts") or [])[-8:]
+    return view
+
+
+def history_delta(value, sent):
+    """Send the per-minute chart history in full once, then only its newest points.
+
+    Between one-second snapshots only the latest minute changes, so resending up to
+    1,441 points every second costs about 90 KB/s per open page. When the earlier
+    points this connection already holds are unchanged, the snapshot carries
+    ``history_tail`` (the replaced last minute and any new one) instead; any other
+    change (day rollover, trimming, a REST bootstrap) resends the full history.
+    Returns the snapshot to send and the history the client now holds."""
+    history = value.get("history")
+    if not isinstance(history, list):
+        return value, sent
+    if sent and history and len(sent) <= len(history) <= len(sent) + 1 and history[:len(sent) - 1] == sent[:-1]:
+        delta = dict(value)
+        del delta["history"]
+        delta["history_tail"] = history[len(sent) - 1:]
+        return delta, history
+    return value, history
+
+
 def embedded_options_html():
     """Keep the original options page and attach only a same-origin frame bridge."""
     markup = (OPTIONS_STATIC / "index.html").read_text(encoding="utf-8")
@@ -507,6 +538,7 @@ class TerminalHandler(BaseHTTPRequestHandler):
             self.json(503, {"error": "邮件配置暂未保存，请检查本机存储后重试。"})
 
     def events(self):
+        view = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).get("view", [""])[0]
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream; charset=utf-8")
         self.send_header("Cache-Control", "no-store")
@@ -517,8 +549,13 @@ class TerminalHandler(BaseHTTPRequestHandler):
         try:
             self.connection.settimeout(10)
             self.wfile.write(b"retry: 2000\n\n")
+            sent = None
             while not self.server.stopping.is_set():
                 value = self.server.monitor.read()
+                if view == "market":
+                    value = market_view(value)
+                else:
+                    value, sent = history_delta(value, sent)
                 payload = json.dumps(value, ensure_ascii=False, allow_nan=False, separators=(",", ":")).encode("utf-8")
                 # Detection runs per trade; browser charts update once per second.
                 self.wfile.write(b"event: snapshot\ndata: " + payload + b"\n\n")

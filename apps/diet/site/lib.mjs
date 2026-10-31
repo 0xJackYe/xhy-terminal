@@ -1,7 +1,10 @@
 export const NUTRIENTS = ['kcal', 'protein', 'carbs', 'fat', 'fiber', 'saturatedFat'];
 export const MEALS = { breakfast: '早餐', lunch: '午餐', dinner: '晚餐', snack: '加餐' };
-export function today() {
-  return new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Shanghai' }).format(new Date());
+// Diary days run on UTC+0, so the date changes at 08:00 Beijing time and a
+// night shift that crosses Beijing midnight stays on one diary day.
+export const DIARY_TIMEZONE = 'UTC';
+export function today(now = new Date()) {
+  return new Intl.DateTimeFormat('sv-SE', { timeZone: DIARY_TIMEZONE }).format(now);
 }
 export function validDate(value) {
   return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)

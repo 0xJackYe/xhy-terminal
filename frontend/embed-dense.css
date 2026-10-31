@@ -1,0 +1,215 @@
+/* Single-window layouts for the Bitcoin pages inside the portal.
+   Every rule is scoped to an embedded document (data-xhy-embedded), so the
+   standalone apps keep their own layouts. Long lists scroll inside their
+   panel against --xhy-vh, the portal window height set by theme-bridge.js. */
+
+/* ---------- Bitcoin: shared ---------- */
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .topbar { height: 40px !important; min-height: 40px; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .topbar .nav-link { padding-block: 0; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .page { max-width: none !important; padding: 0 0 10px !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(.chart-panel, .alarm-panel, .email-panel, .alert-history, .combined-wallet, .btc-cost, .crypto-portfolio, .okx-wallet) { margin-top: 0 !important; padding-block: 10px !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .section-heading { margin-bottom: 6px; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(h2, .wallet-heading h2) { font-size: 15px !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(.button, .primary-button, .secondary-button) { min-height: 30px !important; padding-block: 4px; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(input, select):not([type="checkbox"]):not([type="radio"]) { min-height: 30px; height: 30px; }
+
+/* ---------- Bitcoin: price alerts ---------- */
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #price-alert { min-height: 0; padding-block: 6px !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #connectionNotice { margin: 0 0 6px; padding: 6px 12px; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #alertsPage .price-overview { margin: 0 !important; padding-block: 8px !important; gap: 16px !important; align-items: center; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #alertsPage .price-value { margin-top: 0 !important; font-size: 28px !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #alertsPage .metric > strong { margin: 2px 0 !important; font-size: 20px !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #alertsPage .daily-prices { gap: 2px; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #alertsPage .daily-prices > div { min-height: 0; padding-block: 1px; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #alertsPage .price-chart { margin-top: 4px !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #alertsPage .chart-footer { margin-top: 4px; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #alarmForm .setting-row { margin-top: 6px !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #alarmForm :is(.rule-note, .sound-setting) { margin-block: 6px; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .alarm-actions { margin-top: 6px; gap: 8px; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .notification-actions { margin-top: 8px; padding-top: 8px; gap: 2px 10px; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .notification-actions .text-button { min-height: 28px; padding-block: 2px; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .email-description { margin: 0 0 8px; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .email-fields { gap: 8px !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .email-field { gap: 3px; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .email-footer { margin-top: 8px; gap: 8px; flex-wrap: wrap; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(#emailStatus, #emailDelivery) { margin: 6px 0 0; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .email-help { margin-top: 6px; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .email-help > summary { padding-block: 4px; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .alert-history .table-scroll { max-height: max(140px, calc(var(--xhy-vh, 900px) - 560px)); overflow: auto; overscroll-behavior: contain; }
+
+@media (min-width: 1000px) {
+  /* Chart and history | alarm settings | email, under one price strip. */
+  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #alertsPage:not([hidden]) { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "hero hero hero" "notice notice notice" "overview overview overview" "chart alarm email" "history alarm email"; grid-template-rows: auto auto auto auto 1fr; column-gap: 24px; align-items: start; }
+  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #price-alert { grid-area: hero; }
+  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #connectionNotice { grid-area: notice; }
+  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #alertsPage .price-overview { grid-area: overview; }
+  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #monitorGrid { display: contents; }
+  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #alertsPage .chart-panel { grid-area: chart; }
+  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #alertsPage .alarm-panel { grid-area: alarm; }
+  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #alertsPage .email-panel { grid-area: email; }
+  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #alertsPage .alert-history { grid-area: history; }
+  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .email-fields { grid-template-columns: minmax(0, 1fr) !important; }
+}
+
+/* ---------- Bitcoin: wallet ----------
+   Left: combined holdings, cost basis, balance chart and the 1 BTC goal.
+   Middle: DCA cost, allocation, OKX. Right: the on-chain address view. */
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-message { margin: 0 !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #combinedBTC { font-size: 24px !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-pnl > strong { margin-top: 2px !important; font-size: 20px !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-lifetime { margin: 0 !important; padding: 6px 0 !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-lifetime-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; row-gap: 6px !important; margin: 2px 0 0 !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-lifetime-metrics dd { font-size: 17px !important; }
+/* The two annualized returns share one line under the four cost figures, each
+   with its note; the two explanations sit side by side until one is opened. */
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-annual-metric { grid-column: span 2; display: flex; align-items: baseline; gap: 6px; padding-top: 5px; border-top: 1px solid var(--xhy-line); }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-annual-metric:nth-child(5) { border-left: 0 !important; padding-left: 0 !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-annual-metric dt { flex: none; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-annual-metric dd { flex: none; margin: 0 !important; font-size: 14px !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-annual-metric small { min-width: 0; margin: 0 !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-lifetime { display: flex; flex-wrap: wrap; column-gap: 18px; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-lifetime > :not(details) { flex: 1 0 100%; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-lifetime > details { flex: 1 1 0; min-width: 0; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-lifetime > details[open] { flex-basis: 100%; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-lifetime-details { margin: 0 !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-lifetime-details > summary { min-height: 22px !important; align-items: center !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-lifetime-details > summary > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-day-pnl { display: flex; align-items: baseline; gap: 8px; margin: 0 !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-day-pnl > strong { font-size: 15px !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-controls button { min-height: 26px !important; padding: 2px 7px !important; font-size: 11.5px !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(.combined-chart, .combined-chart svg) { height: 128px !important; min-height: 128px !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-goal { margin: 0 !important; padding: 6px 0 !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-goal-track { margin-block: 6px !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-milestones { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; gap: 0 10px !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-milestones li { padding: 3px 0 !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(.combined-footer, .btc-cost-footer, .portfolio-footer) { margin-top: 4px !important; padding-top: 4px !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .btc-cost-overview { margin: 6px 0 !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .btc-cost-total > strong { font-size: 20px !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .btc-cost-daily > strong { font-size: 16px !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(.btc-cost-message, .portfolio-message, .okx-message) { margin: 2px 0 0 !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .portfolio-sources { margin-top: 4px !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .portfolio-total-unit strong { font-size: 17px !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .portfolio-tabs button { min-height: 26px !important; padding: 2px 9px !important; font-size: 12px !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .portfolio-legend :is(th, td) { padding-block: 3px !important; font-size: 12px !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .wallet-page .wallet-section { margin-top: 0 !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .wallet-heading { margin-bottom: 4px !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .wallet-actions .secondary-button { min-height: 26px !important; padding: 2px 9px; font-size: 12px; }
+
+@media (min-width: 1100px) {
+  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #walletPage:not([hidden]) { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "combined cost onchain" "combined portfolio onchain" "combined okx onchain" "combined . onchain"; grid-template-rows: auto auto auto 1fr; align-items: start; }
+  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #combinedWalletPanel { grid-area: combined; padding-right: 22px !important; }
+  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #btcCostPanel { grid-area: cost; border-top: 0 !important; }
+  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #cryptoPortfolioPanel { grid-area: portfolio; }
+  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #okxWalletPanel { grid-area: okx; }
+  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(#btcCostPanel, #cryptoPortfolioPanel, #okxWalletPanel) { padding-inline: 22px !important; border-left: 1px solid var(--xhy-line) !important; }
+  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #wallet-panel { grid-area: onchain; align-self: stretch; padding: 10px 0 0 22px; border-left: 1px solid var(--xhy-line); }
+
+  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-wallet { display: grid !important; grid-template-columns: minmax(0, 1fr) !important; grid-template-areas: "heading" "message" "overview" "lifetime" "charthead" "chart" "readout" "goal" "footer" !important; gap: 4px !important; }
+  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-overview { display: grid !important; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 6px 16px !important; margin: 0 !important; }
+  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-total { grid-column: 1; grid-row: 1; }
+  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-pnl { grid-column: 2; grid-row: 1; padding-left: 16px !important; }
+  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-sources { grid-column: 1 / -1; grid-row: 2; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 16px; padding: 6px 0 0 !important; border-left: 0 !important; border-top: 1px solid var(--xhy-line) !important; }
+  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-source + .combined-source { margin-top: 0 !important; }
+  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-chart-head { flex-direction: row !important; flex-wrap: wrap; align-items: center !important; justify-content: space-between; }
+  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-goal { border-top: 1px solid var(--xhy-line) !important; }
+
+  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .btc-cost-overview { display: grid !important; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px 14px !important; }
+  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .btc-cost-daily { grid-column: 1 / -1; padding: 6px 0 0 !important; border-left: 0 !important; border-top: 1px solid var(--xhy-line) !important; }
+  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .btc-cost-quantity { padding-left: 14px !important; }
+  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #btcCostNetBTC { font-size: 14px !important; overflow-wrap: anywhere; }
+  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .portfolio-chart-head { flex-direction: column; align-items: stretch !important; gap: 6px !important; margin-top: 6px !important; }
+  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .portfolio-totals { display: grid !important; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px !important; }
+  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .portfolio-tabs { align-self: flex-start; }
+  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .portfolio-content { grid-template-columns: 96px minmax(0, 1fr) !important; gap: 12px !important; margin-top: 6px; align-items: center; }
+  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .portfolio-chart { min-height: 96px !important; }
+  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .portfolio-chart svg { width: 96px !important; height: 96px !important; }
+}
+
+/* The on-chain address view, nested inside the wallet page. */
+:root[data-xhy-embedded="true"][data-xhy-surface="wallet"] body :is(.topbar, .hero, .chart-section, .bottom, .details, .wallet-notes) { padding-inline: 0 !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="wallet"] body .topbar { min-height: 0; padding-block: 0 4px !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="wallet"] body .topbar .button { min-height: 26px !important; padding: 2px 10px; font-size: 12px; }
+:root[data-xhy-embedded="true"][data-xhy-surface="wallet"] body .hero { display: grid !important; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px 12px !important; padding-block: 4px 8px !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="wallet"] body .hero > div:first-child { grid-column: 1 / -1; }
+:root[data-xhy-embedded="true"][data-xhy-surface="wallet"] body .hero h2 { margin: 2px 0 !important; font-size: 24px !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="wallet"] body :is(.pnl-box, .quote-box) { min-height: 0; padding: 8px 10px !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="wallet"] body .pnl-box strong { margin-block: 3px !important; font-size: 18px !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="wallet"] body .quote-box strong { margin-block: 3px !important; font-size: 16px !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="wallet"] body .pnl-heading select { height: 26px; min-height: 26px; }
+:root[data-xhy-embedded="true"][data-xhy-surface="wallet"] body .address-row { margin: 0 0 6px !important; }
+/* The portal's combined panel already tracks the 1 BTC goal across OKX and this address. */
+:root[data-xhy-embedded="true"][data-xhy-surface="wallet"] body .goal { display: none !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="wallet"] body .chart-section { padding-block: 6px !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="wallet"] body .chart-top { flex-wrap: wrap; gap: 6px; }
+:root[data-xhy-embedded="true"][data-xhy-surface="wallet"] body .chart-top .controls button { min-height: 26px !important; padding: 2px 7px !important; font-size: 11.5px !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="wallet"] body .plot { height: 170px !important; margin-top: 6px !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="wallet"] body .wallet-notes { padding-block: 4px !important; }
+
+/* Wallet: second pass, one-line metadata so all three columns fit a laptop window. */
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(.combined-wallet, .btc-cost, .crypto-portfolio, .okx-wallet) { padding-block: 8px !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-total > strong { display: inline; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-total > small { display: inline; margin-left: 4px; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-total > p { margin: 2px 0 0; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(#combinedPnlDates, #combinedPnlNote, #btcCostCounts, .combined-source small, .portfolio-help, .combined-footer > span) { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-pnl select { height: 26px !important; min-height: 26px !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-chart-head > div:first-child { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-day-pnl > small { display: none; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(.combined-chart, .combined-chart svg) { height: 116px !important; min-height: 116px !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-footer { display: flex; gap: 12px; justify-content: space-between; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .btc-cost-overview > div > small { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .btc-cost-daily { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: baseline; gap: 2px 12px; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .btc-cost-daily > :not(strong) { grid-column: 1 / -1; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .btc-cost-daily > strong { grid-column: 1; margin: 0 !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .okx-wallet { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 12px; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .okx-heading { flex: 1 1 100%; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .okx-actions :is(button) { min-height: 26px !important; padding-block: 2px; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .wallet-heading { position: relative; }
+
+:root[data-xhy-embedded="true"][data-xhy-surface="wallet"] body .panel { position: relative; }
+:root[data-xhy-embedded="true"][data-xhy-surface="wallet"] body .topbar { position: absolute; top: 0; right: 0; z-index: 2; padding: 0 !important; border: 0 !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="wallet"] body .hero > * { grid-area: auto !important; order: 0 !important; margin: 0 !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="wallet"] body .hero > div:first-child { grid-column: 1 / -1 !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="wallet"] body .pnl-heading { min-height: 0; gap: 6px; }
+:root[data-xhy-embedded="true"][data-xhy-surface="wallet"] body :is(.pnl-box, .quote-box) small { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+:root[data-xhy-embedded="true"][data-xhy-surface="wallet"] body .plot { height: 160px !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-total { display: flex !important; flex-wrap: wrap; align-items: baseline; column-gap: 4px; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-total > :is(span, p) { flex-basis: 100%; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(.combined-chart, .combined-chart svg) { height: 100px !important; min-height: 100px !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #combinedCoverage { display: none; }
+@media (min-width: 1100px) {
+  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #walletPage:not([hidden]) { grid-template-areas: "combined cost onchain" "combined portfolio onchain" "combined portfolio okx" "combined . ." !important; }
+  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #okxWalletPanel { padding-inline: 22px 0 !important; border-top: 1px solid var(--xhy-line) !important; }
+  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-wallet { grid-template-columns: minmax(0, 1fr) auto !important; grid-template-areas: "heading heading" "message message" "overview overview" "lifetime lifetime" "charthead charthead" "chart chart" "goal goal" "readout footer" !important; }
+  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-readout { align-self: center; }
+  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-footer { border-top: 0 !important; margin: 0 !important; padding: 0 !important; align-self: center; }
+}
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #combinedBTC { font-size: 21px !important; letter-spacing: -.4px; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-wallet { row-gap: 2px !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-goal-head h3 { font-size: 14px !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .portfolio-footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0 12px; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .portfolio-footer > * { margin: 0 !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .portfolio-content { margin-top: 4px !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .okx-wallet { padding-bottom: 0 !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="wallet"] body .chart-top > div:first-child { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; }
+:root[data-xhy-embedded="true"][data-xhy-surface="wallet"] body .chart-heading h3, :root[data-xhy-embedded="true"][data-xhy-surface="wallet"] body .chart-top h3 { font-size: 14px !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="wallet"] body .plot { height: 140px !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-total > strong { margin: 0 !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .page { padding-bottom: 2px !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .portfolio-legend table { width: 100%; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .portfolio-legend :is(th, td):nth-child(2) { display: none; }
+/* Charts take whatever height the window leaves: smaller on a laptop, larger on a tall monitor. */
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(.combined-chart, .combined-chart svg) { height: clamp(70px, calc(var(--xhy-vh, 900px) - 640px), 220px) !important; min-height: 70px !important; }
+/* The price chart draws into a fixed 680×203 viewBox, so it keeps that shape rather than stretching its labels. */
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #alertsPage .price-chart { height: auto !important; aspect-ratio: 680 / 203; }
+:root[data-xhy-embedded="true"][data-xhy-surface="wallet"] body .plot { height: clamp(90px, calc(var(--xhy-vh, 900px) - 590px), 300px) !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-pnl { display: grid !important; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 10px; align-content: start; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-pnl > :not(label):not(select) { grid-column: 1 / -1; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-pnl > select { justify-self: start; }
+
+/* Stale-cache and refresh-failure notices add a red line to most panels after
+   any missed refresh; each panel's own timestamp already shows data age. Setup
+   prompts (not configured, not connected) stay visible. */
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(#combinedMessage, #btcCostMessage, .okx-message.error, .portfolio-message.error) { display: none !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(.combined-state, .btc-cost-state, .okx-state, .portfolio-state):is(.stale, .unavailable, .error) { display: none !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #cryptoPortfolioPanel:has(.portfolio-state.stale) .portfolio-message { display: none !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="wallet"] body .wallet-sync[data-state="error"], :root[data-xhy-embedded="true"][data-xhy-surface="wallet"] body .wallet-notes:has(> .wallet-sync[data-state="error"]:only-child) { display: none !important; }

@@ -42,6 +42,12 @@ class OverviewTests(unittest.TestCase):
         self.assertEqual(result["week"]["days"][4]["mealCount"], 1)
         self.assertIsNone(result["week"]["days"][0]["totals"]["kcal"])
 
+    def test_diary_day_changes_at_utc_midnight_not_beijing_midnight(self):
+        # 01:30 Beijing on 10-28 is still the 10-27 night shift; 08:00 Beijing starts 10-28.
+        self.assertEqual(server.diary_today(dt.datetime(2026, 10, 28, 1, 30, tzinfo=server.BEIJING)), dt.date(2026, 10, 27))
+        self.assertEqual(server.diary_today(dt.datetime(2026, 10, 28, 7, 59, tzinfo=server.BEIJING)), dt.date(2026, 10, 27))
+        self.assertEqual(server.diary_today(dt.datetime(2026, 10, 28, 8, 0, tzinfo=server.BEIJING)), dt.date(2026, 10, 28))
+
     def test_live_store_and_atomic_runtime_store_take_precedence_over_seed(self):
         live = dict(self.diary, days=[])
         with patch("server.safe_read", return_value={"diary": live}):
@@ -75,6 +81,31 @@ class OverviewTests(unittest.TestCase):
         self.assertEqual(result["totalBtc"], "0.9")
         self.assertEqual(result["btcHoldings"], "0.5")
         self.assertTrue(result["btcHoldingsStale"])
+        self.assertIsNone(result["pnl"])
+
+    def test_today_lists_eaten_meals_with_their_energy(self):
+        with patch("server.safe_read", return_value=None):
+            result = server.diet_overview(self.config, dt.date(2026, 10, 24))
+        self.assertEqual([(m["title"], m["kcal"]) for m in result["today"]["meals"]], [("午餐", 100)])
+
+    def test_long_term_position_summarizes_the_cost_basis_metrics(self):
+        lifetime = {"status": "fresh", "metrics": {"average_cost": "58000", "price_usdt": "67000",
+                    "unrealized_net": "900", "unrealized_return_pct": "15.5", "remaining_cost": "5800"}}
+        pnl = server.wallet_overview({"complete": True, "stale": False}, {"lifetime_pnl": lifetime})["pnl"]
+        self.assertEqual(pnl, {"status": "fresh", "averageCost": "58000", "price": "67000",
+                               "unrealized": "900", "returnPct": "15.5", "cost": "5800"})
+        self.assertIsNone(server.lifetime_summary({"status": "loading", "metrics": {}}))
+
+    def test_price_chart_is_sorted_downsampled_and_keeps_the_latest_point(self):
+        history = [{"time_ms": 1000 * i, "price": 100 + i} for i in reversed(range(500))]
+        history.append({"time_ms": "bad", "price": 1})
+        points = server.price_chart(history, limit=120)
+        self.assertLessEqual(len(points), 121)
+        self.assertEqual(points[0], [0, 100])
+        self.assertEqual(points[-1], [499000, 599])
+        self.assertEqual(points, sorted(points))
+        self.assertEqual(server.price_chart(None), [])
+        self.assertEqual(server.alerts_overview(None)["chart"], [])
 
 
 class ProxyTests(unittest.TestCase):
@@ -95,6 +126,8 @@ class ProxyTests(unittest.TestCase):
                     return
                 if self.path == "/api/raw":
                     data, kind = b'{"note":"/api/unchanged"}', "application/json"
+                elif self.path == "/app.js":
+                    data, kind = b"console.log('/api/terminal')", "text/javascript"
                 else:
                     data, kind = b'<script src="/app.js"></script><iframe src="/wallet.html"></iframe>', "text/html"
                 self.send_response(200)
@@ -147,6 +180,22 @@ class ProxyTests(unittest.TestCase):
         self.assertIn(b'src="/btc/wallet.html"', html)
         self.assertEqual(headers["X-Frame-Options"], "SAMEORIGIN")
         self.assertEqual(self.request("/diet/api/raw")[2], b'{"note":"/api/unchanged"}')
+
+    def test_code_is_revalidated_by_etag_and_pages_and_data_are_never_stored(self):
+        for path in ("/styles.css", "/diet/app.js"):
+            with self.subTest(path=path):
+                status, headers, body = self.request(path)
+                self.assertEqual((status, headers["Cache-Control"]), (200, "no-cache"))
+                self.assertTrue(body)
+                etag = headers["ETag"]
+                status, headers, body = self.request(path, headers={"If-None-Match": 'W/"stale", ' + etag})
+                self.assertEqual((status, body, headers["ETag"]), (304, b"", etag))
+                self.assertEqual(self.request(path, headers={"If-None-Match": '"stale"'})[0], 200)
+        for path in ("/", "/btc/", "/diet/api/raw"):
+            with self.subTest(path=path):
+                status, headers, _ = self.request(path)
+                self.assertEqual((status, headers["Cache-Control"]), (200, "no-store"))
+                self.assertNotIn("ETag", headers)
 
     def test_dynamic_js_and_css_roots_are_rewritten(self):
         source = b"fetch(`/api/chat/${id}`); new EventSource('/api/events'); import('/lib.mjs'); const url='https://example.com/api';"

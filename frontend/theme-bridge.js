@@ -149,12 +149,38 @@
       });
     };
     win.__xhyDocumentHeight = { announce };
+    // Frames grow to their content, so their own vh is circular. Long lists
+    // size themselves against the top window instead.
+    try {
+      const top = win.top;
+      const syncViewport = () => doc.documentElement.style.setProperty("--xhy-vh", `${top.innerHeight}px`);
+      top.addEventListener("resize", syncViewport);
+      syncViewport();
+    } catch { /* Only same-origin portal frames reach this point. */ }
     new win.ResizeObserver(announce).observe(doc.body);
     new win.MutationObserver(announce).observe(doc.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["hidden", "class", "style"] });
     win.addEventListener("load", announce);
     win.addEventListener("hashchange", announce);
     doc.fonts?.ready.then(announce);
     announce();
+  }
+
+  // Portal shortcuts keep working while focus is inside an embedded project:
+  // ⌘K / Ctrl+K always, and 1 2 3 T / ? whenever no field is being typed in
+  // and the project has not used the key itself.
+  function connectShortcuts(doc) {
+    const win = doc.defaultView;
+    if (win.top === win || win.__xhyShortcuts) return;
+    win.__xhyShortcuts = true;
+    const typing = target => target instanceof win.Element && Boolean(target.closest("input, textarea, select, [contenteditable]:not([contenteditable='false'])"));
+    doc.addEventListener("keydown", event => {
+      const palette = (event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "k";
+      const single = !event.metaKey && !event.ctrlKey && !event.altKey && !event.isComposing && !event.repeat
+        && ["1", "2", "3", "t", "T", "/", "?"].includes(event.key) && !typing(event.target);
+      if ((!palette && !single) || event.defaultPrevented) return;
+      event.preventDefault();
+      win.top.postMessage({ type: "xhy:shortcut", key: palette ? "palette" : event.key.toLowerCase() }, win.location.origin);
+    });
   }
 
   // Nested wallet content expands the finance document; that document then
@@ -180,17 +206,22 @@
       root.dataset.xhySurface = /^\/travel(?:\.html)?$/.test(doc.location.pathname) ? "travel" : /^\/diet(?:\/|$)/.test(doc.location.pathname) ? "diet" : /\/wallet\.html$/.test(doc.location.pathname) ? "wallet" : "btc";
       root.style.colorScheme = theme;
       if (doc.head && !doc.querySelector('link[data-xhy-embed-theme]')) {
-        const sheet = doc.createElement("link");
-        sheet.rel = "stylesheet";
-        sheet.href = "/embed-theme.css";
-        sheet.dataset.xhyEmbedTheme = "";
-        doc.head.append(sheet);
+        // embed-dense.css only applies inside the portal frame: it re-flows each
+        // page so its content fits one window under the shell header.
+        for (const href of ["/embed-theme.css", "/embed-dense.css"]) {
+          const sheet = doc.createElement("link");
+          sheet.rel = "stylesheet";
+          sheet.href = href;
+          sheet.dataset.xhyEmbedTheme = "";
+          doc.head.append(sheet);
+        }
       }
       // Native terminal CSS also uses body.dark. Keep both token systems aligned.
       if (doc.body) doc.body.classList.toggle("dark", theme === "dark");
       disableOptions(doc);
       connectDocumentHeight(doc);
       connectProjectMotion(doc);
+      connectShortcuts(doc);
     }
     if (!observed.has(doc)) {
       let queued = false;

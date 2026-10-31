@@ -183,5 +183,57 @@ class CLITests(unittest.TestCase):
                 self.assertGreaterEqual((b + .05) / (a + .05), 4.5, (theme, name))
 
 
+
+def utc(text):
+    return cli.dt.datetime.fromisoformat(text.replace("Z", "+00:00"))
+
+
+class ScheduleAndClockTests(unittest.TestCase):
+    def test_night_shift_runs_monday_to_friday_nights_only(self):
+        cases = [
+            ("2026-10-31T15:30:00Z", False, "周末"),   # Saturday 23:30 Beijing: no Saturday shift
+            ("2026-10-31T20:25:00Z", False, "周末"),   # Sunday 04:25 Beijing
+            ("2026-11-01T15:30:00Z", False, "周末"),   # Sunday 23:30 Beijing: no Sunday shift
+            ("2026-11-02T03:00:00Z", False, "休息"),   # Monday 11:00 Beijing
+            ("2026-11-02T14:59:00Z", False, "休息"),   # Monday 22:59 Beijing
+            ("2026-11-02T15:00:00Z", True, "工作中"),  # Monday 23:00 Beijing: the week's first shift
+            ("2026-11-02T22:59:00Z", True, "工作中"),  # Tuesday 06:59 Beijing
+            ("2026-11-02T23:00:00Z", False, "休息"),   # Tuesday 07:00 Beijing: shift over
+            ("2026-10-30T16:00:00Z", True, "工作中"),  # Saturday 00:00 Beijing: Friday's shift continues
+            ("2026-10-30T22:59:00Z", True, "工作中"),  # Saturday 06:59 Beijing
+            ("2026-10-30T23:00:00Z", False, "周末"),   # Saturday 07:00 Beijing: weekend
+        ]
+        for moment, working, label in cases:
+            self.assertEqual(cli.work_status(utc(moment)), (working, label), moment)
+
+    def test_mountain_time_rule_matches_the_time_zone_database(self):
+        try:
+            from zoneinfo import ZoneInfo
+            denver = ZoneInfo("America/Denver")
+        except Exception:
+            self.skipTest("no time zone database")
+        for year in (2025, 2026, 2027, 2030):
+            moment = cli.dt.datetime(year, 1, 1, tzinfo=cli.dt.timezone.utc)
+            while moment.year == year:
+                expected = moment.astimezone(denver).utcoffset().total_seconds() / 3600
+                self.assertEqual(cli.mountain_offset(moment), expected, moment)
+                moment += cli.dt.timedelta(minutes=30) if moment.month in (3, 11) else cli.dt.timedelta(hours=7)
+
+    def test_header_shows_four_clocks_and_the_shift(self):
+        stream = io.StringIO()
+        terminal = cli.Terminal(None, cli.Console(color=False, stream=stream, width=76))
+        terminal.header(now=utc("2026-10-31T20:25:47Z"))
+        text = stream.getvalue()
+        for term in ("北京 UTC+8  2026-11-01 04:25:47", "GMT / UTC+0  2026-10-31 20:25:47", "丹佛 UTC-6  2026-10-31 14:25:47",
+                     "新德里 UTC+5:30  2026-11-01 01:55:47", "周一至周五 · 周末"):
+            self.assertIn(term, text)
+        self.assertNotIn("冬令", text)
+        terminal.header(now=utc("2026-11-02T15:30:00Z"))
+        self.assertIn("丹佛 UTC-7  2026-11-02 08:30:00", stream.getvalue())
+
+    def test_old_shift_setting_is_ignored(self):
+        self.assertNotIn("shift", cli.Terminal(None, cli.Console(color=False, stream=io.StringIO(), width=76)).settings)
+
+
 if __name__ == "__main__":
     unittest.main()

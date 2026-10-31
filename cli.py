@@ -21,6 +21,13 @@ import uuid
 
 ROOT = Path(__file__).resolve().parent
 BEIJING = dt.timezone(dt.timedelta(hours=8))
+DELHI = dt.timezone(dt.timedelta(hours=5, minutes=30))
+try:
+    from zoneinfo import ZoneInfo
+    DENVER = ZoneInfo("America/Denver")
+except Exception:  # Windows has no time zone database unless the tzdata package is installed.
+    DENVER = None
+SHIFT_START, SHIFT_END = 23, 7  # Beijing hours of the night shift
 SETTINGS = ROOT / ".local" / "cli-settings.json"
 MAX_RESPONSE = 8 * 1024 * 1024
 STATUS = {"online": "已连接", "empty": "暂无记录", "stale": "数据延迟", "offline": "未连接"}
@@ -73,8 +80,46 @@ def money(value, currency="$ "):
     return currency + number(value) if number(value) != "—" else "—"
 
 
-def today():
-    return dt.datetime.now(BEIJING).date().isoformat()
+def diary_today():
+    """Diary days run on UTC+0 (they change at 08:00 Beijing time)."""
+    return dt.datetime.now(dt.timezone.utc).date().isoformat()
+
+
+def mountain_offset(utc):
+    """Mountain Time's UTC offset in hours: -6 from the second Sunday of March to the
+    first Sunday of November (US rules since 2007, switching at 02:00 local), else -7."""
+    utc = utc.astimezone(dt.timezone.utc)
+
+    def sunday_from(month, day):
+        start = dt.date(utc.year, month, day)
+        return start + dt.timedelta(days=(6 - start.weekday()) % 7)
+
+    begins = dt.datetime.combine(sunday_from(3, 8), dt.time(9), dt.timezone.utc)
+    ends = dt.datetime.combine(sunday_from(11, 1), dt.time(8), dt.timezone.utc)
+    return -6 if begins <= utc < ends else -7
+
+
+def denver_time(moment):
+    if DENVER is not None:
+        return moment.astimezone(DENVER)
+    return moment.astimezone(dt.timezone(dt.timedelta(hours=mountain_offset(moment))))
+
+
+def utc_label(moment):
+    minutes = int(moment.utcoffset().total_seconds() // 60)
+    hours, rest = divmod(abs(minutes), 60)
+    return "UTC" + ("-" if minutes < 0 else "+") + str(hours) + (f":{rest:02d}" if rest else "")
+
+
+def work_status(now=None):
+    """The night shift runs 23:00-07:00 Beijing time on Monday to Friday nights. A shift
+    belongs to the day it starts: Friday's ends on Saturday morning, and Saturday and
+    Sunday nights are free. Returns (working, label)."""
+    now = (now or dt.datetime.now(dt.timezone.utc)).astimezone(BEIJING)
+    started = now.date() if now.hour >= SHIFT_START else now.date() - dt.timedelta(days=1) if now.hour < SHIFT_END else None
+    if started is not None and started.weekday() < 5:
+        return True, "工作中"
+    return False, "周末" if now.weekday() >= 5 else "休息"
 
 
 def date_value(value):
@@ -201,18 +246,17 @@ def enable_ansi(stream):
 def load_settings():
     try:
         value = json.loads(SETTINGS.read_text(encoding="utf-8"))
-        return {"theme": value.get("theme") if value.get("theme") in PALETTES else "dark",
-                "shift": value.get("shift") if value.get("shift") in ("summer", "winter") else "summer"}
+        return {"theme": value.get("theme") if value.get("theme") in PALETTES else "dark"}
     except (OSError, ValueError, AttributeError):
-        return {"theme": "dark", "shift": "summer"}
+        return {"theme": "dark"}
 
 
 class Terminal:
     def __init__(self, api, console, settings=None):
         self.api, self.out = api, console
-        self.settings = settings or {"theme": console.theme, "shift": "summer"}
+        self.settings = settings or {"theme": console.theme}
         self.snapshot, self.history, self.pending = None, [], None
-        self.record_date = today()
+        self.record_date = diary_today()
         self.own_undo = None
 
     def preference(self, key, value):
@@ -223,18 +267,17 @@ class Terminal:
         except OSError:
             self.out.line("本次设置已生效，暂时无法记住下次偏好。", "muted")
 
-    def header(self):
-        now = dt.datetime.now(BEIJING)
-        gmt = now.astimezone(dt.timezone.utc)
-        winter = self.settings.get("shift") == "winter"
-        hour = now.hour
-        working = hour < (8 if winter else 7) or (not winter and hour >= 23)
+    def header(self, now=None):
+        now = (now or dt.datetime.now(dt.timezone.utc)).astimezone(BEIJING)
+        gmt, denver, delhi = now.astimezone(dt.timezone.utc), denver_time(now), now.astimezone(DELHI)
         self.out.box("XHY  /  个人终端", [
             "饮食日记  ·  加密资产  ·  比特币价格警报",
             f"北京 UTC+8  {now:%Y-%m-%d %H:%M:%S}",
             f"GMT / UTC+0  {gmt:%Y-%m-%d %H:%M:%S}",
-            ("冬令班次 00:00–08:00" if winter else "夏令班次 23:00–次日07:00") + " · 手动设置 · " + ("工作时段" if working else "非工作时段"),
-            "常规作息 07:00 入睡，15:00–16:00 起床；日期按北京自然日。",
+            f"丹佛 {utc_label(denver)}  {denver:%Y-%m-%d %H:%M:%S}",
+            f"新德里 UTC+5:30  {delhi:%Y-%m-%d %H:%M:%S}",
+            f"夜班 北京时间 23:00–次日07:00 · 周一至周五 · {work_status(now)[1]}",
+            "常规作息 07:00 入睡，15:00–16:00 起床；饮食日记按 UTC+0 换日。",
         ])
 
     def read_diary(self):
@@ -255,7 +298,7 @@ class Terminal:
             day = diet.get("today") or {}
             totals = day.get("totals") or {}
             self.out.box("01 / 饮食日记  ·  " + STATUS.get(diet.get("status"), "未连接"), [
-                f"{diet.get('date') or today()}  ·  {number(day.get('mealCount'), 0)} 餐  ·  {number(totals.get('kcal'), 0)} kcal",
+                f"{diet.get('date') or diary_today()} UTC  ·  {number(day.get('mealCount'), 0)} 餐  ·  {number(totals.get('kcal'), 0)} kcal",
                 "蛋白质 " + number(totals.get("protein"), 1) + " g  /  碳水 " + number(totals.get("carbs"), 1) + " g  /  脂肪 " + number(totals.get("fat"), 1) + " g",
                 "过去七天已记录 " + number((diet.get("week") or {}).get("recordedDays"), 0) + " 天",
                 diet.get("error") or "用 /diet 日期查看，直接说话即可和饮食 AI 对话。",
@@ -400,7 +443,7 @@ class Terminal:
             "/retry  确认上次中断的提交，沿用同一请求编号防止重复",
             "/undo  撤销本次会话最后一次修改；其他地方更新后不可撤销",
             "/new  清空对话上下文；不会删除日记",
-            "/theme light|dark  白天 / 黑夜模式；/shift summer|winter  手动选择班次",
+            "/theme light|dark  白天 / 黑夜模式",
             "/clear  清屏；/help  帮助；/quit  退出 CMD 客户端",
             "例：把 2026-10-24 早餐的牛奶改成 200 毫升。",
             "网页继续可用：http://127.0.0.1:" + str(self.api.port) + "/",
@@ -445,9 +488,6 @@ class Terminal:
             self.out.clear()
             self.header()
             self.out.line("已切换白天模式。" if argument == "light" else "已切换黑夜模式。", "good")
-        elif command == "/shift" and argument in ("summer", "winter"):
-            self.preference("shift", argument)
-            self.header()
         elif command == "/clear":
             self.out.clear()
             self.header()
@@ -474,7 +514,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="本机个人终端 CMD 客户端，与网页共用数据")
     parser.add_argument("--port", type=int, default=8780)
     parser.add_argument("--once", choices=("overview", "wallet", "alerts", "diet"), help="只读显示一次后退出")
-    parser.add_argument("--date", type=date_value, help="饮食默认日期 YYYY-MM-DD")
+    parser.add_argument("--date", type=date_value, help="饮食默认日期 YYYY-MM-DD（按 UTC+0 划分）")
     parser.add_argument("--theme", choices=("light", "dark"))
     parser.add_argument("--no-color", action="store_true", help="纯文本输出，不使用 ANSI 控制码")
     parser.add_argument("--no-start", action="store_true", help="只连接已有服务，供自动化或诊断")
@@ -488,7 +528,7 @@ def main(argv=None):
     console = Console(args.theme or settings["theme"], not args.no_color and not os.environ.get("NO_COLOR") and enable_ansi(sys.stdout))
     api = API(args.port)
     terminal = Terminal(api, console, settings)
-    terminal.record_date = args.date or today()
+    terminal.record_date = args.date or diary_today()
     try:
         if not args.no_start:
             from launch import ensure_portal

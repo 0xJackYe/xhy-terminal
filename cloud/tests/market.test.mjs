@@ -207,6 +207,34 @@ test('SSE emits valid snapshot events and bounds frames below the free subreques
   sqlite.close();
 });
 
+test('SSE ?view=market sends the quote, rules and newest alerts without the chart history', async () => {
+  const { env, sqlite } = environment(), jobs = [];
+  const insert = sqlite.prepare('INSERT INTO market_alerts(id,at_ms,event_json) VALUES (?,?,?)');
+  for (let i = 1; i <= 10; i++) insert.run('old-' + i, NOW - i * 60000, JSON.stringify({ id: 'old-' + i, kind: 'threshold', at_ms: NOW - i * 60000 }));
+  const response = await handleMarket(new Request('https://xhy.example/api/terminal/events?view=market'), env, {
+    waitUntil(job) { jobs.push(job); },
+    marketOptions: { now: NOW, fetch: marketFetch(), sleep: async () => {}, streamIntervalMs: 0 },
+  });
+  assert.equal(response.status, 200);
+  const body = await response.text();
+  await Promise.all(jobs);
+  const frames = body.trim().split('\n\n').map(frame => JSON.parse(frame.slice(frame.indexOf('data: ') + 6)));
+  assert.equal(frames.length, 3);
+  const stored = await getMarketSnapshot(env, { now: NOW });
+  for (const snapshot of frames) {
+    assert.deepEqual(Object.keys(snapshot).sort(), ['alerts', 'instance_id', 'market', 'revision', 'server_time_ms', 'settings']);
+    assert.equal(snapshot.market.price, 106);
+    assert.equal(snapshot.market.status, 'live');
+    assert.equal(snapshot.alerts.length, 8);
+    assert(snapshot.alerts.every((alert, i) => !i || snapshot.alerts[i - 1].at_ms >= alert.at_ms));
+  }
+  assert.deepEqual(frames.at(-1).alerts, stored.alerts.slice(0, 8));
+  for (const address of ['/api/terminal/events?view=full', '/api/terminal/events?view=market&x=1', '/api/terminal?view=market']) {
+    assert.equal((await handleMarket(new Request('https://xhy.example' + address), env, {})).status, 400, address);
+  }
+  sqlite.close();
+});
+
 function fallbackFetch({calls=[],gcp=false,time=NOW-500,badDay=false,badInstrument=false,price=106,high=107,low=99}={}){
   return async(address,init)=>{
     const url=new URL(address);calls.push({url,init});

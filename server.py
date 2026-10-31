@@ -6,6 +6,7 @@ changes an alert rule, sends a notification, or calls a trading API.
 import argparse
 import concurrent.futures
 import datetime as dt
+import hashlib
 import http.client
 import json
 import math
@@ -68,11 +69,18 @@ def summarize_day(day, date):
     items = [item for meal in meals for item in meal.get("items", [])]
     return {"date": date, "recorded": bool(meals), "mealCount": len(meals), "itemCount": len(items),
             "totals": nutrient_total(items),
-            "meals": [{key: meal.get(key) for key in ("id", "type", "title", "status")} for meal in meals]}
+            "meals": [{**{key: meal.get(key) for key in ("id", "type", "title", "status")},
+                       "kcal": nutrient_total(meal.get("items", []))["kcal"]} for meal in meals]}
+
+
+def diary_today(now=None):
+    """Diary days run on UTC+0 (they change at 08:00 Beijing time), so a night
+    shift that crosses Beijing midnight stays on one diary day."""
+    return (now or dt.datetime.now(dt.timezone.utc)).astimezone(dt.timezone.utc).date()
 
 
 def diet_overview(config, today=None):
-    today = today or dt.datetime.now(BEIJING).date()
+    today = today or diary_today()
     try:
         live = safe_read(config.diet_port, "/api/diary")
         diary = live.get("diary") if live else None
@@ -126,7 +134,31 @@ def wallet_overview(portfolio, combined):
             "sources": portfolio.get("sources", []), "scopeNote": portfolio.get("scope_note"),
             "thresholdUsd": portfolio.get("threshold_usd"), "excludedUsd": portfolio.get("excluded_usd"),
             "unpricedCurrencies": portfolio.get("unpriced_currencies", []),
-            "liabilitiesUsd": portfolio.get("liabilities_usd"), "conversionQuotes": portfolio.get("conversion_quotes", {})}
+            "liabilitiesUsd": portfolio.get("liabilities_usd"), "conversionQuotes": portfolio.get("conversion_quotes", {}),
+            "pnl": lifetime_summary(combined.get("lifetime_pnl") if isinstance(combined, dict) else None)}
+
+
+def lifetime_summary(lifetime):
+    """Long-term BTC position: moving-average cost against the current price (USDT)."""
+    metrics = lifetime.get("metrics") if isinstance(lifetime, dict) else None
+    if not isinstance(metrics, dict) or not metrics:
+        return None
+    return {"status": lifetime.get("status"), "averageCost": metrics.get("average_cost"),
+            "price": metrics.get("price_usdt"), "unrealized": metrics.get("unrealized_net"),
+            "returnPct": metrics.get("unrealized_return_pct"), "cost": metrics.get("remaining_cost")}
+
+
+def price_chart(history, limit=120):
+    """Downsample the terminal's per-minute history to a small [time_ms, price] series."""
+    points = [[p["time_ms"], p["price"]] for p in history or [] if isinstance(p, dict)
+              and type(p.get("time_ms")) in (int, float) and type(p.get("price")) in (int, float)
+              and math.isfinite(p["time_ms"]) and math.isfinite(p["price"]) and p["price"] > 0]
+    points.sort()
+    step = max(1, math.ceil(len(points) / limit))
+    sampled = points[::step]
+    if points and sampled[-1] is not points[-1]:
+        sampled.append(points[-1])
+    return sampled
 
 
 def alerts_overview(terminal):
@@ -147,6 +179,7 @@ def alerts_overview(terminal):
             "enabled": settings.get("enabled"), "thresholds": settings.get("thresholds_pct", []),
             "metric": settings.get("metric"), "settings": settings,
             "recent": (terminal.get("alerts") or [])[-8:] if terminal else [],
+            "chart": price_chart(terminal.get("history") if terminal else None),
             "storageError": terminal.get("storage_error") if terminal else None}
 
 
@@ -161,6 +194,13 @@ def build_overview(config):
             "services": {"diet": {"status": "online" if probe_port(config.diet_port) else "offline", "url": LINKS["diet"]},
                          "btc": {"status": "online" if terminal else "offline", "url": "/btc/"}},
             "diet": diet, "wallet": wallet_overview(portfolio, combined), "alerts": alerts_overview(terminal)}
+
+
+def revalidated(content_type):
+    """Code, styles, images and fonts may be cached and revalidated by ETag. Pages
+    and data keep no-store: they can carry the diary, balances or the address."""
+    kind = content_type.split(";")[0].strip().lower()
+    return kind in ("text/css", "text/javascript", "application/javascript") or kind.startswith(("image/", "font/"))
 
 
 def probe_port(port):
@@ -253,17 +293,25 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
     def respond(self, status, data, content_type="application/json; charset=utf-8", extra=None):
+        cache, etag = "no-store", None
+        if status == 200 and revalidated(content_type):
+            cache, etag = "no-cache", '"%s"' % hashlib.blake2b(data, digest_size=12).hexdigest()
+            if etag in {tag.strip().removeprefix("W/") for tag in self.headers.get("If-None-Match", "").split(",")}:
+                status, data = 304, b""
         self.send_response(status)
-        self.send_header("Content-Type", content_type)
-        self.send_header("Content-Length", str(len(data)))
-        self.send_header("Cache-Control", "no-store")
+        if status != 304:
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", cache)
+        if etag:
+            self.send_header("ETag", etag)
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "same-origin")
         self.send_header("X-Frame-Options", "SAMEORIGIN")
         for key, value in (extra or {}).items():
             self.send_header(key, value)
         self.end_headers()
-        if self.command != "HEAD":
+        if self.command != "HEAD" and data:
             try:
                 self.wfile.write(data)
             except OSError:

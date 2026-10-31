@@ -80,7 +80,7 @@ test('prompt anchors relative dates to real Beijing date, and sends only dietary
   assert.deepEqual(request.body.thinking, { type: 'disabled' });
   assert.deepEqual(request.body.response_format, { type: 'json_object' });
   assert.equal(request.body.temperature, 0.1);
-  assert.match(request.body.messages[0].content, /北京时间今天是 2026-10-25/);
+  assert.match(request.body.messages[0].content, /北京时间 08:00 换日[^。]*。今天是 2026-10-25（UTC\+0）/);
   assert.match(request.body.messages[0].content, /记录日期 2026-10-21/);
   assert.match(request.body.messages[0].content, /未提到/);
   assert.match(request.body.messages[0].content, /不要自行增加油、酱料、鸡蛋/);

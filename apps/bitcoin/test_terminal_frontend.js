@@ -1,6 +1,6 @@
 'use strict';
 const assert = require('node:assert/strict');
-const {beijingTime,marketHealth,clockPresentation,chartPoints,chartGeometry,validateSettings,eligibleNotifications,walletMessageAction,pageFromHash,createPageRouter,optionsMessageAction,soundLabel,createAudioPreview,fmtPrice,fmtPct} = require('./terminal/dist/terminal.js');
+const {beijingTime,marketHealth,clockPresentation,chartPoints,mergeHistoryTail,chartGeometry,validateSettings,eligibleNotifications,walletMessageAction,pageFromHash,createPageRouter,optionsMessageAction,soundLabel,createAudioPreview,fmtPrice,fmtPct} = require('./terminal/dist/terminal.js');
 let checks = 0;
 function test(name, callback) {callback();checks++;console.log('PASS ' + name);}
 const now = Date.UTC(2026,9,14,7,0,0);
@@ -27,6 +27,16 @@ test('No price yields no live status',()=>assert.equal(marketHealth({status:'liv
 test('Nonpositive prices cannot be presented as a live market',()=>{for(const price of [0,-1])assert.equal(marketHealth({...live,price},now,true).status,'connecting');});
 test('Chart filters missing and nonpositive prices and sorts event times',()=>assert.deepEqual(chartPoints([{time_ms:2,price:2},{time_ms:1,price:1},{time_ms:3,price:null},{time_ms:4,price:0}]),[{time_ms:1,price:1},{time_ms:2,price:2}]));
 test('Duplicate chart timestamp keeps newest value',()=>assert.deepEqual(chartPoints([{time_ms:1,price:1},{time_ms:1,price:2}]),[{time_ms:1,price:2}]));
+test('Stream history tails replace the current minute and append new ones',()=>{
+  const at=(minute,second,price)=>({time_ms:minute*60000+second*1000,price});
+  const held=[at(0,5,1),at(1,5,2),at(2,5,3)];
+  assert.deepEqual(mergeHistoryTail(held,[at(2,40,4)]),[at(0,5,1),at(1,5,2),at(2,40,4)]);
+  assert.deepEqual(mergeHistoryTail(held,[at(2,59,4),at(3,1,5)]),[at(0,5,1),at(1,5,2),at(2,59,4),at(3,1,5)]);
+  // A newer bootstrap that already holds minute 3 still ends with one point per minute.
+  assert.deepEqual(mergeHistoryTail([...held,at(3,0,9)],[at(2,59,4),at(3,1,5)]),[at(0,5,1),at(1,5,2),at(2,59,4),at(3,1,5)]);
+  assert.deepEqual(mergeHistoryTail(null,[at(1,0,1)]),[at(1,0,1)]);
+  assert.deepEqual(mergeHistoryTail(held,[]),held);
+});
 test('Large live history is bounded and keeps actual endpoints',()=>{const history=Array.from({length:3001},(_,i)=>({time_ms:i,price:100+i}));const result=chartPoints(history);assert.equal(result.length,1000);assert.deepEqual(result[0],history[0]);assert.deepEqual(result[999],history[3000]);});
 test('Flat price chart remains finite',()=>{const geometry=chartGeometry([{time_ms:now,price:100},{time_ms:now+1000,price:100}]);assert(!/NaN|Infinity/.test(geometry.path));assert(geometry.max>geometry.min);});
 test('One genuine price can draw without a fabricated series',()=>{const geometry=chartGeometry([{time_ms:now,price:100}]);assert.equal(geometry.points.length,1);assert.equal(geometry.xy.length,1);});

@@ -300,6 +300,13 @@ async function bodyJSON(request) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('invalid');
   return data;
 }
+// The portal overview's live card reads only these fields (?view=market, as on
+// the local terminal): the quote, alert rules and newest alerts, without the
+// chart history that otherwise fills every frame.
+function marketView(snapshot) {
+  return { market: snapshot.market, settings: snapshot.settings, revision: snapshot.revision, instance_id: snapshot.instance_id,
+    server_time_ms: snapshot.server_time_ms, alerts: (snapshot.alerts ?? []).slice(0, 8) };
+}
 function notify(ctx, events) {
   if (!events.length || typeof ctx?.onMarketAlerts !== 'function') return;
   const promise = Promise.resolve().then(() => ctx.onMarketAlerts(events));
@@ -311,7 +318,8 @@ export async function handleMarket(request, env, ctx = {}) {
   const url = new URL(request.url), path = url.pathname;
   const paths = ['/api/terminal', '/api/terminal/settings', '/api/terminal/test', '/api/terminal/silence', '/api/terminal/events'];
   if (!paths.includes(path)) return null;
-  if (url.search) return failure('行情接口不接受查询参数。', 400);
+  const lean = path === '/api/terminal/events' && url.search === '?view=market';
+  if (url.search && !lean) return failure('行情接口不接受查询参数。', 400);
   const options = ctx.marketOptions ?? {};
   try {
     if (path === '/api/terminal' && ['GET', 'HEAD'].includes(request.method)) {
@@ -340,7 +348,7 @@ export async function handleMarket(request, env, ctx = {}) {
                 notify(ctx, result.newAlerts);
                 const { newAlerts, ...snapshot } = result;
                 if (closed) break;
-                controller.enqueue(encoder.encode('event: snapshot\ndata: ' + JSON.stringify(snapshot) + '\n\n'));
+                controller.enqueue(encoder.encode('event: snapshot\ndata: ' + JSON.stringify(lean ? marketView(snapshot) : snapshot) + '\n\n'));
               }
             } catch {
               // EventSource reconnects after closing; never emit fake live data.
