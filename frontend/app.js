@@ -922,6 +922,16 @@
       message.textContent = "项目加载时间较长。可以重试，或在独立窗口中打开。";
       overlay.append(frameActions(key, overlay, { reveal: true }));
     }, 15000);
+    // Travel runs only in the cloud terminal: locally, explain that at once
+    // instead of requesting a page this computer does not serve.
+    if (local && key === "travel") {
+      clearTimeout(entry.timeout);
+      entry.failed = true;
+      overlay.classList.add("is-slow");
+      message.textContent = frameFailure(key, entry);
+      overlay.append(frameActions(key, overlay, { start: false, retry: false, open: false, back: true }));
+      return;
+    }
     iframe.src = url;
   }
 

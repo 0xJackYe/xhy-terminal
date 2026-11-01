@@ -1,7 +1,8 @@
 import {D,dec,txt,iso,beijingDate,normalizeBills,compareTrades,buildCostBook,appendCostBook,costView,positionView} from './cost-book.mjs';
 import {FinanceError,ExchangeClient,connectionIdentity,validateCredentials,encryptConfiguration,decryptConfiguration,normalizeOKX,normalizeBinance,binanceDetailFallbacks,COIN_CODE} from './exchange.mjs';
 import {preserveHistoricalPricePeriods} from './finance-price-periods.mjs';
-import {appendRemainingCapital} from './annualized-math.mjs';
+import {appendRemainingCapital,buildRemainingCapital} from './annualized-math.mjs';
+import {syncBinanceTrades,BINANCE_TRADES_META} from './binance-trades.mjs';
 
 export const FINANCE_SCHEMA_SQL=`
 CREATE TABLE IF NOT EXISTS finance_kv (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_ms INTEGER NOT NULL);
@@ -13,7 +14,7 @@ const json=(value,status=200)=>new Response(JSON.stringify(value),{status,header
 export async function getFinanceSnapshot(env,key,fallback=null){const row=await env.DB.prepare('SELECT value,updated_ms FROM finance_kv WHERE key=?').bind(key).first();if(!row)return fallback;try{return JSON.parse(row.value);}catch{return fallback;}}
 async function put(env,key,value,now){return env.DB.prepare('INSERT INTO finance_kv(key,value,updated_ms) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_ms=excluded.updated_ms').bind(key,JSON.stringify(value),now).run();}
 const putStatement=(env,key,value,now)=>env.DB.prepare('INSERT INTO finance_kv(key,value,updated_ms) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_ms=excluded.updated_ms').bind(key,JSON.stringify(value),now);
-const publicMessages={network_error:'云端暂时无法连接数据源，保留上次快照。',region_restricted:'数据提供方限制了当前云端地区访问，暂不能更新。',ip_restricted:'当前云端地址不在 API IP 白名单内，请调整该只读 API 的允许地址。',read_only_required:'请使用仅含读取权限的 API，不启用交易、划转或提现。',permissions_unverified:'读取权限尚未完成核验，暂不查询账户余额。',credentials_invalid:'API 凭据校验失败，请检查配置。',needs_credentials:'请先配置完整的只读 API 凭据。',history_gap:'成本账本存在超出接口窗口的历史缺口，请补齐账本。',needs_history:'此账户尚未导入完整的历史成本。',historical_rate_missing:'跨币种买入的历史行情尚未完整读取，暂不重算成本。',page_limit:'交易记录超出单次查询上限，保留上次账本。',configuration_unavailable:'云端凭据存储尚未配置完成。',rate_limited:'数据提供方正在限流，稍后自动重试。',provider_error:'数据提供方暂时不能完成请求。',clock_error:'数据提供方时间校验失败，稍后自动重试。',passphrase_invalid:'欧易 Passphrase 不匹配。',permission_denied:'接口拒绝访问，请核对读取权限和 IP 允许范围。',invalid_response:'数据源格式校验未通过，保留上次数据。',market_unavailable:'统一计价行情暂不可用。',invalid_request:'请求格式不正确。',method:'此路径不支持该操作。'};
+const publicMessages={binance_history_invalid:'币安成交与已核对的欧易账本无法衔接（例如卖出了没有买入记录的 BTC），暂不并入成本。',holdings_unavailable:'持仓数量暂不可核实，显示上次估算。',network_error:'云端暂时无法连接数据源，保留上次快照。',region_restricted:'数据提供方限制了当前云端地区访问，暂不能更新。',ip_restricted:'当前云端地址不在 API IP 白名单内，请调整该只读 API 的允许地址。',read_only_required:'请使用仅含读取权限的 API，不启用交易、划转或提现。',permissions_unverified:'读取权限尚未完成核验，暂不查询账户余额。',credentials_invalid:'API 凭据校验失败，请检查配置。',needs_credentials:'请先配置完整的只读 API 凭据。',history_gap:'成本账本存在超出接口窗口的历史缺口，请补齐账本。',needs_history:'此账户尚未导入完整的历史成本。',historical_rate_missing:'跨币种买入的历史行情尚未完整读取，暂不重算成本。',page_limit:'交易记录超出单次查询上限，保留上次账本。',configuration_unavailable:'云端凭据存储尚未配置完成。',rate_limited:'数据提供方正在限流，稍后自动重试。',provider_error:'数据提供方暂时不能完成请求。',clock_error:'数据提供方时间校验失败，稍后自动重试。',passphrase_invalid:'欧易 Passphrase 不匹配。',permission_denied:'接口拒绝访问，请核对读取权限和 IP 允许范围。',invalid_response:'数据源格式校验未通过，保留上次数据。',market_unavailable:'统一计价行情暂不可用。',invalid_request:'请求格式不正确。',method:'此路径不支持该操作。'};
 const errorCode=error=>error instanceof FinanceError?error.code:String(error?.message)==='historical_rate_missing'?'historical_rate_missing':String(error?.message)==='out_of_order_trade'?'history_gap':'network_error';
 function safeError(error){const code=errorCode(error);return {code,error:publicMessages[code]||publicMessages.network_error};}
 
@@ -78,8 +79,12 @@ export function aggregatePortfolio(rows,sources,btcUSD,fx,now,binance){
   return {updated_at:iso(now),complete:sources.every(r=>r.status==='connected')&&!unpriced.size&&liabilities.isZero(),stale:sources.some(r=>['stale','error'].includes(r.status)),total_usd:txt(total),total_cny:fx?.rate?txt(total.mul(fx.rate)):null,total_btc:btcUSD?txt(total.div(btcUSD)):null,conversion_quotes:{btc_usd:btcUSD?txt(btcUSD):null,usd_cny:fx?.rate||null,fx_date:fx?.date||null},excluded_usd:txt(excluded),threshold_usd:'5',assets,locations:venueRows,sources,unpriced_currencies:[...unpriced].sort(),liabilities_usd:txt(liabilities),excluded_liabilities_usd:txt(excludedLiabilities),location_allocation_complete:!negativeLeg,scope_note:'欧易统计交易与资金账户；币安统计现货、资金及其他钱包。不含欧易赚币、子账户及衍生品浮盈。',binance};
 }
 function quoteValid(rows,now,field){if(!Array.isArray(rows)||rows.length!==1||!dec(rows[0]?.[field]||'0').gt(0)||!Number.isSafeInteger(Number(rows[0].ts))||Math.abs(now-Number(rows[0].ts))>180000)throw new FinanceError('market_unavailable');return txt(rows[0][field]);}
+const isBinance=row=>row?.venue==='binance';
 async function syncCost(env,client,account,now){
   let meta=await getFinanceSnapshot(env,'cost_meta'),book=await getFinanceSnapshot(env,'cost_book');
+  // Binance fills join the book only once their whole history is imported,
+  // so the book never holds part of an account's purchases.
+  const binanceMeta=await getFinanceSnapshot(env,BINANCE_TRADES_META),includeBinance=binanceMeta?.complete===true;
   const previousCapital=await getFinanceSnapshot(env,'annualized_capital');
   if(!meta?.complete||meta.identity!==account)return {book:null,meta,error:{code:'needs_history',error:publicMessages.needs_history},recent:[]};
   if(now-meta.as_of_ms>85*86400000)return {book:null,meta,error:{code:'history_gap',error:publicMessages.history_gap},recent:[]};
@@ -93,12 +98,26 @@ async function syncCost(env,client,account,now){
     if(before){if(Object.keys(row).some(k=>k!=='at_ms'&&before[k]!==row[k])||Math.floor(before.at_ms/1000)!==Math.floor(row.at_ms/1000))throw new FinanceError('history_gap');}
     else{fresh.push(row);if(row.side==='buy')await foreignRate(client,row,rates);}
   }
-  let rebuild=!book||old.some(r=>{const row=JSON.parse(r.record_json);return row.at_ms>book.last_at_ms||row.at_ms===book.last_at_ms&&BigInt(row.bill_id)>BigInt(book.last_bill_id);})||fresh.some(r=>r.at_ms<book.last_at_ms||r.at_ms===book.last_at_ms&&BigInt(r.bill_id)<=BigInt(book.last_bill_id));
+  // Every stored trade is either in the book or deliberately left out of it;
+  // a different count means rows were added elsewhere (Binance) or lost.
+  const stored=Number((await env.DB.prepare('SELECT COUNT(*) AS count FROM finance_trades').first())?.count);
+  const binanceStale=book&&(includeBinance?(book.excluded_binance||0)>0&&book.binance_failed_at!==stored:(book.binance_count||0)>0);
+  let rebuild=!book||book.invested_usdt==null||stored!==book.trade_count+(book.excluded_binance||0)||binanceStale||old.some(r=>{const row=JSON.parse(r.record_json);if(isBinance(row)&&!book.binance_included)return false;return row.at_ms>book.last_at_ms||row.at_ms===book.last_at_ms&&BigInt(row.bill_id)>BigInt(book.last_bill_id);})||fresh.some(r=>r.at_ms<book.last_at_ms||r.at_ms===book.last_at_ms&&BigInt(r.bill_id)<=BigInt(book.last_bill_id));
+  let used=null,binanceIssue=null;
   if(rebuild){
     const all=(await env.DB.prepare('SELECT record_json FROM finance_trades ORDER BY at_ms, length(bill_id), bill_id').all()).results||[];
     const records=all.map(r=>JSON.parse(r.record_json));records.push(...fresh);
-    for(const row of records)if(row.side==='buy'&&row.quote_ccy!=='USDT')await foreignRate(client,row,rates);
-    book=buildCostBook(records,rates);
+    const okxOnly=records.filter(r=>!isBinance(r));used=includeBinance?records:okxOnly;
+    // Binance rows carry the Binance minute rates they were imported with.
+    for(const row of okxOnly)if(row.side==='buy'&&row.quote_ccy!=='USDT')await foreignRate(client,row,rates);
+    try{book=buildCostBook(used,rates);}
+    catch(error){
+      // Binance fills that cannot join the verified OKX history (for example
+      // a sale of BTC with no recorded purchase) never break the OKX book.
+      if(used===okxOnly)throw error;used=okxOnly;book=buildCostBook(used,rates);
+      binanceIssue={code:'binance_history_invalid',error:publicMessages.binance_history_invalid};book.binance_failed_at=stored+fresh.length;
+    }
+    book.binance_count=used.length-okxOnly.length;book.excluded_binance=records.length-used.length;book.binance_included=includeBinance&&book.excluded_binance===0;
   }else book=appendCostBook(book,fresh,rates);
   meta={...meta,as_of_ms:end};
   const latestCredentials=await credentials(env,'okx');if(await connectionIdentity(latestCredentials)!==account)throw new FinanceError('account_changed');
@@ -108,7 +127,12 @@ async function syncCost(env,client,account,now){
   // insert is detected above and reconstructed on the next retry.
   for(let i=0;i<statements.length;i+=90)await env.DB.batch(statements.slice(i,i+90));
   const anchors=[putStatement(env,'cost_meta',meta,now),putStatement(env,'cost_book',book,now),putStatement(env,'historical_rates',rates,now)];
-  if(previousCapital?.identity===account&&previousCapital.trade_count<book.trade_count){
+  if(used&&previousCapital?.identity===account){
+    // A rebuilt book (Binance history added, removed or reordered) rebuilds
+    // the dated remaining capital from the very same trades.
+    try{const capital=buildRemainingCapital(used,rates);if(capital.trade_count===book.trade_count&&capital.last_bill_id===book.last_bill_id&&dec(capital.cost).eq(book.cost)&&dec(capital.inventory).eq(book.inventory))anchors.push(putStatement(env,'annualized_capital',{...capital,identity:account,seed_epoch:previousCapital.seed_epoch||null},now));}
+    catch{/* A cost-date mismatch cannot change the verified cost book. */}
+  }else if(previousCapital?.identity===account&&previousCapital.trade_count<book.trade_count){
     try{
       let capitalUpdates=fresh;
       if(previousCapital.trade_count!==book.trade_count-fresh.length){
@@ -122,7 +146,8 @@ async function syncCost(env,client,account,now){
   }
   await env.DB.batch(anchors);
   const recentRows=(await env.DB.prepare('SELECT record_json FROM finance_trades WHERE at_ms>=? ORDER BY at_ms, length(bill_id), bill_id').bind(Math.min(now-2*86400000,start)).all()).results||[];
-  return {book,meta,recent:recentRows.map(r=>JSON.parse(r.record_json)),error:null,rates};
+  const recent=recentRows.map(r=>JSON.parse(r.record_json)).filter(r=>!isBinance(r)||book.binance_included);
+  return {book,meta,recent,error:null,rates,binance_issue:binanceIssue};
 }
 
 export async function syncFinance(env,{fetch:fetcher=globalThis.fetch,now:clock=Date.now,force=false}={}){
@@ -137,12 +162,24 @@ export async function syncFinance(env,{fetch:fetcher=globalThis.fetch,now:clock=
     const btcUSD=quoteValid(index,clock(),'idxPx');
     const btcTicker=tickers.find(r=>r.instId==='BTC-USDT');const price=quoteValid([btcTicker],clock(),'last');
     const okx=normalizeOKX(trading,funding,tickers,btcUSD,clock(),account.slice(0,24));
+    // One verified read-only Binance client serves both the balance and the
+    // trade-history reads in this run.
+    const binanceReady=(async()=>{const c=await credentials(env,'binance'),b=new ExchangeClient('binance',c,{fetch:fetcher,now:clock});await b.syncTime();await b.permissions();return {client:b,identity:await connectionIdentity(c)};})();
+    binanceReady.catch(()=>{});
     const outcomes=await Promise.allSettled([
-      syncCost(env,client,account,clock()),
+      (async()=>{
+        // Binance fills are stored first, so this run's cost book sees them.
+        let trades=null;const costMeta=await getFinanceSnapshot(env,'cost_meta');
+        if(costMeta?.complete&&costMeta.identity===account){
+          try{const {client:b,identity}=await binanceReady;trades=await syncBinanceTrades(env,b,{identity,coverageStartMs:costMeta.coverage_start_ms,rates:await getFinanceSnapshot(env,'historical_rates',{}),now:clock()});}
+          catch(error){trades={error:safeError(error)};}
+        }
+        return {...await syncCost(env,client,account,clock()),binance_trades:trades};
+      })(),
       readConfirmedBalance(env.WALLET_ADDRESS,{fetch:fetcher,now:clock}),
       publicGET('https://api.frankfurter.dev/v2/rates?base=USD&quotes=CNY&providers=ecb',fetcher,65536),
       (async()=>{
-        const c=await credentials(env,'binance'),b=new ExchangeClient('binance',c,{fetch:fetcher,now:clock});await b.syncTime();await b.permissions();
+        const {client:b}=await binanceReady;
         const wallets=await b.get('/sapi/v1/asset/wallet/balance',{needBalanceDetail:'true',quoteAsset:'BTC',recvWindow:5000}),fallback=binanceDetailFallbacks(wallets);
         const [spot,funding]=await Promise.all([fallback.includes('Spot')?b.post('/sapi/v3/asset/getUserAsset',{needBtcValuation:'true',recvWindow:5000}):null,fallback.includes('Funding')?b.post('/sapi/v1/asset/get-funding-asset',{needBtcValuation:'true',recvWindow:5000}):null]);
         return normalizeBinance({wallets,spot,funding},btcUSD,clock());
@@ -168,19 +205,33 @@ export async function syncFinance(env,{fetch:fetcher=globalThis.fetch,now:clock=
     if(chain)rows.push({ccy:'BTC',quantity:chain.btc,usd_value:txt(dec(chain.btc).mul(btcUSD)),location:'offline'});
     const portfolio=aggregatePortfolio(rows,sources,btcUSD,fx,clock(),binanceStatus);
     const policy=await getFinanceSnapshot(env,'policy',{}),oldCombined=await getFinanceSnapshot(env,'combined',emptyCombined());
-    // The cost book covers OKX and the offline wallet, so the long-term P&L
-    // stays on those holdings; the BTC total also counts Binance's BTC.
     const holdings=chain?txt(dec(chain.btc).add(okx.summary.btc_holdings_total)):null;
     const binanceBTC=binance&&typeof binance.btc_holdings==='string'?binance.btc_holdings:null;
     const totalBTC=holdings&&binanceBTC!=null?txt(dec(holdings).add(binanceBTC)):holdings;
+    // The long-term P&L counts Binance BTC once the book holds Binance's
+    // purchase history; until then it stays on OKX and the offline wallet.
+    const binanceInBook=cost?.book?.binance_included===true;
+    const pnlHoldings=!holdings?null:!binanceInBook?holdings:binanceBTC!=null?totalBTC:null;
+    // A Binance merge that failed keeps its reason on the book until a later
+    // rebuild succeeds; an account without Binance keys is simply not connected.
+    const binanceTrades=cost?.binance_trades||null,tradeError=binanceTrades?.error?.code==='needs_credentials'?null:binanceTrades?.error||null;
+    const binanceTradesError=tradeError||cost?.binance_issue||(cost?.book?.binance_failed_at!=null?{code:'binance_history_invalid',error:publicMessages.binance_history_invalid}:null);
     let pnl=emptyPnL(account.slice(0,24),costError?.error||publicMessages.needs_history);
     let costPublic=emptyCost(account.slice(0,24),costError?.error||publicMessages.needs_history);
     if(cost?.book){
-      costPublic=costView(cost.book,cost.recent,cost.meta,clock(),account.slice(0,24),costError?'stale':'fresh',costError?.error||null);
-      if(holdings){
-        const unverified=policy.verified_nonspot_adjustment_btc!=null&&dec(holdings).sub(cost.book.inventory).sub(policy.verified_nonspot_adjustment_btc).abs().gte('0.00000001');
-        pnl=positionView(cost.book,holdings,price,cost.meta,policy,clock(),account.slice(0,24),chainError||unverified?'stale':'fresh',chainError?.error||(unverified?'存在新的非现货持仓数量调整待核对。':null));
-        pnl.reconciliation={verified_at:policy.verified_at||null,verified_adjustment_btc:policy.verified_nonspot_adjustment_btc||null,change_since_verification_btc:policy.verified_nonspot_adjustment_btc?txt(dec(holdings).sub(cost.book.inventory).sub(policy.verified_nonspot_adjustment_btc)):null,matched:!unverified};
+      costPublic=costView(cost.book,cost.recent,cost.meta,clock(),account.slice(0,24),costError?'stale':'fresh',costError?.error||null,cost.rates||{});
+      costPublic.venues=binanceInBook?['okx','binance']:['okx'];
+      costPublic.binance_history={status:binanceInBook?'included':binanceTradesError?'error':binanceTrades?.meta?'importing':'not_connected',records:cost.book.binance_count||0,error:binanceTradesError?.error||null};
+      if(pnlHoldings){
+        const unverified=policy.verified_nonspot_adjustment_btc!=null&&dec(pnlHoldings).sub(cost.book.inventory).sub(policy.verified_nonspot_adjustment_btc).abs().gte('0.00000001');
+        pnl=positionView(cost.book,pnlHoldings,price,cost.meta,policy,clock(),account.slice(0,24),chainError||unverified?'stale':'fresh',chainError?.error||(unverified?'存在新的非现货持仓数量调整待核对。':null));
+        pnl.reconciliation={verified_at:policy.verified_at||null,verified_adjustment_btc:policy.verified_nonspot_adjustment_btc||null,change_since_verification_btc:policy.verified_nonspot_adjustment_btc?txt(dec(pnlHoldings).sub(cost.book.inventory).sub(policy.verified_nonspot_adjustment_btc)):null,matched:!unverified};
+        pnl.venues=costPublic.venues;
+      }else{
+        // Holdings that cannot be confirmed (a missing balance source) keep the
+        // account-matching previous estimate, marked stale, never a partial one.
+        const previousPnl=await getFinanceSnapshot(env,'btc_pnl');
+        if(previousPnl?.connection_id===account.slice(0,24))pnl={...previousPnl,status:'stale',error:publicMessages.holdings_unavailable};
       }
     }else{
       // A transient cost query failure preserves the account-matching previous
@@ -202,10 +253,10 @@ export async function syncFinance(env,{fetch:fetcher=globalThis.fetch,now:clock=
       combined={ok:true,stale:!!chainError||!!binanceError,updated_at:iso(clock()),goal_btc:'1',totals:{btc:totalBTC,usd:txt(usd),cny:fx?txt(usd.mul(fx.rate)):null},sources:sourcesBTC,quotes:{btc_usd:btcUSD,usd_cny:fx?.rate||null},history:trimmed,pnl:periods,coverage:{complete:false,note:'已保留迁移前的真实余额历史；云端持续追加新快照。价格变动盈亏保留原核算区间，并注明历史截止时间。'},lifetime_pnl:pnl};
     }
     const currentCredentials=await credentials(env,'okx');if(await connectionIdentity(currentCredentials)!==account)throw new FinanceError('account_changed');
-    const write=[['okx',okx],['portfolio',portfolio],['combined',combined],['btc_cost',costPublic],['btc_pnl',pnl],['market',{price_usdt:price,btc_usd:btcUSD,usd_cny:fx?.rate||null,updated_at:iso(clock())}],['sync_status',{ok:true,last_success_ms:clock(),last_attempt_ms:now,cost_error:costError||null,chain_error:chainError,binance_error:binanceError}]];
+    const write=[['okx',okx],['portfolio',portfolio],['combined',combined],['btc_cost',costPublic],['btc_pnl',pnl],['market',{price_usdt:price,btc_usd:btcUSD,usd_cny:fx?.rate||null,updated_at:iso(clock())}],['sync_status',{ok:true,last_success_ms:clock(),last_attempt_ms:now,cost_error:costError||null,chain_error:chainError,binance_error:binanceError,binance_trades_error:binanceTradesError}]];
     if(chain&&!chainError)write.push(['chain_balance',chain]);if(binance&&!binanceError)write.push(['binance',binance]);if(fx)write.push(['fx',fx]);
     await env.DB.batch(write.map(([k,v])=>putStatement(env,k,v,clock())));
-    return {ok:true,updated_at:iso(clock()),cost_error:costError?.code||null,chain_error:chainError?.code||null,binance_error:binanceError?.code||null};
+    return {ok:true,updated_at:iso(clock()),cost_error:costError?.code||null,chain_error:chainError?.code||null,binance_error:binanceError?.code||null,binance_trades_error:binanceTradesError?.code||null};
   }catch(error){const e=safeError(error);await put(env,'sync_status',{ok:false,...e,last_attempt_ms:now},now);return {ok:false,...e};}
 }
 

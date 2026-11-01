@@ -34,11 +34,13 @@ export function validateBinancePermissions(payload){
 }
 const okxPrivate=new Set(['/api/v5/account/config','/api/v5/account/balance','/api/v5/asset/balances','/api/v5/account/bills-archive','/api/v5/asset/bills-history']);
 const okxPublic=new Set(['/api/v5/public/time','/api/v5/market/ticker','/api/v5/market/tickers','/api/v5/market/index-tickers','/api/v5/market/history-candles']);
-const binancePrivate=new Set(['/sapi/v1/account/apiRestrictions','/sapi/v1/asset/wallet/balance','/sapi/v1/c2c/orderMatch/listUserOrderHistory']);
+const binancePrivate=new Set(['/sapi/v1/account/apiRestrictions','/sapi/v1/asset/wallet/balance','/sapi/v1/c2c/orderMatch/listUserOrderHistory','/api/v3/myTrades','/sapi/v1/convert/tradeFlow']);
+// Trade history is read only for BTC against these USD stablecoins.
+const binanceTradeSymbols=new Set(['BTCUSDT','BTCUSDC','BTCFDUSD']);
 // Fallback per-coin Spot and Funding balances are signed POST reads on
 // Binance; nothing else may be sent with POST.
 const binancePrivatePost=new Set(['/sapi/v3/asset/getUserAsset','/sapi/v1/asset/get-funding-asset']);
-const binancePublic=new Set(['/api/v3/time']);
+const binancePublic=new Set(['/api/v3/time','/api/v3/klines']);
 function approvedParams(venue,path,params){
   if(Object.values(params).some(v=>!['string','number'].includes(typeof v)||String(v).length>100))return false;
   const allowed=venue==='okx'?{
@@ -47,7 +49,8 @@ function approvedParams(venue,path,params){
     '/api/v5/asset/bills-history':['type','limit','pagingType','after'],
     '/api/v5/public/time':[], '/api/v5/market/ticker':['instId'], '/api/v5/market/tickers':['instType'],
     '/api/v5/market/index-tickers':['instId'], '/api/v5/market/history-candles':['instId','bar','after','before','limit']
-  }:{'/api/v3/time':[],'/sapi/v1/account/apiRestrictions':['recvWindow'],'/sapi/v1/asset/wallet/balance':['needBalanceDetail','quoteAsset','recvWindow'],'/sapi/v3/asset/getUserAsset':['needBtcValuation','recvWindow'],'/sapi/v1/asset/get-funding-asset':['needBtcValuation','recvWindow'],'/sapi/v1/c2c/orderMatch/listUserOrderHistory':['tradeType','startTimestamp','endTimestamp','page','rows','recvWindow']};
+  }:{'/api/v3/time':[],'/sapi/v1/account/apiRestrictions':['recvWindow'],'/sapi/v1/asset/wallet/balance':['needBalanceDetail','quoteAsset','recvWindow'],'/sapi/v3/asset/getUserAsset':['needBtcValuation','recvWindow'],'/sapi/v1/asset/get-funding-asset':['needBtcValuation','recvWindow'],'/sapi/v1/c2c/orderMatch/listUserOrderHistory':['tradeType','startTimestamp','endTimestamp','page','rows','recvWindow'],
+    '/api/v3/myTrades':['symbol','fromId','limit','recvWindow'],'/sapi/v1/convert/tradeFlow':['startTime','endTime','limit','recvWindow'],'/api/v3/klines':['symbol','interval','startTime','limit']};
   if(!allowed[path]||Object.keys(params).some(k=>!allowed[path].includes(k)))return false;
   if(params.instId&&!/^[A-Z0-9]{1,20}-[A-Z0-9]{1,20}$/.test(params.instId))return false;
   if(params.instType&&params.instType!=='SPOT')return false;
@@ -56,8 +59,11 @@ function approvedParams(venue,path,params){
   if(params.needBtcValuation!=null&&params.needBtcValuation!=='true')return false;
   if(params.needBalanceDetail!=null&&params.needBalanceDetail!=='true')return false;
   if(params.quoteAsset!=null&&params.quoteAsset!=='BTC')return false;
+  if(path==='/api/v3/myTrades'&&!binanceTradeSymbols.has(String(params.symbol)))return false;
+  if(path==='/api/v3/klines'&&(!/^[A-Z0-9]{1,20}USDT$/.test(String(params.symbol))||params.interval!=='1m'))return false;
+  if(params.limit!=null&&Number(params.limit)>1000)return false;
   if(path==='/api/v5/asset/bills-history'&&(!['116','117','118'].includes(String(params.type))||String(params.pagingType)!=='2'))return false;
-  for(const k of ['begin','end','after','before','limit','recvWindow','startTimestamp','endTimestamp','page','rows','pagingType'])if(params[k]!=null&&!/^\d{1,20}$/.test(String(params[k])))return false;
+  for(const k of ['begin','end','after','before','limit','recvWindow','startTimestamp','endTimestamp','page','rows','pagingType','fromId','startTime','endTime'])if(params[k]!=null&&!/^\d{1,20}$/.test(String(params[k])))return false;
   return true;
 }
 export class ExchangeClient {
@@ -87,7 +93,9 @@ export class ExchangeClient {
       // A signed Binance POST carries its parameters in the query string with an empty body.
       response=await this.fetcher(origin+full,{method,headers,redirect:'manual',signal:AbortSignal.timeout(12000)});
       if(response.status>=300&&response.status<400)throw new FinanceError('redirect_rejected');
-      const raw=await response.text();if(raw.length>4*1024*1024)throw new FinanceError('invalid_response');payload=JSON.parse(raw);
+      const raw=await response.text();if(raw.length>4*1024*1024)throw new FinanceError('invalid_response');
+      // Binance Convert order ids exceed 2^53; keep large ids exact as strings.
+      payload=JSON.parse(this.venue==='binance'?raw.replace(/("(?:orderId|id)"\s*:\s*)(\d{16,})(?=\s*[,}\]])/g,'$1"$2"'):raw);
     }catch(error){if(error instanceof FinanceError)throw error;throw new FinanceError('network_error');}
     if(response.status===429||response.status===418)throw new FinanceError('rate_limited',429);
     if(response.status===451)throw new FinanceError('region_restricted',451);

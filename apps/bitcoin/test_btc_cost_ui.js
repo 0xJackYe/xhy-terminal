@@ -42,6 +42,15 @@ function harness(options={}) {
 let checks=0;
 async function check(name,fn) { await fn();checks++;console.log('OK '+name); }
 (async()=>{
+  await check('the ledger names its exchanges and totals net investment across quote currencies',async()=>{
+    const both={...SNAPSHOT,venues:['okx','binance'],binance_history:{status:'included',records:3,error:null},summary:{...SNAPSHOT.summary,net_invested_usdt:'5500.5'}};
+    let h=harness({responses:[both]});await h.settle();
+    assert.equal(h.node('btcCostVenues').textContent,'欧易 + 币安');assert.equal(h.node('btcCostNetUSDT').textContent,'5,500.50');assert.match(h.node('btcCostNetUSDT').title,/全部 BTC/);
+    h=harness({responses:[{...SNAPSHOT,venues:['okx'],binance_history:{status:'error',records:0,error:'币安成交与已核对的欧易账本无法衔接 <b>'}}]});await h.settle();
+    assert.equal(h.node('btcCostVenues').textContent,'欧易 · 币安未并入');assert.match(h.node('btcCostVenues').title,/无法衔接/);assert.equal(h.node('btcCostNetUSDT').textContent,'5,426.82');
+    h=harness({responses:[{...SNAPSHOT,venues:['okx'],binance_history:{status:'importing',records:0,error:null}}]});await h.settle();
+    assert.equal(h.node('btcCostVenues').textContent,'欧易 · 币安导入中');
+  });
   await check('absent mount target has no side effects',()=>assert.equal(api.mount({root:{},document:{getElementById:()=>null}}),null));
   await check('fixed decimal strings retain exact BTC and large integer values',()=>{
     assert.equal(api.exact('0.0684981895130917'),'0.0684981895130917');

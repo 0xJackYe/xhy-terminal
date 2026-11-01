@@ -61,7 +61,7 @@ export async function buildAnnualizedResponse(env,ctx={},options={}){
   const completed=btc.years.filter(y=>!y.partial_year&&y.period_return_pct!=null);
   btc.mean_annual_return_pct=completed.length?txt(completed.reduce((sum,y)=>sum.add(y.period_return_pct),dec('0')).div(completed.length)):null;
   btc.mean_annual_years=completed.length;btc.currency='USDT';
-  btc.scope='欧易已导入买入账本对应的当前 BTC 持仓估算；不含已实现回款。';
+  btc.scope=(pnl.venues?.includes('binance')?'欧易与币安':'欧易')+'买入账本对应的当前 BTC 持仓估算；不含已实现回款。';
   await write(env,'annualized_result',{identity:account,anchor,btc},now).run();
  }
  const stale=pnl.status!=='fresh'||sync?.ok===false||now-asOfMs>180000;

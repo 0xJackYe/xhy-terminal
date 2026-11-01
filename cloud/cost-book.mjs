@@ -80,7 +80,7 @@ export function normalizeBills(rows) {
 export const compareTrades = (a,b) => a.at_ms-b.at_ms || (BigInt(a.bill_id)<BigInt(b.bill_id)?-1:BigInt(a.bill_id)>BigInt(b.bill_id)?1:0);
 
 export function emptyBook() {
-  return {version:1,inventory:'0',cost:'0',bought:'0',sold:'0',buy_count:0,sell_count:0,trade_count:0,first_trade_at:null,last_trade_at:null,last_at_ms:0,last_bill_id:'0',first_buy_at:null,last_buy_at:null,first_net_buy_price:null,last_net_buy_price:null,by_currency:{}};
+  return {version:1,inventory:'0',cost:'0',bought:'0',sold:'0',invested_usdt:'0',received_usdt:'0',invested_complete:true,buy_count:0,sell_count:0,trade_count:0,first_trade_at:null,last_trade_at:null,last_at_ms:0,last_bill_id:'0',first_buy_at:null,last_buy_at:null,first_net_buy_price:null,last_net_buy_price:null,by_currency:{}};
 }
 export function rateFor(row,rates) {
   if(row.quote_ccy==='USDT')return new D(1);
@@ -99,6 +99,9 @@ export function appendCostBook(original,updates,rates={}) {
     const group=book.by_currency[row.quote_ccy] ||= {buy_spent:'0',sell_received:'0',bought_btc:'0'};
     if(row.side==='buy'){
       const cash=amount.mul(rateFor(row,rates));
+      // All-currency totals in USDT at each fill's minute; a book saved before
+      // these totals existed stays incomplete until it is rebuilt.
+      if(book.invested_usdt==null)book.invested_complete=false;else book.invested_usdt=txt(dec(book.invested_usdt).add(cash));
       book.inventory=txt(dec(book.inventory).add(quantity));book.cost=txt(dec(book.cost).add(cash));book.bought=txt(dec(book.bought).add(quantity));book.buy_count++;
       group.buy_spent=txt(dec(group.buy_spent).add(amount));group.bought_btc=txt(dec(group.bought_btc).add(quantity));
       if(!book.first_buy_at){book.first_buy_at=at;book.first_net_buy_price=txt(cash.div(quantity));}
@@ -109,6 +112,7 @@ export function appendCostBook(original,updates,rates={}) {
       book.cost=txt(sold.eq(inventory)?new D(0):cost.sub(cost.mul(sold).div(inventory)));
       book.inventory=txt(inventory.sub(sold));book.sold=txt(dec(book.sold).add(sold));book.sell_count++;
       group.sell_received=txt(dec(group.sell_received).add(amount));
+      try{if(book.received_usdt==null)throw new Error('legacy_book');book.received_usdt=txt(dec(book.received_usdt).add(amount.mul(rateFor(row,rates))));}catch{book.invested_complete=false;}
     }
     book.trade_count++;book.first_trade_at ||= at;book.last_trade_at=at;book.last_at_ms=row.at_ms;book.last_bill_id=row.bill_id;
   }
@@ -119,14 +123,16 @@ export function buildCostBook(records,rates={}) {
   for(const row of records){validateTrade(row);if(seen.has(row.id)||bills.has(row.bill_id)||bills.has(row.counter_bill_id))throw new Error('duplicate_trade');seen.add(row.id);bills.add(row.bill_id);bills.add(row.counter_bill_id);}
   return appendCostBook(emptyBook(),records,rates);
 }
-export function costView(book,recent,meta,now,connection,status='fresh',error=null) {
+export function costView(book,recent,meta,now,connection,status='fresh',error=null,rates={}) {
   const date=beijingDate(now);let count=0,spent=new D(0),quantity=new D(0);
-  for(const row of recent){if(row.side==='buy'&&beijingDate(row.at_ms)===date){count++;quantity=quantity.add(row.btc_net);if(row.quote_ccy==='USDT')spent=spent.add(row.quote_amount);}}
+  // Today's DCA spending counts every buy valued in USDT at its minute rate.
+  for(const row of recent){if(row.side==='buy'&&beijingDate(row.at_ms)===date){count++;quantity=quantity.add(row.btc_net);try{spent=spent.add(dec(row.quote_amount).mul(rateFor(row,rates)));}catch{/* a missing rate leaves that buy out of the USDT total */}}}
+  const netInvested=book.invested_usdt!=null&&book.received_usdt!=null&&book.invested_complete!==false?txt(dec(book.invested_usdt).sub(book.received_usdt)):null;
   const currencies=Object.entries(book.by_currency).sort(([a],[b])=>a.localeCompare(b)).map(([currency,g])=>({currency,buy_spent:g.buy_spent,sell_received:g.sell_received,net_invested:txt(dec(g.buy_spent).sub(g.sell_received)),average_buy_cost:dec(g.bought_btc).gt(0)?txt(dec(g.buy_spent).div(g.bought_btc)):null}));
-  return {status,refreshing:false,last_success_at:meta?.as_of_ms?iso(meta.as_of_ms):null,error,error_code:error?'refresh_failed':null,plan_daily_usdt:'20',coverage_complete:meta?.complete===true,connection_id:connection,refresh_interval_seconds:60,retry_in_seconds:0,summary:{buy_count:book.buy_count,sell_count:book.sell_count,bought_btc:book.bought,sold_btc:book.sold,net_bought_btc:book.inventory,by_currency:currencies},today:{date_beijing:date,buy_count:count,buy_spent_usdt:txt(spent),bought_btc:txt(quantity),remaining_plan_usdt:txt(D.max(0,new D(20).sub(spent)))},recent_trades:[...recent].sort(compareTrades).slice(-30).reverse().map(r=>({id:r.id,time_beijing:iso(r.at_ms),side:r.side,price:r.price,quote_ccy:r.quote_ccy,quote_amount:r.quote_amount,btc_net:r.btc_net,fee_btc:r.fee_btc}))};
+  return {status,refreshing:false,last_success_at:meta?.as_of_ms?iso(meta.as_of_ms):null,error,error_code:error?'refresh_failed':null,plan_daily_usdt:'20',coverage_complete:meta?.complete===true,connection_id:connection,refresh_interval_seconds:60,retry_in_seconds:0,summary:{buy_count:book.buy_count,sell_count:book.sell_count,bought_btc:book.bought,sold_btc:book.sold,net_bought_btc:book.inventory,net_invested_usdt:netInvested,by_currency:currencies},today:{date_beijing:date,buy_count:count,buy_spent_usdt:txt(spent),bought_btc:txt(quantity),remaining_plan_usdt:txt(D.max(0,new D(20).sub(spent)))},recent_trades:[...recent].sort(compareTrades).slice(-30).reverse().map(r=>({id:r.id,time_beijing:iso(r.at_ms),side:r.side,price:r.price,quote_ccy:r.quote_ccy,quote_amount:r.quote_amount,btc_net:r.btc_net,fee_btc:r.fee_btc}))};
 }
 export function positionView(book,holdings,price,meta,policy,now,connection,status='fresh',error=null){
   const q=dec(holdings),p=dec(price),cost=dec(book.cost);if(q.lt(0)||!p.gt(0))throw new Error('holdings_unavailable');
   const market=q.mul(p),unrealized=market.sub(cost),adjustment=q.sub(book.inventory);
-  return {status,estimated:true,currency:'USDT',method:'moving_weighted_average',focus:'long_term_unrealized',connection_id:connection,error,refresh_interval_seconds:60,as_of:iso(now),quote_at:iso(now),ledger_as_of:meta?.as_of_ms?iso(meta.as_of_ms):null,holdings_as_of:iso(now),coverage_start:meta?.coverage_start_ms?iso(meta.coverage_start_ms):null,coverage_complete:meta?.complete===true,history_status:status,trade_count:book.trade_count,buy_count:book.buy_count,sell_count:book.sell_count,first_trade_at:book.first_trade_at,last_trade_at:book.last_trade_at,first_buy_at:book.first_buy_at,last_buy_at:book.last_buy_at,ignored_received_btc:policy?.received_btc||'0',metrics:{unrealized_net:txt(unrealized),unrealized_return_pct:cost.gt(0)?txt(unrealized.div(cost).mul(100)):null,remaining_cost:book.cost,average_cost:q.gt(0)?txt(cost.div(q)):null,spot_average_cost:dec(book.inventory).gt(0)?txt(cost.div(book.inventory)):null,holdings_btc:txt(q),spot_inventory_btc:book.inventory,known_net_bought_btc:book.inventory,bought_net_btc:book.bought,nonspot_btc_adjustment:txt(adjustment),market_value:txt(market),price_usdt:txt(p),first_net_buy_price:book.first_net_buy_price,last_net_buy_price:book.last_net_buy_price},assumptions:['每笔定投以净到账 BTC 和含手续费实付金额更新移动加权平均买入成本。','历史卖出仅按卖出前平均成本调整剩余数量和成本，不将卖出回款计入当前浮盈。','按你的要求，小额 Received 不追加原始取得成本，相关非现货净变动作为期末数量调整，因此属于估算。','ETH、USDC 换入按成交分钟 OKX/USDT 收盘价折算；缺失行情时不填零。','云端后台每分钟同步新成交，页面定期更新持仓价格和浮盈。']};
+  return {status,estimated:true,currency:'USDT',method:'moving_weighted_average',focus:'long_term_unrealized',connection_id:connection,error,refresh_interval_seconds:60,as_of:iso(now),quote_at:iso(now),ledger_as_of:meta?.as_of_ms?iso(meta.as_of_ms):null,holdings_as_of:iso(now),coverage_start:meta?.coverage_start_ms?iso(meta.coverage_start_ms):null,coverage_complete:meta?.complete===true,history_status:status,trade_count:book.trade_count,buy_count:book.buy_count,sell_count:book.sell_count,first_trade_at:book.first_trade_at,last_trade_at:book.last_trade_at,first_buy_at:book.first_buy_at,last_buy_at:book.last_buy_at,ignored_received_btc:policy?.received_btc||'0',metrics:{unrealized_net:txt(unrealized),unrealized_return_pct:cost.gt(0)?txt(unrealized.div(cost).mul(100)):null,remaining_cost:book.cost,average_cost:q.gt(0)?txt(cost.div(q)):null,spot_average_cost:dec(book.inventory).gt(0)?txt(cost.div(book.inventory)):null,holdings_btc:txt(q),spot_inventory_btc:book.inventory,known_net_bought_btc:book.inventory,bought_net_btc:book.bought,nonspot_btc_adjustment:txt(adjustment),market_value:txt(market),price_usdt:txt(p),first_net_buy_price:book.first_net_buy_price,last_net_buy_price:book.last_net_buy_price},assumptions:['每笔定投以净到账 BTC 和含手续费实付金额更新移动加权平均买入成本。','历史卖出仅按卖出前平均成本调整剩余数量和成本，不将卖出回款计入当前浮盈。','按你的要求，小额 Received 不追加原始取得成本，相关非现货净变动作为期末数量调整，因此属于估算。','非 USDT 计价的成交（ETH、USDC、FDUSD 等）按成交分钟收盘价折算为 USDT：欧易成交用欧易行情，币安成交用币安行情；缺失行情时不填零。','币安现货（BTC/USDT、BTC/USDC、BTC/FDUSD）与闪兑的 BTC 成交在全部历史导入后并入同一账本；用 BNB 等其他币抵扣的手续费按成交分钟价格计入成本。','云端后台每分钟同步新成交，页面定期更新持仓价格和浮盈。']};
 }

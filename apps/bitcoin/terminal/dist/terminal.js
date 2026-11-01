@@ -382,6 +382,14 @@
   function applyOptionsFocus() {
     document.body.classList.toggle('focus-options',currentPage === 'options' && optionsChildFocused);
   }
+  // The on-chain balance page loads on the first visit to the wallet page, and
+  // not inside the portal, whose simplified wallet tab does not show it.
+  function loadWalletFrame() {
+    const frame = $('walletFrame');
+    let framed = true;try { framed = root.self !== root.top; } catch (_) { framed = true; }
+    if (!frame || frame.src || framed) return;
+    frame.src = (frame.dataset && frame.dataset.src) || '/wallet.html';
+  }
   function showPage() {
     const transition = pageRouter.change(root.location.hash);
     if (!transition.changed) return;
@@ -398,6 +406,7 @@
     document.title = 'Bitcoin · ' + {alerts:'价格警报',options:'期权看板',wallet:'钱包走势'}[currentPage];
     applyOptionsFocus();
     if (transition.loadOptions) $('optionsFrame').src = '/options.html';
+    if (currentPage === 'wallet') loadWalletFrame();
     if (transition.requestOptionsState) requestOptionsState();
     root.scrollTo({top:0,behavior:'instant'});
   }

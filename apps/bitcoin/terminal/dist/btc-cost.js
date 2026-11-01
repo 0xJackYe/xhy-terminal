@@ -57,7 +57,7 @@
       (data.summary === null || data.summary && typeof data.summary === 'object' && !Array.isArray(data.summary) && Array.isArray(data.summary.by_currency)) &&
       (data.today === null || data.today && typeof data.today === 'object' && !Array.isArray(data.today)) && Array.isArray(data.recent_trades);
   }
-  const MARKUP = '<div class="btc-cost-heading"><div><h2 id="btcCostTitle">BTC 定投与成本</h2><span id="btcCostState" class="btc-cost-state" role="status" aria-live="polite">正在读取</span></div><button id="btcCostRefresh" class="secondary-button" type="button">刷新</button></div>'+
+  const MARKUP = '<div class="btc-cost-heading"><div><h2 id="btcCostTitle">BTC 定投与成本</h2><small id="btcCostVenues" class="btc-cost-venues"></small><span id="btcCostState" class="btc-cost-state" role="status" aria-live="polite">正在读取</span></div><button id="btcCostRefresh" class="secondary-button" type="button">刷新</button></div>'+
     '<div class="btc-cost-overview"><div class="btc-cost-total"><span>累计净投入 · USDT</span><strong id="btcCostNetUSDT">—</strong><small>USDT 实际支出减卖出回款</small></div><div class="btc-cost-quantity"><span>现货净买入 · BTC</span><strong id="btcCostNetBTC">—</strong><small id="btcCostCounts">—</small></div><div class="btc-cost-daily"><div class="btc-cost-daily-head"><span>今日 BTC 买入</span><small id="btcCostDailyDate"></small></div><strong><span id="btcCostTodaySpent">—</span><small> USDT · 每日计划 <span id="btcCostDailyPlan">20.00</span></small></strong><div class="btc-cost-track" id="btcCostProgress" role="progressbar" aria-label="今日实际买入占每日计划" aria-valuemin="0" aria-valuemax="100"><i id="btcCostProgressFill"></i></div><small id="btcCostDailyDetail">等待今日成交</small></div></div>'+
     '<p id="btcCostMessage" class="btc-cost-message" role="status" hidden></p><div class="btc-cost-footer"><time id="btcCostUpdated">等待首次同步</time></div>';
   function mount(options = {}) {
@@ -78,7 +78,14 @@
       const status = failed ? hasData ? '待同步 · 保留记录' : '暂时无法连接' : state && state.status === 'loading' ? '正在补齐记录' : hasData ? stale ? '待同步 · 保留记录' : '已同步 · 只读' : '等待成本记录';
       node('btcCostState').textContent = status;node('btcCostState').className = 'btc-cost-state '+(hasData ? stale ? 'stale' : 'fresh' : 'unavailable');
       const usdt = summary && summary.by_currency.find(row => row && row.currency === 'USDT');
-      node('btcCostNetUSDT').textContent = exact(usdt && usdt.net_invested,2,true);
+      // Net invested across every quote currency, valued in USDT at each fill's
+      // minute; older snapshots fall back to the USDT-priced fills alone.
+      const total = summary && typeof summary.net_invested_usdt === 'string' ? summary.net_invested_usdt : null;
+      node('btcCostNetUSDT').textContent = exact(total !== null ? total : usdt && usdt.net_invested,2,true);
+      node('btcCostNetUSDT').title = total !== null ? '全部 BTC 买入减卖出回款，按成交时价格折算为 USDT' : 'USDT 计价成交的实际支出减卖出回款';
+      const venues = state && Array.isArray(state.venues) ? state.venues : [], history = state && state.binance_history && typeof state.binance_history === 'object' ? state.binance_history : null;
+      node('btcCostVenues').textContent = !hasData ? '' : venues.includes('binance') ? '欧易 + 币安' : history && history.status === 'importing' ? '欧易 · 币安导入中' : history && history.status === 'error' ? '欧易 · 币安未并入' : '欧易';
+      node('btcCostVenues').title = history && typeof history.error === 'string' ? history.error.slice(0,200) : '';
       // Satoshi precision on screen; the full ledger value stays in the tooltip.
       node('btcCostNetBTC').textContent = exact(summary && summary.net_bought_btc, 8);
       node('btcCostNetBTC').title = exact(summary && summary.net_bought_btc) === '—' ? '' : exact(summary && summary.net_bought_btc) + ' BTC';
