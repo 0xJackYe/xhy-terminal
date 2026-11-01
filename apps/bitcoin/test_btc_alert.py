@@ -241,6 +241,56 @@ class AlertTests(unittest.TestCase):
         self.assertEqual(101, state["market"]["day_high"])
         self.assertEqual(101, state["history"][-1]["price"])
 
+    def test_chart_gap_after_sleep_is_refilled_from_five_minute_candles_and_rechecked(self):
+        # The clock is 12:00 Beijing: the open at 00:00 and one live trade now
+        # left the chart as a straight line across the morning.
+        self.baseline()
+        self.trade(101)
+        start = beijing_day_start(self.clock.ms)
+        calls = []
+
+        def fetcher(url):
+            calls.append(url)
+            query = parse_qs(urlsplit(url).query)
+            if query["interval"] == ["1d"]:
+                return [[start, "100", "110", "90", "101", "0", start + DAY_MS - 1]]
+            return [[opening, "100", "105", "95", str(100 + (opening - start) // 300000 % 7), "0", opening + 299999]
+                    for opening in range(start, self.clock.ms, 300000)]
+
+        test = self
+
+        class Stops(threading.Event):
+            def __init__(self):
+                super().__init__()
+                self.waits = 0
+
+            def wait(self, timeout=None):
+                self.waits += 1
+                if self.waits == 1:
+                    # The computer sleeps for two hours, then the live stream
+                    # resumes: a new gap opens after the startup load.
+                    test.clock.advance(2 * 3600000)
+                    test.trade(102)
+                    return False
+                self.set()
+                return True
+
+        self.monitor._fetcher = fetcher
+        self.monitor._public_fetch = fetcher
+        self.monitor._stop = Stops()
+        with self.monitor._lock:
+            self.assertTrue(self.monitor._history_gap_locked(self.clock.ms))
+        self.monitor._bootstrap_loop()
+        history = self.monitor.read()["history"]
+        self.assertGreater(len(history), 150)
+        self.assertGreater(len({point["price"] for point in history}), 3)
+        self.assertEqual(102, history[-1]["price"])
+        with self.monitor._lock:
+            self.assertFalse(self.monitor._history_gap_locked(self.clock.ms))
+        # Startup loads the daily and 5-minute candles; the re-check after the
+        # sleep fetches only the 5-minute candles again.
+        self.assertEqual(["1d", "5m", "5m"], [parse_qs(urlsplit(url).query)["interval"][0] for url in calls])
+
     def test_rest_previous_day_never_establishes_today_baseline(self):
         start = beijing_day_start(self.clock.ms) - DAY_MS
         self.monitor._apply_bootstrap([[start, "100", "200", "100", "200", "0", start + DAY_MS - 1]], [], self.clock.ms)

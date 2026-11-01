@@ -32,6 +32,10 @@ MAX_CALIBRATION_RTT_MS = 4000
 CLOCK_CALIBRATION_INTERVAL_S = 300
 MAX_CALIBRATION_AGE_S = 3600
 REST_BASE = "https://data-api.binance.vision"
+# The chart is re-checked for gaps (sleep, a dropped connection, a new day) and
+# missing minutes are filled from genuine 5-minute candles.
+BACKFILL_CHECK_SECONDS = 600
+HISTORY_GAP_MS = 10 * 60000
 WS_URL = "wss://data-stream.binance.vision/stream?" + urlencode(
     {"streams": "btcusdt@trade/btcusdt@kline_1d@+08:00"}, safe="@/:"
 )
@@ -746,25 +750,47 @@ class BtcAlertMonitor:
             self._rest_retry_at_ms = None
             self._revision += 1
 
+    def _history_gap_locked(self, now):
+        start = self._day_start_ms
+        if start is None:
+            return False
+        times = sorted(point["time_ms"] for point in self._history.values() if start <= point["time_ms"] <= now)
+        points = [start] + times + [now]
+        return any(later - earlier > HISTORY_GAP_MS for earlier, later in zip(points, points[1:]))
+
     def _bootstrap_loop(self):
         delay = 30
+        loaded = False
         while not self._stop.is_set():
             try:
-                daily_url = REST_BASE + "/api/v3/klines?" + urlencode(
-                    {"symbol": "BTCUSDT", "interval": "1d", "timeZone": "8", "limit": 2})
-                chart_url = REST_BASE + "/api/v3/klines?" + urlencode(
-                    {"symbol": "BTCUSDT", "interval": "5m", "timeZone": "8", "limit": 288})
-                daily = self._public_fetch(daily_url)
-                if self._stop.is_set():
+                with self._lock:
+                    now = self._now()
+                    self._roll_day_locked(now)
+                    need_daily = not loaded or self._day_open is None
+                    need_chart = not loaded or self._history_gap_locked(now)
+                if need_daily:
+                    daily_url = REST_BASE + "/api/v3/klines?" + urlencode(
+                        {"symbol": "BTCUSDT", "interval": "1d", "timeZone": "8", "limit": 2})
+                    daily = self._public_fetch(daily_url)
+                    if self._stop.is_set():
+                        return
+                    if not isinstance(daily, list):
+                        raise ValueError("日线接口返回格式错误")
+                    self._apply_bootstrap(daily, [], self._now())
+                if need_chart:
+                    chart_url = REST_BASE + "/api/v3/klines?" + urlencode(
+                        {"symbol": "BTCUSDT", "interval": "5m", "timeZone": "8", "limit": 288})
+                    chart = self._public_fetch(chart_url)
+                    if not isinstance(chart, list):
+                        raise ValueError("历史行情接口返回格式错误")
+                    self._apply_bootstrap([], chart, self._now())
+                loaded = True
+                delay = 30
+                # Keep checking: a chart that lost minutes (the computer slept or
+                # the live connection dropped) is refilled instead of keeping a
+                # straight line across the gap.
+                if self._stop.wait(BACKFILL_CHECK_SECONDS):
                     return
-                if not isinstance(daily, list):
-                    raise ValueError("日线接口返回格式错误")
-                self._apply_bootstrap(daily, [], self._now())
-                chart = self._public_fetch(chart_url)
-                if not isinstance(chart, list):
-                    raise ValueError("历史行情接口返回格式错误")
-                self._apply_bootstrap([], chart, self._now())
-                return
             except Exception as exc:
                 retry_delay = max(delay, exc.retry_seconds) if isinstance(exc, PublicRateLimitError) else delay
                 with self._lock:

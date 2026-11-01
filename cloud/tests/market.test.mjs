@@ -320,3 +320,79 @@ test('three fully refreshed SSE frames with all fallback hosts stay within the f
   assert(calls.length+d1Calls+5<=50,`HTTP ${calls.length} + D1 ${d1Calls} + auth/email reserve 5`);
   sqlite.close();
 });
+
+// A provider that serves the trade and daily candle, plus genuine 5-minute
+// candles for today (closes follow a visible wave, not a straight line).
+function curveFetch({ trade = () => ({ price: 106, time: NOW - 500 }), calls = [], binanceCandles = true, okxCandles = true } = {}) {
+  const wave = i => (100 + 5 * Math.sin(i / 6)).toFixed(2);
+  return async (address) => {
+    const url = new URL(address); calls.push(url);
+    if (url.origin === 'https://www.okx.com') {
+      if (!okxCandles || url.searchParams.get('bar') !== '5m') return new Response('blocked', { status: 403 });
+      const rows = [];
+      for (let open = START; open <= NOW; open += 300000) rows.unshift([String(open), '100', '106', '94', wave((open - START) / 300000), '1', '1', '1', open + 300000 <= NOW ? '1' : '0']);
+      return Response.json({ code: '0', data: rows.slice(0, 300) });
+    }
+    if (url.origin !== 'https://data-api.binance.vision') return new Response('blocked', { status: 403 });
+    if (url.pathname === '/api/v3/aggTrades') { const { price, time } = trade(); return Response.json([{ a: 1, p: String(price), T: time }]); }
+    if (url.searchParams.get('interval') === '1d') return Response.json([[START, '100', '110', '90', '106', '1', START + DAY - 1]]);
+    assert.equal(url.searchParams.get('interval'), '5m'); assert.equal(url.searchParams.get('startTime'), String(START));
+    if (!binanceCandles) return new Response('unavailable', { status: 503 });
+    const rows = [];
+    for (let open = START; open <= NOW; open += 300000) rows.push([open, '100', '106', '94', wave((open - START) / 300000), '1', open + 300000 - 1]);
+    return Response.json(rows);
+  };
+}
+const distinctPrices = history => new Set(history.map(row => row.price)).size;
+
+test('a late or stale observation never erases newer samples from today\'s curve', async () => {
+  const { env, sqlite } = environment();
+  const at = [NOW - 30 * 60000, NOW - 20 * 60000, NOW - 10 * 60000], prices = [101, 103, 99];
+  for (let i = 0; i < 3; i++) await syncMarket(env, { now: at[i], force: true, fetch: marketFetch({ price: prices[i], time: at[i] - 500 }) });
+  // Every source now returns a trade 25 minutes old (a cached or lagging feed).
+  const stale = await syncMarket(env, { now: NOW, force: true, fetch: marketFetch({ price: 104, time: NOW - 25 * 60000 }) });
+  assert.equal(stale.market.status, 'stale');
+  const history = (await getMarketSnapshot(env, { now: NOW })).history;
+  for (let i = 0; i < 3; i++) assert.ok(history.some(row => row.time_ms === at[i] - 500 && row.price === prices[i]), 'kept sample ' + i);
+  assert.ok(history.some(row => row.time_ms === NOW - 25 * 60000 && row.price === 104), 'the late point fills only its own minute');
+  assert.deepEqual(history.map(row => row.time_ms), [...history.map(row => row.time_ms)].sort((a, b) => a - b));
+  sqlite.close();
+});
+
+test('missing parts of today are filled from genuine 5-minute candles on cron and page loads, at most every five minutes', async () => {
+  const { env, sqlite } = environment(), calls = [];
+  // Ten hours into the Beijing day with no stored samples: before the fix the
+  // chart was a straight line from the 00:00 open to the current price.
+  const first = await syncMarket(env, { now: NOW, backfill: true, fetch: curveFetch({ calls }) });
+  assert.ok(first.history.length > 100, 'one point per five minutes since 00:00');
+  assert.ok(distinctPrices(first.history) > 20, 'the curve follows the real candles');
+  assert.equal(first.history[0].time_ms, START);assert.equal(first.history.at(-1).price, 106);
+  assert.ok(first.history.every((row, i) => !i || row.time_ms - first.history[i - 1].time_ms <= 10 * 60000), 'no gap is left');
+  assert.equal(calls.filter(url => url.searchParams.get('interval') === '5m').length, 1);
+  // A new live sample keeps its minute; no candle request while there is no gap.
+  await syncMarket(env, { now: NOW + 60000, force: true, backfill: true, fetch: curveFetch({ calls, trade: () => ({ price: 107, time: NOW + 59500 }) }) });
+  assert.equal(calls.filter(url => url.searchParams.get('interval') === '5m').length, 1);
+  const latest = (await getMarketSnapshot(env, { now: NOW + 60000 })).history;
+  assert.equal(latest.at(-1).price, 107);assert.ok(latest.length > 100);
+  // Stream frames never request candles.
+  const { env: streamEnv, sqlite: streamDb } = environment(), streamCalls = [];
+  await syncMarket(streamEnv, { now: NOW, fetch: curveFetch({ calls: streamCalls }) });
+  assert.equal(streamCalls.filter(url => url.searchParams.get('interval') === '5m').length, 0);
+  streamDb.close();
+  sqlite.close();
+});
+
+test('candle backfill falls back to OKX, is throttled after a failure, and the page load triggers it', async () => {
+  const { env, sqlite } = environment(), calls = [];
+  const response = await handleMarket(new Request('https://xhy.example/api/terminal'), env, { marketOptions: { now: NOW, fetch: curveFetch({ calls, binanceCandles: false }) } });
+  const body = await response.json();
+  assert.ok(body.history.length > 100 && distinctPrices(body.history) > 20, 'OKX 5-minute candles fill the day');
+  // When every candle source fails, the next attempt waits five minutes.
+  const { env: down, sqlite: downDb } = environment(), tries = [];
+  await syncMarket(down, { now: NOW, backfill: true, fetch: curveFetch({ calls: tries, binanceCandles: false, okxCandles: false }) });
+  await syncMarket(down, { now: NOW + 60000, force: true, backfill: true, fetch: curveFetch({ calls: tries, binanceCandles: false, okxCandles: false }) });
+  assert.equal(tries.filter(url => url.searchParams.get('bar') === '5m').length, 1);
+  await syncMarket(down, { now: NOW + 6 * 60000, force: true, backfill: true, fetch: curveFetch({ calls: tries, binanceCandles: false, okxCandles: false }) });
+  assert.equal(tries.filter(url => url.searchParams.get('bar') === '5m').length, 2);
+  downDb.close();sqlite.close();
+});

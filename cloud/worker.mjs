@@ -40,7 +40,7 @@ async function fetchHandler(request,env,ctx){
 export default {
  async fetch(request,env,ctx){try{return protect(await fetchHandler(request,env,ctx));}catch{return protect(json({error:'云端服务暂时不可用，请稍后重试。'},503));}},
  async scheduled(event,env,ctx){ctx.waitUntil((async()=>{
-   const market=await syncMarket(env).catch(()=>null);await newAlerts(env,market?.newAlerts).catch(()=>{});
+   const market=await syncMarket(env,{backfill:true}).catch(()=>null);await newAlerts(env,market?.newAlerts).catch(()=>{});
    await syncFinance(env).catch(()=>{});await syncCapitalAccounts(env).catch(()=>{});await processMailQueue(env).catch(()=>{});
    if(new Date(event.scheduledTime||Date.now()).getUTCMinutes()%30===0)await env.DB.prepare('DELETE FROM auth_attempts WHERE window_ms<?').bind(Date.now()-86400000).run();
  })());}
