@@ -35,6 +35,9 @@ export function validateBinancePermissions(payload){
 const okxPrivate=new Set(['/api/v5/account/config','/api/v5/account/balance','/api/v5/asset/balances','/api/v5/account/bills-archive','/api/v5/asset/bills-history']);
 const okxPublic=new Set(['/api/v5/public/time','/api/v5/market/ticker','/api/v5/market/tickers','/api/v5/market/index-tickers','/api/v5/market/history-candles']);
 const binancePrivate=new Set(['/sapi/v1/account/apiRestrictions','/sapi/v1/asset/wallet/balance','/sapi/v1/c2c/orderMatch/listUserOrderHistory']);
+// Fallback per-coin Spot and Funding balances are signed POST reads on
+// Binance; nothing else may be sent with POST.
+const binancePrivatePost=new Set(['/sapi/v3/asset/getUserAsset','/sapi/v1/asset/get-funding-asset']);
 const binancePublic=new Set(['/api/v3/time']);
 function approvedParams(venue,path,params){
   if(Object.values(params).some(v=>!['string','number'].includes(typeof v)||String(v).length>100))return false;
@@ -44,12 +47,15 @@ function approvedParams(venue,path,params){
     '/api/v5/asset/bills-history':['type','limit','pagingType','after'],
     '/api/v5/public/time':[], '/api/v5/market/ticker':['instId'], '/api/v5/market/tickers':['instType'],
     '/api/v5/market/index-tickers':['instId'], '/api/v5/market/history-candles':['instId','bar','after','before','limit']
-  }:{'/api/v3/time':[],'/sapi/v1/account/apiRestrictions':['recvWindow'],'/sapi/v1/asset/wallet/balance':['needBalanceDetail','quoteAsset','recvWindow'],'/sapi/v1/c2c/orderMatch/listUserOrderHistory':['tradeType','startTimestamp','endTimestamp','page','rows','recvWindow']};
+  }:{'/api/v3/time':[],'/sapi/v1/account/apiRestrictions':['recvWindow'],'/sapi/v1/asset/wallet/balance':['needBalanceDetail','quoteAsset','recvWindow'],'/sapi/v3/asset/getUserAsset':['needBtcValuation','recvWindow'],'/sapi/v1/asset/get-funding-asset':['needBtcValuation','recvWindow'],'/sapi/v1/c2c/orderMatch/listUserOrderHistory':['tradeType','startTimestamp','endTimestamp','page','rows','recvWindow']};
   if(!allowed[path]||Object.keys(params).some(k=>!allowed[path].includes(k)))return false;
   if(params.instId&&!/^[A-Z0-9]{1,20}-[A-Z0-9]{1,20}$/.test(params.instId))return false;
   if(params.instType&&params.instType!=='SPOT')return false;
   if(params.bar&&params.bar!=='1m')return false;
   if(params.tradeType&&!['BUY','SELL'].includes(params.tradeType))return false;
+  if(params.needBtcValuation!=null&&params.needBtcValuation!=='true')return false;
+  if(params.needBalanceDetail!=null&&params.needBalanceDetail!=='true')return false;
+  if(params.quoteAsset!=null&&params.quoteAsset!=='BTC')return false;
   if(path==='/api/v5/asset/bills-history'&&(!['116','117','118'].includes(String(params.type))||String(params.pagingType)!=='2'))return false;
   for(const k of ['begin','end','after','before','limit','recvWindow','startTimestamp','endTimestamp','page','rows','pagingType'])if(params[k]!=null&&!/^\d{1,20}$/.test(String(params[k])))return false;
   return true;
@@ -59,9 +65,11 @@ export class ExchangeClient {
     if(!['okx','binance'].includes(venue))throw new FinanceError('route_rejected',400);
     this.venue=venue;this.credentials=validateCredentials(credentials,venue);this.fetcher=fetcher.bind(globalThis);this.now=now;this.offset=0;
   }
-  async get(path,params={},authenticated=true){
-    const valid=this.venue==='okx'?(authenticated?okxPrivate:okxPublic):(authenticated?binancePrivate:binancePublic);
-    if(!valid.has(path)||!approvedParams(this.venue,path,params))throw new FinanceError('route_rejected',400);
+  get(path,params={},authenticated=true){return this.request('GET',path,params,authenticated);}
+  post(path,params={}){return this.request('POST',path,params,true);}
+  async request(method,path,params={},authenticated=true){
+    const valid=method==='POST'?(this.venue==='binance'&&authenticated?binancePrivatePost:new Set()):this.venue==='okx'?(authenticated?okxPrivate:okxPublic):(authenticated?binancePrivate:binancePublic);
+    if(!['GET','POST'].includes(method)||!valid.has(path)||!approvedParams(this.venue,path,params))throw new FinanceError('route_rejected',400);
     const origin=this.venue==='okx'?'https://www.okx.com':'https://api-gcp.binance.com';
     const headers={'Accept':'application/json','User-Agent':'XHY-Terminal/1.0'}, values={...params};
     if(this.venue==='binance'&&authenticated)values.timestamp=Math.round(this.now()+this.offset);
@@ -76,7 +84,8 @@ export class ExchangeClient {
     }
     let response,payload;
     try{
-      response=await this.fetcher(origin+full,{method:'GET',headers,redirect:'manual',signal:AbortSignal.timeout(12000)});
+      // A signed Binance POST carries its parameters in the query string with an empty body.
+      response=await this.fetcher(origin+full,{method,headers,redirect:'manual',signal:AbortSignal.timeout(12000)});
       if(response.status>=300&&response.status<400)throw new FinanceError('redirect_rejected');
       const raw=await response.text();if(raw.length>4*1024*1024)throw new FinanceError('invalid_response');payload=JSON.parse(raw);
     }catch(error){if(error instanceof FinanceError)throw error;throw new FinanceError('network_error');}
@@ -149,24 +158,64 @@ export function normalizeOKX(trading,funding,tickers,btcUSD,now,connection){
   const tradingUSD=trading[0].totalEq==null?null:txt(dec(trading[0].totalEq));
   return {configured:true,pending_credentials:false,missing_fields:[],refreshing:false,last_success_at:iso(now),error:null,error_code:null,status:'connected',assets:rows,summary:{trading_usd:tradingUSD,funding_usd:complete?txt(fundingValue):null,total_usd:complete&&tradingUSD!=null?txt(dec(tradingUSD).add(fundingValue)):null,valuation_complete:complete,btc_total:txt(dec(btc?.trading_equity||'0').add(btc?.funding_balance||'0')),btc_holdings_total:btc?.quantity||'0',scope_label:'交易账户与资金账户；不含赚币及子账户'},permissions:{verified:true,read_only:true},observed_at:iso(now),history:[],cash_valuation:{assets:rows.map(r=>({ccy:r.ccy,quantity:r.quantity,usd_value:r.usd_value})),complete},refresh_interval_seconds:60,retry_in_seconds:0,consecutive_failures:0,history_error:null,connection_id:connection};
 }
-export function normalizeBinance(payload,btcUSD,now){
-  if(!Array.isArray(payload)||!payload.length||payload.length>64)throw new FinanceError('invalid_response');
-  const assets=[],missing=new Set(),names=new Set();
-  for(const wallet of payload){
-    if(typeof wallet.walletName!=='string'||names.has(wallet.walletName)||typeof wallet.activate!=='boolean')throw new FinanceError('invalid_response');names.add(wallet.walletName);
-    const details=wallet.assetBalances;
-    if(!Array.isArray(details)){if(wallet.activate||!dec(wallet.balance||'0').isZero())missing.add(wallet.walletName);continue;}
-    if(!details.length&&!dec(wallet.balance||'0').isZero())missing.add(wallet.walletName);
+const binanceWalletNames={'Spot':'现货','Funding':'资金','Earn':'理财','Cross Margin':'全仓杠杆','Isolated Margin':'逐仓杠杆','USDⓈ-M Futures':'U 本位合约','COIN-M Futures':'币本位合约','Options':'期权','Trading Bots':'交易机器人','Copy Trading':'跟单'};
+// Coin codes are upper-case A–Z/0–9 tickers, but some Binance listings use
+// caseless scripts (for example Chinese names). Lower-case Latin stays invalid
+// so "btc" can never pose as "BTC".
+export const COIN_CODE=/^[A-Z0-9\p{Lo}][A-Z0-9._\-\p{Lo}\p{N}]{0,31}$/u;
+const optionalDecimal=value=>{try{return value==null?null:dec(value);}catch{return null;}};
+// BTC held counts Spot, Funding and Earn coins; margin and futures balances
+// can include borrowed or collateral funds, so they are valued but not counted.
+const binanceBTCWallets=new Set(['Spot','Funding','Earn']);
+// The wallet-balance read asks for Binance's documented per-asset detail
+// (needBalanceDetail=true). Spot or Funding holding a balance without that
+// detail is read again from its own balance endpoint, so coins and BTC in
+// those wallets are always itemized.
+export function binanceDetailFallbacks(wallets){
+  if(!Array.isArray(wallets))return [];
+  return ['Spot','Funding'].filter(name=>{
+    const wallet=wallets.find(row=>row&&row.walletName===name);if(!wallet)return false;
+    const balance=optionalDecimal(wallet.balance),detailed=Array.isArray(wallet.assetBalances)&&wallet.assetBalances.length>0;
+    return !detailed&&(balance===null||!balance.isZero());
+  });
+}
+// Itemized coins carry Binance's own BTC valuation. A wallet with neither
+// detail nor a fallback (Earn, futures, ...) is counted at its BTC-quoted
+// wallet total, without a coin breakdown. One malformed entry marks its
+// wallet incomplete instead of failing the whole read.
+export function normalizeBinance({wallets,spot=null,funding=null}={},btcUSD,now){
+  if(!Array.isArray(wallets)||!wallets.length||wallets.length>64)throw new FinanceError('invalid_response');
+  for(const rows of [spot,funding])if(rows!=null&&(!Array.isArray(rows)||rows.length>5000))throw new FinanceError('invalid_response');
+  const price=optionalDecimal(btcUSD);if(!price||!price.gt(0))throw new FinanceError('market_unavailable');
+  const assets=[],missing=new Set(),names=new Set(),totals=new Set();
+  const itemize=(wallet,rows)=>{
     const seen=new Set();
-    for(const item of details){
-      if(!/^[A-Z0-9._-]{1,32}$/.test(item.asset)||seen.has(item.asset))throw new FinanceError('invalid_response');seen.add(item.asset);
+    for(const item of rows.slice(0,5000)){
+      if(!item||typeof item!=='object'||typeof item.asset!=='string'||!COIN_CODE.test(item.asset)||seen.has(item.asset)){missing.add(wallet);continue;}
+      seen.add(item.asset);
       const fields={};let incomplete=false;
-      for(const key of ['free','locked','freeze','withdrawing']){if(item[key]==null){fields[key]=null;incomplete=true;}else fields[key]=txt(dec(item[key]));}
+      for(const key of ['free','locked','freeze','withdrawing']){const value=optionalDecimal(item[key]);if(value===null){fields[key]=null;incomplete=true;}else fields[key]=txt(value);}
       const ambiguous=fields.freeze!=null&&!dec(fields.freeze).isZero()||fields.withdrawing!=null&&!dec(fields.withdrawing).isZero();
-      const quantity=incomplete||ambiguous?null:dec(fields.free).add(fields.locked),btc=item.btcValuation==null?null:dec(item.btcValuation);
-      if(incomplete||ambiguous||btc==null)missing.add(wallet.walletName);
-      assets.push({ccy:item.asset,wallet:wallet.walletName,quantity:txt(quantity),btc_value:txt(btc),usd_value:btc==null?null:txt(btc.mul(btcUSD)),components:fields,quantity_complete:quantity!=null,quantity_note:ambiguous?'冻结字段归属不明确，数量暂不估算。':incomplete?'数量字段不完整。':null});
+      const quantity=incomplete||ambiguous?null:dec(fields.free).add(fields.locked),btc=optionalDecimal(item.btcValuation);
+      if(incomplete||ambiguous||btc===null)missing.add(wallet);
+      assets.push({ccy:item.asset,wallet,quantity:txt(quantity),btc_value:txt(btc),usd_value:btc===null?null:txt(btc.mul(price)),components:fields,quantity_complete:quantity!==null,quantity_note:ambiguous?'冻结字段归属不明确，数量暂不估算。':incomplete?'数量字段不完整。':null});
     }
+  };
+  for(const wallet of wallets){
+    const name=wallet&&typeof wallet.walletName==='string'&&wallet.walletName&&wallet.walletName.length<=64?wallet.walletName:null;
+    if(!name||names.has(name))throw new FinanceError('invalid_response');names.add(name);
+    const fallback=name==='Spot'?spot:name==='Funding'?funding:null,details=Array.isArray(wallet.assetBalances)?wallet.assetBalances:null;
+    const balance=optionalDecimal(wallet.balance??'0');
+    if(details&&(details.length||balance!==null&&balance.isZero())){itemize(name,details);continue;}
+    if(fallback){itemize(name,fallback);continue;}
+    if(balance===null||balance.lt(0)){missing.add(name);continue;}
+    if(balance.isZero())continue;
+    totals.add(name);
+    const code=('BINANCE-'+name.toUpperCase().replace(/[^A-Z0-9]+/g,'-').replace(/^-|-$/g,'')).slice(0,30).replace(/-$/,'');
+    assets.push({ccy:code,label:'币安'+(binanceWalletNames[name]||name),wallet:name,quantity:null,btc_value:txt(balance),usd_value:txt(balance.mul(price)),components:null,quantity_complete:false,quantity_note:'钱包合计，未逐币统计。'});
   }
-  return {assets,complete:missing.size===0,missing_wallets:[...missing],wallets_count:payload.length,observed_at:iso(now),scope:'API 返回的主账户钱包；不承诺覆盖全部产品与子账户。'};
+  const btcRows=assets.filter(row=>row.ccy==='BTC'&&binanceBTCWallets.has(row.wallet));
+  const btc=btcRows.every(row=>row.quantity_complete)?txt(btcRows.reduce((sum,row)=>sum.add(row.quantity),new D(0))):null;
+  const uncounted=[...totals].filter(name=>binanceBTCWallets.has(name));
+  return {assets,btc_holdings:btc,btc_scope:uncounted.length?'不含未拆分币种的'+uncounted.map(name=>binanceWalletNames[name]||name).join('、')+'钱包':null,complete:missing.size===0,missing_wallets:[...missing],wallets_count:wallets.length,observed_at:iso(now),scope:'币安各钱包按币种统计；没有币种明细的钱包按钱包合计计入。不含子账户。'};
 }

@@ -18,6 +18,7 @@ import re
 import ssl
 import threading
 import time
+import unicodedata
 from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import HTTPRedirectHandler, HTTPSHandler, Request, build_opener
@@ -111,6 +112,21 @@ def _text_decimal(value):
     return result.rstrip("0").rstrip(".") if "." in result else result
 
 
+def valid_currency(code):
+    """Upper-case A-Z/0-9 tickers, plus caseless scripts some listings use
+    (for example Chinese names). Lower-case Latin never poses as a ticker."""
+    if not isinstance(code, str) or not 1 <= len(code) <= 32:
+        return False
+    for index, char in enumerate(code):
+        if "A" <= char <= "Z" or "0" <= char <= "9":
+            continue
+        category = unicodedata.category(char) if ord(char) > 127 else ""
+        if category == "Lo" or (index and (category.startswith("N") or char in "._-")):
+            continue
+        return False
+    return True
+
+
 def validate_read_only_permissions(payload):
     """Fail closed before balances; never change any exchange permissions."""
     if not isinstance(payload, dict) or payload.get("enableReading") is not True:
@@ -158,7 +174,7 @@ def normalize_wallets(payload, observed_at=None):
             name, activated = wallet.get("walletName"), wallet.get("activate")
             if (not isinstance(name, str) or not name.strip() or len(name) > 80
                     or any(ord(c) < 32 for c in name) or name in names
-                    or type(activated) is not bool):
+                    or (activated is not None and type(activated) is not bool)):
                 raise _bad_response()
             names.add(name)
             wallet_value = _decimal(wallet.get("balance"))
@@ -177,7 +193,7 @@ def normalize_wallets(payload, observed_at=None):
                     raise _bad_response()
                 currency = item.get("asset")
                 if (not isinstance(currency, str)
-                        or re.fullmatch(r"[A-Z0-9][A-Z0-9._-]{0,31}", currency) is None
+                        or not valid_currency(currency)
                         or currency in currencies):
                     raise _bad_response()
                 currencies.add(currency)

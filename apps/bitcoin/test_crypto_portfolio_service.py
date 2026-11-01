@@ -120,6 +120,11 @@ def private_values():return [KEY,SECRET,NEW_KEY,NEW_SECRET,*OKX_CREDS.values()]
 
 
 class AggregateAssetsTests(unittest.TestCase):
+    def test_a_caseless_listing_name_joins_the_portfolio_instead_of_failing_it(self):
+        result=aggregate_assets([row('币安人生','1000','12','binance'),row('BTC','1','100','offline')],sources(),int(NOW*1000))
+        self.assertIn('币安人生',[item['ccy'] for item in result['assets']])
+        with self.assertRaises(ValueError):aggregate_assets([row('btc','1','100','offline')],sources(),int(NOW*1000))
+
     def test_threshold_is_applied_after_cross_location_coin_aggregation(self):
         result=aggregate_assets([row('ETH','1','3','okx'),row('ETH','1','3','binance')],sources(),int(NOW*1000))
         self.assertEqual('6',result['total_usd']);self.assertEqual(['ETH'],[item['ccy'] for item in result['assets']])

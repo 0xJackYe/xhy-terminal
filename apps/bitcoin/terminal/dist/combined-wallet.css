@@ -44,3 +44,8 @@
 .combined-annual-table .combined-annual-reason td{text-align:left;color:var(--muted);font-family:inherit;font-size:10px;padding-top:0}
 @media(max-width:1080px){.combined-lifetime-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}.combined-lifetime-metrics>div:nth-child(4){border-left:0;padding-left:0}}
 @media(max-width:740px){.combined-lifetime-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.combined-lifetime-metrics>div:nth-child(4){border-left:1px solid var(--line);padding-left:12px}.combined-lifetime-metrics>div:nth-child(odd){border-left:0;padding-left:0}.combined-annual-table th:first-child{width:44%}.combined-annual-table th,.combined-annual-table td{padding-left:3px;padding-right:3px}}
+/* Total profit leads the strip: seven figures, wrapping 7 / 4+3 / 2 per row. */
+.combined-lifetime-metrics{grid-template-columns:repeat(7,minmax(0,1fr))}
+.combined-total-profit dd{font-weight:650}.combined-total-profit small{display:block;color:var(--muted);font-size:10px;line-height:1.5;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media(max-width:1080px){.combined-lifetime-metrics{grid-template-columns:repeat(4,minmax(0,1fr))}.combined-lifetime-metrics>div:nth-child(4){border-left:1px solid var(--line);padding-left:16px}.combined-lifetime-metrics>div:nth-child(5){border-left:0;padding-left:0}}
+@media(max-width:740px){.combined-lifetime-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.combined-lifetime-metrics>div:nth-child(even){border-left:1px solid var(--line);padding-left:12px}.combined-lifetime-metrics>div:nth-child(odd){border-left:0;padding-left:0}}

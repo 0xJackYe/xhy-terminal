@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { webcrypto, createHmac } from 'node:crypto';
 import { D, normalizeBills, buildCostBook, appendCostBook, positionView, costView, iso } from '../cost-book.mjs';
-import { ExchangeClient, FinanceError, validateOKXPermissions, validateBinancePermissions, encryptConfiguration, decryptConfiguration, connectionIdentity, normalizeBinance } from '../exchange.mjs';
+import { ExchangeClient, FinanceError, validateOKXPermissions, validateBinancePermissions, encryptConfiguration, decryptConfiguration, connectionIdentity, normalizeBinance, binanceDetailFallbacks } from '../exchange.mjs';
 import { syncFinance, handleFinance, aggregatePortfolio } from '../finance.mjs';
 if(!globalThis.crypto)globalThis.crypto=webcrypto;
 const NOW=Date.now(),ADDRESS='bc1q'+'a'.repeat(38),KEY='A'.repeat(64),SECRET='B'.repeat(64);
@@ -87,9 +87,57 @@ test('public market requests do not transmit exchange credentials and provider b
   await assert.rejects(()=>c.get('/api/v5/market/ticker',{instId:'BTC-USDT'},false),error=>error.code==='ip_restricted'&&!error.message.includes('sensitive'));
   assert.equal(calls[0].headers['OK-ACCESS-KEY'],undefined);
 });
+const coin=(asset,free,btcValuation,extra={})=>({asset,free,locked:'0',freeze:'0',withdrawing:'0',btcValuation,...extra});
+const wallet=(walletName,balance,assetBalances,extra={})=>({walletName,activate:true,balance,...(assetBalances?{assetBalances}:{}),...extra});
+const wallets=(spot='0',funding='0',extra=[])=>[wallet('Spot',spot),wallet('Funding',funding),...extra];
 test('binance wallet BTC-equivalent is never counted as actual BTC holdings',()=>{
-  const result=normalizeBinance([{walletName:'Spot',activate:true,balance:'.1',assetBalances:[{asset:'USDT',free:'12',locked:'0',freeze:'0',withdrawing:'0',btcValuation:'.1'}]}],'100',NOW);
-  assert.equal(result.assets[0].ccy,'USDT');assert.equal(result.assets[0].quantity,'12');assert.equal(result.assets[0].usd_value,'10');
+  const result=normalizeBinance({wallets:[wallet('Spot','.1',[coin('USDT','12','.1')])]},'100',NOW);
+  assert.equal(result.assets[0].ccy,'USDT');assert.equal(result.assets[0].quantity,'12');assert.equal(result.assets[0].usd_value,'10');assert.equal(result.btc_holdings,'0');
+});
+test('binance itemizes every wallet from the documented balance detail and counts BTC in Spot, Funding and Earn only',()=>{
+  const result=normalizeBinance({wallets:[wallet('Spot','.01',[coin('BTC','.01','.01')]),wallet('Funding','.00625',[coin('USDT','150','.00125'),coin('BTC','.005','.005')]),wallet('Earn','.002',[coin('BTC','.002','.002')]),wallet('Cross Margin','.1',[coin('BTC','.1','.1')])]},'120000',NOW);
+  assert.deepEqual(result.assets.map(r=>[r.ccy,r.wallet,r.quantity,r.usd_value]),[['BTC','Spot','0.01','1200'],['USDT','Funding','150','150'],['BTC','Funding','0.005','600'],['BTC','Earn','0.002','240'],['BTC','Cross Margin','0.1','12000']]);
+  assert.equal(result.btc_holdings,'0.017');assert.equal(result.btc_scope,null);assert.equal(result.complete,true);assert.deepEqual(result.missing_wallets,[]);
+  assert.deepEqual(binanceDetailFallbacks([wallet('Spot','.01',[coin('BTC','.01','.01')]),wallet('Funding','0')]),[]);
+});
+test('without detail Spot and Funding come from their own balance reads and other wallets count at their total',()=>{
+  const list=[wallet('Spot','.01'),wallet('Funding','.00125',[]),wallet('Earn','.0005'),wallet('Cross Margin','0',undefined,{activate:false})];
+  assert.deepEqual(binanceDetailFallbacks(list),['Spot','Funding']);
+  const result=normalizeBinance({wallets:list,spot:[coin('BTC','.01','.01')],funding:[coin('USDT','150','.00125')]},'120000',NOW);
+  assert.deepEqual(result.assets.map(r=>[r.ccy,r.wallet,r.quantity,r.usd_value]),[['BTC','Spot','0.01','1200'],['USDT','Funding','150','150'],['BINANCE-EARN','Earn',null,'60']]);
+  assert.equal(result.assets[2].label,'币安理财');assert.equal(result.assets[2].btc_value,'0.0005');
+  assert.equal(result.btc_holdings,'0.01');assert.equal(result.btc_scope,'不含未拆分币种的理财钱包');assert.equal(result.complete,true);
+});
+test('one unexpected Binance entry marks only its wallet incomplete instead of blanking the whole account',()=>{
+  const result=normalizeBinance({wallets:[wallet('Spot','.02',[coin('币安人生','1000','.001'),{asset:'<script>',free:'1'},coin('BTC','.01','.01',{freeze:'.002'}),coin('BTC','.5','.5')]),{walletName:'Funding',balance:'.001',assetBalances:[coin('ETH','1',null)]},wallet('Isolated Margin','-3')]},'100',NOW);
+  assert.deepEqual(result.assets.map(r=>[r.ccy,r.quantity]),[['币安人生','1000'],['BTC',null],['ETH','1']]);
+  assert.equal(result.btc_holdings,null);assert.equal(result.assets[2].usd_value,null);
+  assert.equal(result.complete,false);assert.deepEqual(result.missing_wallets.sort(),['Funding','Isolated Margin','Spot']);
+  assert.throws(()=>normalizeBinance({wallets:[]},'100',NOW),error=>error.code==='invalid_response');
+  assert.throws(()=>normalizeBinance([wallet('Spot','1')],'100',NOW),error=>error.code==='invalid_response');
+  assert.throws(()=>normalizeBinance({wallets:[wallet('Spot','1'),wallet('Spot','2')]},'100',NOW),error=>error.code==='invalid_response');
+  assert.throws(()=>normalizeBinance({wallets:[wallet('Spot','1')]},'0',NOW),error=>error.code==='market_unavailable');
+});
+test('a caseless Binance listing name joins the portfolio instead of failing the whole sync',()=>{
+  const p=aggregatePortfolio([{ccy:'币安人生',quantity:'1000',usd_value:'12',location:'binance'},{ccy:'BTC',quantity:'.1',usd_value:'10',location:'offline'}],[{id:'binance',status:'connected'},{id:'offline',status:'connected'}],'100',{rate:'7'},NOW);
+  assert.deepEqual(p.assets.map(r=>r.ccy),['币安人生','BTC']);
+  assert.throws(()=>aggregatePortfolio([{ccy:'btc',quantity:'1',usd_value:'1',location:'offline'}],[],'100',null,NOW),error=>error.code==='invalid_response');
+});
+test('binance balance reads are one signed detail GET plus fallback POSTs that carry no body',async()=>{
+  const calls=[];const c=new ExchangeClient('binance',{api_key:KEY,secret_key:SECRET},{fetch:async(url,options)=>{calls.push({url:new URL(url),options});return new Response('[]');},now:()=>NOW});
+  await c.get('/sapi/v1/asset/wallet/balance',{needBalanceDetail:'true',quoteAsset:'BTC',recvWindow:5000});
+  await c.post('/sapi/v3/asset/getUserAsset',{needBtcValuation:'true',recvWindow:5000});await c.post('/sapi/v1/asset/get-funding-asset',{needBtcValuation:'true',recvWindow:5000});
+  assert.deepEqual(calls.map(r=>[r.options.method,r.url.pathname]),[['GET','/sapi/v1/asset/wallet/balance'],['POST','/sapi/v3/asset/getUserAsset'],['POST','/sapi/v1/asset/get-funding-asset']]);
+  for(const {url,options} of calls){
+    assert.equal(options.body,undefined);assert.equal(options.headers['X-MBX-APIKEY'],KEY);
+    const query=new URLSearchParams(url.search),signature=query.get('signature');query.delete('signature');
+    assert.equal(signature,createHmac('sha256',SECRET).update(query.toString()).digest('hex'));
+  }
+  assert.equal(calls[0].url.searchParams.get('needBalanceDetail'),'true');assert.equal(calls[0].url.searchParams.get('quoteAsset'),'BTC');
+  for(const attempt of [()=>c.post('/sapi/v1/asset/wallet/balance',{}),()=>c.post('/sapi/v1/asset/transfer',{}),()=>c.get('/sapi/v3/asset/getUserAsset',{needBtcValuation:'true'}),()=>c.post('/sapi/v3/asset/getUserAsset',{needBtcValuation:'false'}),()=>c.get('/sapi/v1/asset/wallet/balance',{quoteAsset:'USDT'}),()=>c.get('/sapi/v1/asset/wallet/balance',{needBalanceDetail:'false'}),()=>c.request('DELETE','/sapi/v3/asset/getUserAsset',{})])
+    await assert.rejects(attempt,error=>error.code==='route_rejected');
+  assert.equal(calls.length,3);
+  await assert.rejects(()=>new ExchangeClient('okx',OKX,{fetch:async()=>new Response('{}')}).post('/api/v5/account/balance',{}),error=>error.code==='route_rejected');
 });
 test('portfolio excludes only after coin aggregation and keeps unknown valuation unknown',()=>{
   const p=aggregatePortfolio([{ccy:'BTC',quantity:'.02',usd_value:'2',location:'okx'},{ccy:'BTC',quantity:'.04',usd_value:'4',location:'offline'},{ccy:'MISSING',quantity:'1',usd_value:null,location:'binance'}],[{id:'okx',status:'connected'}],'100',{rate:'7',date:'2026-10-26'},NOW,{});
@@ -115,9 +163,10 @@ async function fixture(){
   DB.set('okx',{configured:true,connection_id:account.slice(0,24),status:'connected',last_success_at:iso(NOW),assets:[],summary:{}});
   DB.set('historical_rates',{});
   for(const r of original)DB.trades.set(r.id,{id:r.id,bill_id:r.bill_id,at_ms:r.at_ms,record_json:JSON.stringify(r)});
-  const calls=[];let unsafe=false;
+  const calls=[];let unsafe=false,binance={wallets:wallets()};
   async function fetcher(value,options={}){
-    const u=new URL(value);calls.push({url:u,options});assert.equal(options.method,'GET');
+    const u=new URL(value);calls.push({url:u,options});
+    assert.equal(options.method,['/sapi/v3/asset/getUserAsset','/sapi/v1/asset/get-funding-asset'].includes(u.pathname)?'POST':'GET');
     if(u.hostname==='www.okx.com'){
       if(u.pathname==='/api/v5/public/time')return ok([{ts:String(NOW)}]);
       if(u.pathname==='/api/v5/account/config')return ok([{perm:unsafe?'read_only,trade':'read_only'}]);
@@ -130,13 +179,15 @@ async function fixture(){
     if(u.hostname==='api-gcp.binance.com'){
       if(u.pathname==='/api/v3/time')return new Response(JSON.stringify({serverTime:NOW}));
       if(u.pathname==='/sapi/v1/account/apiRestrictions')return new Response(JSON.stringify({enableReading:true,enableWithdrawals:false,enableSpotAndMarginTrading:false}));
-      if(u.pathname==='/sapi/v1/asset/wallet/balance')return new Response(JSON.stringify([{walletName:'Spot',activate:false,balance:'0',assetBalances:[]}]));
+      if(u.pathname==='/sapi/v3/asset/getUserAsset')return new Response(JSON.stringify(binance.spot||[]));
+      if(u.pathname==='/sapi/v1/asset/get-funding-asset')return new Response(JSON.stringify(binance.funding||[]));
+      if(u.pathname==='/sapi/v1/asset/wallet/balance')return new Response(JSON.stringify(binance.wallets));
     }
     if(u.hostname==='blockstream.info')return new Response(JSON.stringify({address:ADDRESS,chain_stats:{funded_txo_sum:50000000,spent_txo_sum:0,tx_count:1}}));
     if(u.hostname==='api.frankfurter.dev')return new Response(JSON.stringify([{base:'USD',quote:'CNY',date:'2026-10-26',rate:7.2}]));
     throw new Error('unexpected request '+u.hostname+u.pathname);
   }
-  return {env,DB,account,fetcher,calls,setUnsafe:value=>{unsafe=value;}};
+  return {env,DB,account,fetcher,calls,setUnsafe:value=>{unsafe=value;},setBinance:value=>{binance=value;}};
 }
 test('scheduled finance sync ingests DCA once, persists cost and serves all existing UI routes',async()=>{
   const f=await fixture(),result=await syncFinance(f.env,{fetch:f.fetcher,now:()=>NOW,force:true});assert.equal(result.ok,true);
@@ -146,6 +197,21 @@ test('scheduled finance sync ingests DCA once, persists cost and serves all exis
     const r=await handleFinance(new Request('https://x.pages.dev'+path),f.env,{});assert.equal(r.status,200,path);const body=await r.json();assert.equal(JSON.stringify(body).includes(OKX.secret_key),false);assert.equal(r.headers.get('cache-control'),'no-store');
   }
   f.DB.kv.delete('sync_lock');await syncFinance(f.env,{fetch:f.fetcher,now:()=>NOW,force:true});assert.equal(f.DB.trades.size,3);assert.equal(f.DB.get('cost_book').cost,'160');
+});
+test('binance BTC joins the BTC total and a Funding deposit joins the portfolio, while the P&L keeps its ledger scope',async()=>{
+  for(const [label,binance,posts] of [
+    ['documented detail',{wallets:[wallet('Spot','.25',[coin('BTC','.25','.25')]),wallet('Funding','1.25',[coin('USDT','150','1.25')]),wallet('Earn','.1')]},0],
+    ['fallback reads',{spot:[coin('BTC','.25','.25')],funding:[coin('USDT','150','1.25')],wallets:wallets('.25','1.25',[wallet('Earn','.1')])},2]]){
+    const f=await fixture();f.setBinance(binance);
+    const result=await syncFinance(f.env,{fetch:f.fetcher,now:()=>NOW,force:true});assert.equal(result.ok,true,label);assert.equal(result.binance_error,null,label);
+    const combined=f.DB.get('combined');assert.equal(combined.totals.btc,'1.75',label);assert.equal(combined.totals.usd,'210',label);
+    assert.deepEqual(combined.sources.map(r=>[r.id,r.btc]),[['offline','0.5'],['okx','1'],['binance','0.25']],label);
+    assert.equal(f.DB.get('btc_pnl').metrics.holdings_btc,'1.5',label);assert.equal(f.DB.get('btc_pnl').status,'fresh',label);
+    const portfolio=f.DB.get('portfolio'),byCoin=Object.fromEntries(portfolio.assets.map(r=>[r.ccy,r]));
+    assert.equal(byCoin.USDT.usd_value,'150',label);assert.equal(byCoin.BTC.quantity,'1.75',label);assert.equal(byCoin['BINANCE-EARN'].label,'币安理财',label);assert.equal(byCoin['BINANCE-EARN'].usd_value,'12',label);
+    assert.equal(portfolio.locations.find(r=>r.id==='binance').usd_value,'192',label);
+    assert.equal(f.calls.filter(r=>r.options.method==='POST').length,posts,label);
+  }
 });
 test('a non-read-only key fails before balance and leaves the verified book intact',async()=>{
   const f=await fixture();f.setUnsafe(true);const result=await syncFinance(f.env,{fetch:f.fetcher,now:()=>NOW,force:true});assert.equal(result.ok,false);assert.equal(result.code,'read_only_required');assert.equal(f.calls.some(r=>r.url.pathname.endsWith('/balance')),false);assert.equal(f.DB.get('cost_book').cost,'100');

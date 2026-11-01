@@ -166,6 +166,12 @@ class WalletNormalizationTests(unittest.TestCase):
         for currency in ['btc','<img>','','BTC/USDT','A'*33]:
             with self.assertRaises(BinanceWalletError):normalize_wallets([wallet(assets=[asset(currency)])],OBSERVED)
 
+    def test_caseless_listing_names_are_coins_and_activation_may_be_omitted(self):
+        row=wallet(assets=[asset('币安人生','1000','0',btcValuation='0.001'),asset('1000SATS','5','0',btcValuation='0.0001')]);del row['activate']
+        result=normalize_wallets([row],OBSERVED)
+        self.assertEqual(['币安人生','1000SATS'],[item['ccy'] for item in result['assets']])
+        self.assertTrue(result['complete']);self.assertEqual('1000',result['assets'][0]['quantity'])
+
     def test_wallet_response_structure_limits_and_activation_are_strict(self):
         for data in [None,{},[],[None],[wallet(activate='true')],[wallet(name='')],[wallet(name='bad\nname')],[wallet(assets={})],[wallet()]*65]:
             with self.assertRaises(BinanceWalletError):normalize_wallets(data,OBSERVED)

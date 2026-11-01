@@ -1,5 +1,5 @@
 import {D,dec,txt,iso,beijingDate,normalizeBills,compareTrades,buildCostBook,appendCostBook,costView,positionView} from './cost-book.mjs';
-import {FinanceError,ExchangeClient,connectionIdentity,validateCredentials,encryptConfiguration,decryptConfiguration,normalizeOKX,normalizeBinance} from './exchange.mjs';
+import {FinanceError,ExchangeClient,connectionIdentity,validateCredentials,encryptConfiguration,decryptConfiguration,normalizeOKX,normalizeBinance,binanceDetailFallbacks,COIN_CODE} from './exchange.mjs';
 import {preserveHistoricalPricePeriods} from './finance-price-periods.mjs';
 import {appendRemainingCapital} from './annualized-math.mjs';
 
@@ -57,9 +57,9 @@ export function aggregatePortfolio(rows,sources,btcUSD,fx,now,binance){
   const coins=new Map(),locations={okx:new D(0),binance:new D(0),offline:new D(0)},unpriced=new Set();
   let liabilities=new D(0),excluded=new D(0),excludedLiabilities=new D(0),negativeLeg=false;
   for(const r of rows){
-    if(!/^[A-Z0-9._-]{1,32}$/.test(r.ccy)||!Object.hasOwn(locations,r.location))throw new FinanceError('invalid_response');
+    if(typeof r.ccy!=='string'||!COIN_CODE.test(r.ccy)||!Object.hasOwn(locations,r.location))throw new FinanceError('invalid_response');
     if(r.quantity==='0'&&(r.usd_value==null||r.usd_value==='0'))continue;
-    const coin=coins.get(r.ccy)||{quantity:new D(0),complete:true,legs:[]};
+    const coin=coins.get(r.ccy)||{quantity:new D(0),complete:true,legs:[],label:typeof r.label==='string'?r.label.slice(0,40):null};
     if(r.quantity==null)coin.complete=false;else coin.quantity=coin.quantity.add(r.quantity);
     if(r.usd_value==null)unpriced.add(r.ccy);else coin.legs.push({location:r.location,value:dec(r.usd_value)});
     coins.set(r.ccy,coin);
@@ -69,13 +69,13 @@ export function aggregatePortfolio(rows,sources,btcUSD,fx,now,binance){
     if(unpriced.has(ccy))continue;const value=coin.legs.reduce((a,r)=>a.add(r.value),new D(0));
     if(value.lt(0)){if(value.abs().lt(5))excludedLiabilities=excludedLiabilities.add(value.abs());else liabilities=liabilities.add(value.abs());continue;}
     if(value.lt(5)){excluded=excluded.add(value);continue;}
-    assets.push({ccy,quantity:coin.complete?txt(coin.quantity):null,usd_value:txt(value)});
+    assets.push({ccy,...(coin.label?{label:coin.label}:{}),quantity:coin.complete?txt(coin.quantity):null,usd_value:txt(value)});
     for(const leg of coin.legs){locations[leg.location]=locations[leg.location].add(leg.value);if(leg.value.lt(0)){negativeLeg=true;liabilities=liabilities.add(leg.value.abs());}}
   }
   assets.sort((a,b)=>dec(b.usd_value).cmp(a.usd_value)||a.ccy.localeCompare(b.ccy));const total=assets.reduce((n,r)=>n.add(r.usd_value),new D(0));
   for(const r of assets)r.percentage=total.gt(0)?dec(r.usd_value).div(total).mul(100).toNumber():0;
   const venueRows=negativeLeg?[]:Object.entries(locations).filter(([,v])=>v.gt(0)).map(([id,v])=>({id,label:{okx:'欧易',binance:'币安',offline:'离线钱包'}[id],usd_value:txt(v),percentage:total.gt(0)?v.div(total).mul(100).toNumber():0}));
-  return {updated_at:iso(now),complete:sources.every(r=>r.status==='connected')&&!unpriced.size&&liabilities.isZero(),stale:sources.some(r=>['stale','error'].includes(r.status)),total_usd:txt(total),total_cny:fx?.rate?txt(total.mul(fx.rate)):null,total_btc:btcUSD?txt(total.div(btcUSD)):null,conversion_quotes:{btc_usd:btcUSD?txt(btcUSD):null,usd_cny:fx?.rate||null,fx_date:fx?.date||null},excluded_usd:txt(excluded),threshold_usd:'5',assets,locations:venueRows,sources,unpriced_currencies:[...unpriced].sort(),liabilities_usd:txt(liabilities),excluded_liabilities_usd:txt(excludedLiabilities),location_allocation_complete:!negativeLeg,scope_note:'欧易统计交易与资金账户；币安统计接口返回的钱包。不含欧易赚币、子账户及衍生品浮盈。',binance};
+  return {updated_at:iso(now),complete:sources.every(r=>r.status==='connected')&&!unpriced.size&&liabilities.isZero(),stale:sources.some(r=>['stale','error'].includes(r.status)),total_usd:txt(total),total_cny:fx?.rate?txt(total.mul(fx.rate)):null,total_btc:btcUSD?txt(total.div(btcUSD)):null,conversion_quotes:{btc_usd:btcUSD?txt(btcUSD):null,usd_cny:fx?.rate||null,fx_date:fx?.date||null},excluded_usd:txt(excluded),threshold_usd:'5',assets,locations:venueRows,sources,unpriced_currencies:[...unpriced].sort(),liabilities_usd:txt(liabilities),excluded_liabilities_usd:txt(excludedLiabilities),location_allocation_complete:!negativeLeg,scope_note:'欧易统计交易与资金账户；币安统计现货、资金及其他钱包。不含欧易赚币、子账户及衍生品浮盈。',binance};
 }
 function quoteValid(rows,now,field){if(!Array.isArray(rows)||rows.length!==1||!dec(rows[0]?.[field]||'0').gt(0)||!Number.isSafeInteger(Number(rows[0].ts))||Math.abs(now-Number(rows[0].ts))>180000)throw new FinanceError('market_unavailable');return txt(rows[0][field]);}
 async function syncCost(env,client,account,now){
@@ -141,7 +141,12 @@ export async function syncFinance(env,{fetch:fetcher=globalThis.fetch,now:clock=
       syncCost(env,client,account,clock()),
       readConfirmedBalance(env.WALLET_ADDRESS,{fetch:fetcher,now:clock}),
       publicGET('https://api.frankfurter.dev/v2/rates?base=USD&quotes=CNY&providers=ecb',fetcher,65536),
-      (async()=>{const c=await credentials(env,'binance'),b=new ExchangeClient('binance',c,{fetch:fetcher,now:clock});await b.syncTime();await b.permissions();return normalizeBinance(await b.get('/sapi/v1/asset/wallet/balance',{needBalanceDetail:'true',quoteAsset:'BTC',recvWindow:5000}),btcUSD,clock());})()
+      (async()=>{
+        const c=await credentials(env,'binance'),b=new ExchangeClient('binance',c,{fetch:fetcher,now:clock});await b.syncTime();await b.permissions();
+        const wallets=await b.get('/sapi/v1/asset/wallet/balance',{needBalanceDetail:'true',quoteAsset:'BTC',recvWindow:5000}),fallback=binanceDetailFallbacks(wallets);
+        const [spot,funding]=await Promise.all([fallback.includes('Spot')?b.post('/sapi/v3/asset/getUserAsset',{needBtcValuation:'true',recvWindow:5000}):null,fallback.includes('Funding')?b.post('/sapi/v1/asset/get-funding-asset',{needBtcValuation:'true',recvWindow:5000}):null]);
+        return normalizeBinance({wallets,spot,funding},btcUSD,clock());
+      })()
     ]);
     let [cost,chain,fx,binance]=outcomes.map((r,i)=>r.status==='fulfilled'?r.value:null);
     const costError=outcomes[0].status==='rejected'?safeError(outcomes[0].reason):cost?.error;
@@ -163,7 +168,11 @@ export async function syncFinance(env,{fetch:fetcher=globalThis.fetch,now:clock=
     if(chain)rows.push({ccy:'BTC',quantity:chain.btc,usd_value:txt(dec(chain.btc).mul(btcUSD)),location:'offline'});
     const portfolio=aggregatePortfolio(rows,sources,btcUSD,fx,clock(),binanceStatus);
     const policy=await getFinanceSnapshot(env,'policy',{}),oldCombined=await getFinanceSnapshot(env,'combined',emptyCombined());
+    // The cost book covers OKX and the offline wallet, so the long-term P&L
+    // stays on those holdings; the BTC total also counts Binance's BTC.
     const holdings=chain?txt(dec(chain.btc).add(okx.summary.btc_holdings_total)):null;
+    const binanceBTC=binance&&typeof binance.btc_holdings==='string'?binance.btc_holdings:null;
+    const totalBTC=holdings&&binanceBTC!=null?txt(dec(holdings).add(binanceBTC)):holdings;
     let pnl=emptyPnL(account.slice(0,24),costError?.error||publicMessages.needs_history);
     let costPublic=emptyCost(account.slice(0,24),costError?.error||publicMessages.needs_history);
     if(cost?.book){
@@ -182,13 +191,15 @@ export async function syncFinance(env,{fetch:fetcher=globalThis.fetch,now:clock=
     }
     let combined=emptyCombined(pnl);
     if(holdings){
-      const usd=dec(holdings).mul(btcUSD),point={timestamp:iso(clock()),btc:holdings,usd:txt(usd),cny:fx?txt(usd.mul(fx.rate)):null};
+      const usd=dec(totalBTC).mul(btcUSD),point={timestamp:iso(clock()),btc:totalBTC,usd:txt(usd),cny:fx?txt(usd.mul(fx.rate)):null};
       const prior=Array.isArray(oldCombined.history)?oldCombined.history.filter(p=>Number.isFinite(Date.parse(p.timestamp))&&Date.parse(p.timestamp)>=clock()-365*86400000):[];
       // Preserve verified imported history, appending actual new observations.
       const history=[...prior];if(!history.length||clock()-Date.parse(history.at(-1).timestamp)>=60000)history.push(point);else history[history.length-1]=point;
       const trimmed=history.length>2500?history.filter((_,i)=>i===history.length-1||i%Math.ceil(history.length/2400)===0):history;
       const periods=preserveHistoricalPricePeriods(oldCombined.pnl,clock());
-      combined={ok:true,stale:!!chainError,updated_at:iso(clock()),goal_btc:'1',totals:{btc:holdings,usd:txt(usd),cny:fx?txt(usd.mul(fx.rate)):null},sources:[{id:'offline',label:'离线钱包',btc:chain.btc,status:chainError?'stale':'fresh',updated_at:chain.updated_at},{id:'okx',label:'欧易',btc:okx.summary.btc_holdings_total,status:'fresh',updated_at:okx.last_success_at}],quotes:{btc_usd:btcUSD,usd_cny:fx?.rate||null},history:trimmed,pnl:periods,coverage:{complete:false,note:'已保留迁移前的真实余额历史；云端持续追加新快照。价格变动盈亏保留原核算区间，并注明历史截止时间。'},lifetime_pnl:pnl};
+      const sourcesBTC=[{id:'offline',label:'离线钱包',btc:chain.btc,status:chainError?'stale':'fresh',updated_at:chain.updated_at},{id:'okx',label:'欧易',btc:okx.summary.btc_holdings_total,status:'fresh',updated_at:okx.last_success_at}];
+      if(binanceBTC!=null)sourcesBTC.push({id:'binance',label:'币安',btc:binanceBTC,status:binanceError?'stale':'fresh',updated_at:binance.observed_at});
+      combined={ok:true,stale:!!chainError||!!binanceError,updated_at:iso(clock()),goal_btc:'1',totals:{btc:totalBTC,usd:txt(usd),cny:fx?txt(usd.mul(fx.rate)):null},sources:sourcesBTC,quotes:{btc_usd:btcUSD,usd_cny:fx?.rate||null},history:trimmed,pnl:periods,coverage:{complete:false,note:'已保留迁移前的真实余额历史；云端持续追加新快照。价格变动盈亏保留原核算区间，并注明历史截止时间。'},lifetime_pnl:pnl};
     }
     const currentCredentials=await credentials(env,'okx');if(await connectionIdentity(currentCredentials)!==account)throw new FinanceError('account_changed');
     const write=[['okx',okx],['portfolio',portfolio],['combined',combined],['btc_cost',costPublic],['btc_pnl',pnl],['market',{price_usdt:price,btc_usd:btcUSD,usd_cny:fx?.rate||null,updated_at:iso(clock())}],['sync_status',{ok:true,last_success_ms:clock(),last_attempt_ms:now,cost_error:costError||null,chain_error:chainError,binance_error:binanceError}]];

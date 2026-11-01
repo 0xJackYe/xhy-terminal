@@ -36,12 +36,15 @@
   function percentage(value){return finite(value)&&value>=0&&value<=100?value>0&&value<.01?'<0.01%':value.toFixed(2)+'%':'—';}
   function timestamp(value){const number=typeof value==='string'?Date.parse(value):finite(value)?value:NaN;return finite(number)&&number>0&&number<=8640000000000000?number:null;}
   function beijing(value){const time=timestamp(value);if(time===null)return '—';const d=new Date(time+28800000),pad=n=>String(n).padStart(2,'0');return d.getUTCFullYear()+'-'+pad(d.getUTCMonth()+1)+'-'+pad(d.getUTCDate())+' '+pad(d.getUTCHours())+':'+pad(d.getUTCMinutes());}
+  // Upper-case A–Z/0–9 tickers, plus caseless scripts used by a few listings
+  // (for example Chinese names); lower-case Latin never poses as a ticker.
+  const COIN_CODE=/^[A-Z0-9\p{Lo}][A-Z0-9._\-\p{Lo}\p{N}]{0,31}$/u;
   function rows(state,mode='currency') {
     const raw=state&&(mode==='location'?state.locations:state.assets);
     return (Array.isArray(raw)?raw:[]).slice(0,MAX_ROWS).filter(row=>row&&typeof row==='object'&&!Array.isArray(row)&&
-      (mode==='location'?Object.prototype.hasOwnProperty.call(LABELS,row.id):typeof row.ccy==='string'&&/^[A-Z0-9._-]{1,30}$/.test(row.ccy))&&
+      (mode==='location'?Object.prototype.hasOwnProperty.call(LABELS,row.id):typeof row.ccy==='string'&&COIN_CODE.test(row.ccy))&&
       positive(row.usd_value)&&finite(row.percentage)&&row.percentage>0&&row.percentage<=100).map((row,index)=>({
-        id:mode==='location'?row.id:row.ccy,label:mode==='location'?LABELS[row.id]:row.ccy,
+        id:mode==='location'?row.id:row.ccy,label:mode==='location'?LABELS[row.id]:typeof row.label==='string'&&row.label?row.label.slice(0,40):row.ccy,
         quantity:mode==='location'?null:row.quantity,value:row.usd_value,percentage:row.percentage,color:COLORS[index%COLORS.length]}));
   }
   function geometry(state,mode='currency') {
@@ -66,7 +69,8 @@
   function renderSources(state) {
     const raw=state&&Array.isArray(state.sources)?state.sources:[],byId=new Map(raw.filter(row=>row&&Object.prototype.hasOwnProperty.call(LABELS,row.id)).map(row=>[row.id,row]));
     return ['okx','binance','offline'].map(id=>{const source=byId.get(id),status=source&&['connected','partial','needs_credentials','error','stale','connecting'].includes(source.status)?source.status:'connecting';
-      return '<span class="portfolio-source '+status+'">'+LABELS[id]+'<small>'+(status==='connected'?'已连接':status==='partial'?'已连接 · 部分数据':status==='needs_credentials'?'未连接':status==='connecting'?'同步中':status==='stale'?'缓存快照':'连接待恢复')+'</small></span>';}).join('');
+      const reason=status!=='connected'&&source&&typeof source.note==='string'&&source.note?' title="'+escape(source.note.slice(0,200))+'"':'';
+      return '<span class="portfolio-source '+status+'"'+reason+'>'+LABELS[id]+'<small>'+(status==='connected'?'已连接':status==='partial'?'已连接 · 部分数据':status==='needs_credentials'?'未连接':status==='connecting'?'同步中':status==='stale'?'缓存快照':'连接待恢复')+'</small></span>';}).join('');
   }
   function health(state,now=Date.now(),failed=false) {
     if(!state)return{kind:failed?'stale':'waiting',text:failed?'连接待恢复':'正在汇总'};
@@ -105,7 +109,7 @@
       node('portfolioTotalCny').textContent=money(hasTotal?state.total_cny:null,'cny');
       node('portfolioTotalBtc').textContent=exact(hasTotal?state.total_btc:null,8,true);
       node('portfolioSources').innerHTML=renderSources(state);node('portfolioChart').innerHTML=renderChart(state,mode);node('portfolioLegend').innerHTML=renderLegend(state,mode);
-      const unpriced=state&&Array.isArray(state.unpriced_currencies)?state.unpriced_currencies.filter(ccy=>typeof ccy==='string'&&/^[A-Z0-9._-]{1,30}$/.test(ccy)):[],notes=[];
+      const unpriced=state&&Array.isArray(state.unpriced_currencies)?state.unpriced_currencies.filter(ccy=>typeof ccy==='string'&&COIN_CODE.test(ccy)):[],notes=[];
       if(unpriced.length)notes.push('暂无可靠美元估值：'+unpriced.slice(0,30).join('、')+(unpriced.length>30?'等 '+unpriced.length+' 个币种':''));
       if(state&&positive(state.liabilities_usd))notes.push('负债另列 '+money(state.liabilities_usd)+'，未计入饼图');
       if(state&&typeof state.location_note==='string'&&state.location_note)notes.push(state.location_note.slice(0,300));

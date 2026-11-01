@@ -118,6 +118,13 @@ async function portfolioResponse(env,account,now){
   return result;
  }catch{return {...missing,status:'unavailable',reason:'总资产资金流水或计价数据正在核对，稍后自动重试。'};}
 }
+// The overview card's total profit (realized and unrealized together): the
+// same verified cash flows and valuation as the portfolio XIRR above.
+export async function portfolioProfit(env,now=Date.now()){
+ const result=await portfolioResponse(env,await identity(env),now);
+ if(!result||typeof result.profit_usdt!=='string')return {status:result?.status||'unavailable',reason:typeof result?.reason==='string'?result.reason:null};
+ return {status:result.status,profit_usdt:result.profit_usdt,contributed_usdt:result.contributed_usdt,withdrawn_usdt:result.withdrawn_usdt,market_value_usdt:result.market_value_usdt,as_of:result.as_of||null};
+}
 export async function handleAnnualized(request,env,ctx={}){
  const url=new URL(request.url);if(url.pathname!=='/api/wallet/annualized')return null;
  if(!['GET','HEAD'].includes(request.method))return json({error:'年化回测接口仅支持读取。'},405);

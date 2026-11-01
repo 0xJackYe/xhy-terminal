@@ -28,7 +28,7 @@ async function fixture(t){
  for(const r of records)await DB.prepare('INSERT INTO finance_trades(id,bill_id,at_ms,record_json) VALUES(?,?,?,?)').bind(r.id,r.bill_id,r.at_ms,JSON.stringify(r)).run();
  const bills=[{billId:'6',tradeId:'3',ordId:'103',instType:'SPOT',instId:'BTC-USDT',subType:'1',ccy:'BTC',sz:'0.2',px:'100',fee:'0',balChg:'0.2',ts:String(NOW-1000)},{billId:'7',tradeId:'3',ordId:'103',instType:'SPOT',instId:'BTC-USDT',subType:'2',ccy:'USDT',sz:'20',px:'100',fee:'0',balChg:'-20',ts:String(NOW-1000)}];
  const fetcher=async(address,options)=>{
-  assert.equal(options.method,'GET');const u=new URL(address);
+  const u=new URL(address);assert.equal(options.method,['/sapi/v3/asset/getUserAsset','/sapi/v1/asset/get-funding-asset'].includes(u.pathname)?'POST':'GET');
   if(u.hostname==='www.okx.com'){
    if(u.pathname.endsWith('/public/time'))return ok([{ts:String(NOW)}]);
    if(u.pathname.endsWith('/account/config'))return ok([{perm:'read_only'}]);
@@ -41,7 +41,8 @@ async function fixture(t){
   if(u.hostname==='api-gcp.binance.com'){
    if(u.pathname==='/api/v3/time')return Response.json({serverTime:NOW});
    if(u.pathname==='/sapi/v1/account/apiRestrictions')return Response.json({enableReading:true,enableWithdrawals:false,enableSpotAndMarginTrading:false});
-   if(u.pathname==='/sapi/v1/asset/wallet/balance')return Response.json([{walletName:'Spot',activate:false,balance:'0',assetBalances:[]}]);
+   if(['/sapi/v3/asset/getUserAsset','/sapi/v1/asset/get-funding-asset'].includes(u.pathname))return Response.json([]);
+   if(u.pathname==='/sapi/v1/asset/wallet/balance')return Response.json([{walletName:'Spot',activate:false,balance:'0'}]);
   }
   if(u.hostname==='blockstream.info')return Response.json({address:ADDRESS,chain_stats:{funded_txo_sum:50000000,spent_txo_sum:0,tx_count:1}});
   if(u.hostname==='api.frankfurter.dev')return Response.json([{base:'USD',quote:'CNY',date:'2026-10-27',rate:7}]);

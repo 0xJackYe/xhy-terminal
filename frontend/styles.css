@@ -176,6 +176,8 @@ html:not([data-view="overview"]) .service-notice { display: none; }
 .inline-empty { margin: 0; color: var(--faint); font-size: 12px; list-style: none; }
 
 .stat-grid small { margin-left: 2px; font-size: 11px; font-weight: 400; color: var(--muted); }
+.stat-grid small.positive { color: var(--positive); }
+.stat-grid small.negative { color: var(--danger); }
 
 .alert-list { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
 .alert-list li:not(.inline-empty) { display: grid; align-items: baseline; gap: 10px; padding: 3px 0; font-size: 12.5px; animation: row-in 420ms var(--ease-out) backwards; animation-delay: calc(var(--d, 0) * 50ms); }

@@ -113,3 +113,26 @@ test('the additional metrics share theme variables and collapse to two columns o
  assert.match(css,/@media\(max-width:740px\)\{\.combined-lifetime-metrics\{grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
  assert.doesNotMatch(css,/\.combined-annual[^}]*#[0-9a-f]{3}/i);
 });
+
+test('total profit shows realized plus unrealized portfolio result with its sign, or the reason it is missing',async t=>{
+ const h=harness();t.after(()=>h.controller.destroy());
+ h.annualQueue.push({...structuredClone(annual),portfolio:{status:'estimated',method:'cashflow_xirr',annualized_return_pct:'-8.1',profit_usdt:'-123.45',contributed_usdt:'1000',withdrawn_usdt:'200',market_value_usdt:'676.55',years:[]}});
+ await h.settle();
+ assert.equal(h.node('combinedTotalProfit').textContent,'−123.45');assert.equal(h.node('combinedTotalProfit').className,'negative');
+ assert.equal(h.node('combinedTotalProfitNote').textContent,'收益率 −12.35%');
+ assert.equal(h.node('combinedTotalProfitNote').title,'累计盈亏 = 当前市值 676.55 + 已提出 200.00 − 累计投入 1,000.00 USDT');assert.equal(h.node('combinedTotalProfitCell').title,h.node('combinedTotalProfitNote').title);
+ assert.deepEqual(api.totalProfit({profit_usdt:'50',contributed_usdt:'0'}),{profit:'50',percent:null,contributed:'0',withdrawn:null,value:null});
+ assert.equal(api.totalProfit({profit_usdt:null}),null);
+ const missing=harness();t.after(()=>missing.controller.destroy());
+ missing.annualQueue.push({...structuredClone(annual),portfolio:{status:'unavailable',reason:'总资产估值来源尚不完整，暂不计算年化。',years:[]}});
+ await missing.settle();
+ assert.equal(missing.node('combinedTotalProfit').textContent,'—');assert.equal(missing.node('combinedTotalProfitNote').textContent,'总资产估值来源尚不完整，暂不计算年化。');
+});
+test('the BTC total names every place it adds up, Binance included',()=>{
+ assert.equal(api.sourceScope([{id:'offline'},{id:'binance'},{id:'okx'}]),'欧易 + 币安 + 离线钱包');
+ assert.equal(api.sourceScope([{id:'offline'},{id:'okx'}]),'欧易 + 离线钱包');
+ assert.equal(api.sourceScope([]),'欧易 + 离线钱包');
+ const html=api.renderSources([{id:'okx',btc:'1',status:'fresh'},{id:'binance',btc:'0.25',status:'stale'},{id:'offline',btc:'0.5',status:'fresh'},{id:'evil',btc:'9'}]);
+ assert.match(html,/币安 BTC/);assert.match(html,/0\.25/);assert.doesNotMatch(html,/evil/);assert.equal((html.match(/class="combined-source"/g)||[]).length,3);
+});
+

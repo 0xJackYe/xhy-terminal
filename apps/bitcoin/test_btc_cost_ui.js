@@ -62,7 +62,7 @@ async function check(name,fn) { await fn();checks++;console.log('OK '+name); }
   });
   await check('net investment uses only its labeled USDT currency and keeps exact BTC quantity',async()=>{
     const data=structuredClone(SNAPSHOT);data.summary.by_currency.reverse();const h=harness({responses:[data]});await h.settle();
-    assert.equal(h.node('btcCostNetUSDT').textContent,'5,426.82');assert.equal(h.node('btcCostNetBTC').textContent,'0.0684981895130917');assert.match(h.node('btcCostPanel').innerHTML,/USDT 实际支出减卖出回款/);
+    assert.equal(h.node('btcCostNetUSDT').textContent,'5,426.82');assert.equal(h.node('btcCostNetBTC').textContent,'0.06849819');assert.equal(h.node('btcCostNetBTC').title,'0.0684981895130917 BTC');assert.match(h.node('btcCostPanel').innerHTML,/USDT 实际支出减卖出回款/);
   });
   await check('malformed amount count date and server error fields cannot inject HTML or CSS',async()=>{
     const attack='<img src=x onerror=alert(1)>',data=structuredClone(SNAPSHOT);data.summary.net_bought_btc=attack;data.summary.buy_count=attack;data.summary.by_currency[0].net_invested=attack;data.last_success_at=attack;data.error=attack;data.today.buy_spent_usdt=attack;data.today.remaining_plan_usdt=attack;data.recent_trades=[{side:attack}];
@@ -71,7 +71,7 @@ async function check(name,fn) { await fn();checks++;console.log('OK '+name); }
   });
   await check('visible panel loads only local read API and displays actual plan progress',async()=>{
     const h=harness();await h.settle();assert.equal(h.requests.length,1);assert.equal(h.requests[0].url,'/api/wallet/btc-cost');assert.equal(h.requests[0].init.method,'GET');assert.equal(h.requests[0].init.cache,'no-store');assert.equal(h.requests[0].init.credentials,'same-origin');
-    assert.equal(h.node('btcCostNetUSDT').textContent,'5,426.82');assert.equal(h.node('btcCostNetBTC').textContent,'0.0684981895130917');assert.equal(h.node('btcCostTodaySpent').textContent,'6.00');assert.match(h.node('btcCostDailyDetail').textContent,/3 笔 · 距计划 14.00 USDT/);assert.equal(h.node('btcCostProgressFill').style.width,'29.99%');assert.equal(h.node('btcCostState').textContent,'已同步 · 只读');
+    assert.equal(h.node('btcCostNetUSDT').textContent,'5,426.82');assert.equal(h.node('btcCostNetBTC').textContent,'0.06849819');assert.equal(h.node('btcCostNetBTC').title,'0.0684981895130917 BTC');assert.equal(h.node('btcCostTodaySpent').textContent,'6.00');assert.match(h.node('btcCostDailyDetail').textContent,/3 笔 · 距计划 14.00 USDT/);assert.equal(h.node('btcCostProgressFill').style.width,'29.99%');assert.equal(h.node('btcCostState').textContent,'已同步 · 只读');
   });
   await check('removed payment table recent fills and explanation stay absent through refreshes',async()=>{
     const h=harness();await h.settle();await h.tick();assert.equal(h.requests.length,2);assert.equal(h.node('btcCostState').textContent,'已同步 · 只读');
@@ -95,7 +95,7 @@ async function check(name,fn) { await fn();checks++;console.log('OK '+name); }
     const h=harness();await h.settle();for(const value of [new Error('sk-private-token'),{http_status:401,data:{error:'private-secret'}},{http_status:503,data:null}]) { h.responses.push(value);await h.tick();assert.equal(h.node('btcCostNetUSDT').textContent,'5,426.82');assert.equal(h.node('btcCostState').textContent,'待同步 · 保留记录');assert.match(h.node('btcCostMessage').textContent,/保留上次/);assert.doesNotMatch(h.node('btcCostMessage').textContent,/private|token|secret/);assert.match(h.node('btcCostUpdated').textContent,/2026-10-26 00:20:00/); }
   });
   await check('malformed or absent snapshots cannot clear last valid balances',async()=>{
-    const h=harness();await h.settle();for(const bad of [null,[],{},false,{...SNAPSHOT,summary:[]},{...SNAPSHOT,recent_trades:null},{...SNAPSHOT,status:'oops'},{...SNAPSHOT,summary:null,today:null,status:'loading'}]) { h.responses.push(bad);await h.tick();assert.equal(h.node('btcCostNetBTC').textContent,'0.0684981895130917');assert.equal(h.node('btcCostState').textContent,'待同步 · 保留记录'); }
+    const h=harness();await h.settle();for(const bad of [null,[],{},false,{...SNAPSHOT,summary:[]},{...SNAPSHOT,recent_trades:null},{...SNAPSHOT,status:'oops'},{...SNAPSHOT,summary:null,today:null,status:'loading'}]) { h.responses.push(bad);await h.tick();assert.equal(h.node('btcCostNetBTC').textContent,'0.06849819');assert.equal(h.node('btcCostNetBTC').title,'0.0684981895130917 BTC');assert.equal(h.node('btcCostState').textContent,'待同步 · 保留记录'); }
   });
   await check('older successful snapshots cannot roll accumulated cost backwards',async()=>{
     const h=harness();await h.settle();const data=structuredClone(SNAPSHOT);data.last_success_at='2026-10-25T00:00:00+08:00';data.summary.by_currency[0].net_invested='1';h.responses.push(data);await h.tick();assert.equal(h.node('btcCostNetUSDT').textContent,'5,426.82');assert.equal(h.node('btcCostState').textContent,'待同步 · 保留记录');

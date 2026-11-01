@@ -62,6 +62,7 @@ export function demoOverview() {
       status: "online", updatedAt, complete: true, stale: false,
       totalUsd: 49432.17, totalCny: 351957, btcHoldings: 0.61234567, btcHoldingsStale: false,
       pnl: { status: "fresh", averageCost: "58210.44", price: price.toFixed(2), unrealized: ((price - 58210.44) * 0.61234567).toFixed(2), returnPct: ((price / 58210.44 - 1) * 100).toFixed(2) },
+      totalProfit: { status: "estimated", profit_usdt: (49432.17 + 1200 - 41850).toFixed(2), contributed_usdt: "41850.00", withdrawn_usdt: "1200.00", market_value_usdt: "49432.17" },
       assets: [
         { ccy: "BTC", usd_value: 41422.1, quantity: 0.61234567 },
         { ccy: "USDT", usd_value: 5210.3, quantity: 5210.3 },

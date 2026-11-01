@@ -9,6 +9,7 @@ import threading
 import time
 
 from okx_wallet_service import OKXVault, WalletError, DIRECTORY
+from binance_wallet import valid_currency
 
 
 def number(value):
@@ -132,7 +133,7 @@ def aggregate_assets(rows, sources, now_ms):
         negative_leg = False
         for row in rows:
             ccy, location = row['ccy'], row['location']
-            if not re.fullmatch('[A-Z0-9._-]{1,30}', ccy) or location not in {'offline', 'okx', 'binance'}:
+            if not valid_currency(ccy) or location not in {'offline', 'okx', 'binance'}:
                 raise ValueError('invalid_asset')
             quantity, usd = number(row.get('quantity')), number(row.get('usd_value'))
             if quantity == 0 and usd in (None, Decimal(0)):

@@ -79,7 +79,9 @@
       node('btcCostState').textContent = status;node('btcCostState').className = 'btc-cost-state '+(hasData ? stale ? 'stale' : 'fresh' : 'unavailable');
       const usdt = summary && summary.by_currency.find(row => row && row.currency === 'USDT');
       node('btcCostNetUSDT').textContent = exact(usdt && usdt.net_invested,2,true);
-      node('btcCostNetBTC').textContent = exact(summary && summary.net_bought_btc);
+      // Satoshi precision on screen; the full ledger value stays in the tooltip.
+      node('btcCostNetBTC').textContent = exact(summary && summary.net_bought_btc, 8);
+      node('btcCostNetBTC').title = exact(summary && summary.net_bought_btc) === '—' ? '' : exact(summary && summary.net_bought_btc) + ' BTC';
       node('btcCostCounts').textContent = summary ? '买入 '+count(summary.buy_count)+' 条成交 · 卖出 '+count(summary.sell_count)+' 条成交' : '—';
       node('btcCostDailyDate').textContent = todayDate(now());
       node('btcCostDailyPlan').textContent = exact(state && state.plan_daily_usdt || '20',2,true);

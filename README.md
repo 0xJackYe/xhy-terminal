@@ -15,6 +15,14 @@
 
 只展示持仓平均买入价、当前 BTC/USDT 价格、浮盈和收益率。每笔定投按实际净到账 BTC 与含手续费支出自动更新移动加权平均成本；后台每 20 秒核算，页面每 30 秒刷新。历史卖出只调整剩余持仓成本。跨币种买入按成交分钟行情折算，计算假设在页面可展开查看。
 
+- **比特币总持有**：欧易 BTC 净持有 + 币安 BTC + 离线钱包。币安计入现货、资金和理财钱包里的 BTC；杠杆、合约钱包可能含借入或保证金，只计入资产估值，不算作持有的 BTC。持仓浮盈和均价仍只按欧易成交账本与离线钱包核算（币安没有成本记录）。BTC 数量显示到 8 位小数（聪），完整数值在鼠标悬停提示里。
+- **累计盈亏**（总览卡片与钱包页）：当前加密资产总市值 + 已提出 − 累计投入，即已实现与未实现盈亏之和，正数绿色、负数红色，旁边是相对累计投入的收益率；投入和提出取自已核对的出入金记录（云端），悬停可看到计算式。本机终端没有这份记录，显示“—”。
+- **币安读取**：云端每分钟用只读 API 读取钱包余额（官方 `needBalanceDetail=true` 逐币明细）；若现货或资金钱包没有返回明细，再用这两个钱包各自的只读余额接口补齐。没有逐币明细的其他钱包按钱包合计计入。单个无法识别的条目只把所在钱包标为不完整，不再让整个币安读数失败；中文等无大小写文字的币种代码也能识别。币安读取失败时，钱包页“资产分布”里的“币安”会显示状态，悬停可看到原因（例如 IP 白名单或地区限制）。
+
+## 钱包页（加密资产 → 钱包走势）
+
+在总终端里显示为两栏：左边是比特币总持有（各来源一行）、盈亏（累计盈亏在前，BTC 浮盈、收益率、持仓均价、当前价格，下面是两个平均年化）、合计余额走势和攒到 1 BTC 进度；右边是资产分布和定投。重复的链上地址视图、正常状态下的欧易连接卡片、每行时间戳和说明文字在这里隐藏；数据过期时会重新显示快照时间。单独打开比特币终端（`/btc/`）仍显示全部明细。
+
 ## 本机运行
 
 需要 Windows、Python 3.9+、Node.js 20+，比特币后台依赖见 `apps/bitcoin/requirements.txt`。
@@ -73,7 +81,13 @@ python -m unittest test_btc_pnl_service test_btc_cost_tracker test_btc_cost_http
 node test_terminal_frontend.js
 node --test test_terminal_ui.js
 node test_combined_wallet_ui.js
+node test_annualized_wallet_ui.js
+node test_crypto_portfolio_ui.js
+node test_btc_cost_ui.js
+python -m unittest test_binance_wallet test_crypto_portfolio_service -q
 ```
+
+云端：`cd cloud && npm ci && npm test`（构建后运行 Worker、饮食和钱包界面测试）。
 
 饮食项目可运行 `npm run check`、`npm test`、`npm run build`。部分原始日记归档检查需先恢复本机日记数据；日常测试不调用付费 AI 或交易接口。
 

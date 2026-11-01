@@ -218,16 +218,20 @@
     text(`${key}-updated`, updatedAt ? `更新于 ${timestamp(updatedAt, true)}` : "尚未同步");
   }
 
+  // Exchange wallet totals (e.g. Binance Earn) carry a readable label instead of a coin code.
+  const assetName = (asset) => typeof asset.label === "string" && asset.label ? asset.label.slice(0, 40) : asset.ccy;
+
   function renderWallet(wallet = {}) {
     setModuleStatus("wallet", wallet.status || "offline");
     animateNumber("wallet-usd", wallet.totalUsd, 2, { cents: true });
     text("wallet-cny", finite(wallet.totalCny) ? `约 ¥${fixed(wallet.totalCny, 2)} CNY` : wallet.status === "offline" ? "暂时无法读取钱包估值" : "连接账户后显示资产总估值");
     animateNumber("wallet-btc", wallet.btcHoldings, 8);
-    text("wallet-btc-label", `BTC 实际持仓${finite(wallet.btcHoldings) && wallet.btcHoldingsStale ? " · 已延迟" : ""}`);
+    text("wallet-btc-label", `BTC 持仓${finite(wallet.btcHoldings) && wallet.btcHoldingsStale ? " · 已延迟" : ""}`);
     const list = $("wallet-assets");
     const assets = (Array.isArray(wallet.assets) ? wallet.assets : []).filter((asset) => asset && typeof asset.ccy === "string" && finite(asset.usd_value));
     const visible = assets.slice(0, 8);
     renderPnl(wallet.pnl);
+    renderTotalProfit(wallet.totalProfit);
     renderLocations(Array.isArray(wallet.locations) ? wallet.locations : [], wallet);
     text("wallet-asset-count", assets.length ? `${number(assets.length)} 种${assets.length > visible.length ? ` · 显示前 ${visible.length}` : ""}` : "");
     const total = finite(wallet.totalUsd) && Number(wallet.totalUsd) > 0 ? Number(wallet.totalUsd) : assets.reduce((sum, asset) => sum + Math.max(0, Number(asset.usd_value)), 0);
@@ -244,7 +248,7 @@
         name.className = "asset-name";
         const share = document.createElement("span");
         share.className = "asset-share";
-        name.append(document.createTextNode(asset.ccy), share);
+        name.append(document.createTextNode(assetName(asset)), share);
         const value = document.createElement("span");
         value.className = "asset-value";
         const bar = document.createElement("span");
@@ -260,7 +264,7 @@
       const ratio = total > 0 ? clamp(Number(asset.usd_value) / total) : 0;
       const share = row.querySelector(".asset-share"), value = row.querySelector(".asset-value");
       const shareText = total > 0 ? `${number(ratio * 100, 1)}%` : "", valueText = money(asset.usd_value);
-      const title = `${asset.ccy} 持仓 ${number(asset.quantity, 8)}，估值 ${valueText}`;
+      const title = finite(asset.quantity) ? `${assetName(asset)} 持仓 ${number(asset.quantity, 8)}，估值 ${valueText}` : `${assetName(asset)} 估值 ${valueText}`;
       if (share.textContent !== shareText) share.textContent = shareText;
       if (value.textContent !== valueText) value.textContent = valueText;
       if (row.title !== title) row.title = title;
@@ -274,21 +278,42 @@
       list.append(empty);
     }
     const scopeNote = typeof wallet.scopeNote === "string" ? wallet.scopeNote : "";
-    const walletNote = wallet.status === "offline" ? "钱包服务暂未连接，可重试同步或独立打开。" : `${wallet.complete === false ? "当前资产估值不完整。" : ""}${scopeNote || (wallet.complete === false ? "部分账户或资产暂未计入。" : "")}`;
+    // The coverage note shows only while the valuation is incomplete; otherwise it is the total's tooltip.
+    const walletNote = wallet.status === "offline" ? "钱包服务暂未连接，可重试同步或独立打开。" : wallet.complete === false ? `当前资产估值不完整。${scopeNote || "部分账户或资产暂未计入。"}` : "";
+    const metric = $("wallet-usd").parentElement;
+    if (metric.title !== scopeNote) metric.title = scopeNote;
     text("wallet-note", walletNote);
     $("wallet-note").hidden = !walletNote;
     text("wallet-module-updated", `加密钱包 · ${wallet.updatedAt ? `更新于 ${timestamp(wallet.updatedAt, true)}` : "尚未同步"}`);
   }
 
+  const tone = (value) => finite(value) ? Number(value) > 0 ? "positive" : Number(value) < 0 ? "negative" : "" : "";
+  function signedCell(id, value, suffix = "", empty = "—") {
+    const element = $(id);
+    if (element.className !== tone(value)) element.className = tone(value);
+    text(id, finite(value) ? `${signed(value)}${suffix}` : empty);
+  }
+
   function renderPnl(pnl) {
     const metrics = pnl && typeof pnl === "object" ? pnl : {};
     text("wallet-avg-cost", fixed(metrics.averageCost));
-    const sign = (value) => finite(value) ? Number(value) > 0 ? "positive" : Number(value) < 0 ? "negative" : "" : "";
-    for (const [id, value, suffix] of [["wallet-unrealized", metrics.unrealized, ""], ["wallet-return", metrics.returnPct, "%"]]) {
-      const element = $(id);
-      if (element.className !== sign(value)) element.className = sign(value);
-      text(id, finite(value) ? `${signed(value)}${suffix}` : "—");
-    }
+    signedCell("wallet-unrealized", metrics.unrealized);
+    signedCell("wallet-return", metrics.returnPct, "%", "");
+  }
+
+  // Lifetime result of the whole crypto portfolio: market value plus everything
+  // withdrawn minus everything put in (realized and unrealized together).
+  function renderTotalProfit(total) {
+    const data = total && typeof total === "object" ? total : {};
+    const profit = finite(data.profit_usdt) ? Number(data.profit_usdt) : null;
+    const contributed = finite(data.contributed_usdt) ? Number(data.contributed_usdt) : null;
+    signedCell("wallet-total-profit", profit);
+    signedCell("wallet-total-return", profit !== null && contributed > 0 ? (profit / contributed * 100).toFixed(2) : null, "%", "");
+    const cell = $("wallet-total-cell");
+    const title = profit === null
+      ? (typeof data.reason === "string" && data.reason ? data.reason : local ? "本机终端不核算累计盈亏，请在云端终端查看。" : "累计盈亏需要已核对的投入、提出记录。")
+      : `当前市值 ${fixed(data.market_value_usdt)} + 已提出 ${fixed(data.withdrawn_usdt)} − 累计投入 ${fixed(data.contributed_usdt)}（USDT）`;
+    if (cell.title !== title) cell.title = title;
   }
 
   const locationColors = { offline: "var(--accent)", okx: "var(--text)", binance: "var(--amber)" };
