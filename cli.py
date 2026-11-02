@@ -27,7 +27,7 @@ try:
     DENVER = ZoneInfo("America/Denver")
 except Exception:  # Windows has no time zone database unless the tzdata package is installed.
     DENVER = None
-SHIFT_START, SHIFT_END = 23, 7  # Beijing hours of the night shift
+SHIFT_START, SHIFT_END = 9, 17  # America/Denver local hours; DST follows denver_time.
 SETTINGS = ROOT / ".local" / "cli-settings.json"
 MAX_RESPONSE = 8 * 1024 * 1024
 STATUS = {"online": "已连接", "empty": "暂无记录", "stale": "数据延迟", "offline": "未连接"}
@@ -112,12 +112,11 @@ def utc_label(moment):
 
 
 def work_status(now=None):
-    """The night shift runs 23:00-07:00 Beijing time on Monday to Friday nights. A shift
-    belongs to the day it starts: Friday's ends on Saturday morning, and Saturday and
-    Sunday nights are free. Returns (working, label)."""
-    now = (now or dt.datetime.now(dt.timezone.utc)).astimezone(BEIJING)
-    started = now.date() if now.hour >= SHIFT_START else now.date() - dt.timedelta(days=1) if now.hour < SHIFT_END else None
-    if started is not None and started.weekday() < 5:
+    """Work 09:00 inclusive to 17:00 exclusive, Monday-Friday in America/Denver.
+    Denver's local calendar and automatic daylight saving time govern the schedule.
+    Returns (working, label)."""
+    now = denver_time(now or dt.datetime.now(dt.timezone.utc))
+    if now.weekday() < 5 and SHIFT_START <= now.hour < SHIFT_END:
         return True, "工作中"
     return False, "周末" if now.weekday() >= 5 else "休息"
 
@@ -268,16 +267,17 @@ class Terminal:
             self.out.line("本次设置已生效，暂时无法记住下次偏好。", "muted")
 
     def header(self, now=None):
-        now = (now or dt.datetime.now(dt.timezone.utc)).astimezone(BEIJING)
-        gmt, denver, delhi = now.astimezone(dt.timezone.utc), denver_time(now), now.astimezone(DELHI)
+        now = denver_time(now or dt.datetime.now(dt.timezone.utc))
+        gmt, beijing, delhi = now.astimezone(dt.timezone.utc), now.astimezone(BEIJING), now.astimezone(DELHI)
         self.out.box("XHY  /  个人终端", [
             "饮食日记  ·  加密资产  ·  比特币价格警报",
-            f"北京 UTC+8  {now:%Y-%m-%d %H:%M:%S}",
+            f"丹佛 {utc_label(now)}  {now:%Y-%m-%d %H:%M:%S}",
+            f"北京 UTC+8  {beijing:%Y-%m-%d %H:%M:%S}",
             f"GMT / UTC+0  {gmt:%Y-%m-%d %H:%M:%S}",
-            f"丹佛 {utc_label(denver)}  {denver:%Y-%m-%d %H:%M:%S}",
             f"新德里 UTC+5:30  {delhi:%Y-%m-%d %H:%M:%S}",
-            f"夜班 北京时间 23:00–次日07:00 · 周一至周五 · {work_status(now)[1]}",
-            "常规作息 07:00 入睡，15:00–16:00 起床；饮食日记按 UTC+0 换日。",
+            f"工作 丹佛时间 09:00–17:00 · 周一至周五 · {work_status(now)[1]}",
+            "America/Denver · 自动切换夏令时",
+            "常规作息（北京时间）07:00 入睡，15:00–16:00 起床；饮食日记按 UTC+0 换日。",
         ])
 
     def read_diary(self):

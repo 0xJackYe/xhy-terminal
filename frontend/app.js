@@ -130,28 +130,11 @@
     }).catch(() => {});
   }
 
-  // The night shift runs 23:00–07:00 Beijing time on Monday to Friday nights
-  // (09:00–17:00 in Denver while it keeps daylight time). A shift belongs to the
-  // day it starts: Friday's ends on Saturday morning, and Saturday and Sunday
-  // nights are free.
-  const SHIFT_START = 23 * 3600, SHIFT_END = 7 * 3600, DAY = 86400;
-  const workday = (day) => day >= 1 && day <= 5;
+  const workZone = window.XHYWorkSchedule.TIME_ZONE;
   function updateWorkSchedule(now) {
-    const beijing = new Date(now.getTime() + 8 * 3600000);
-    const seconds = beijing.getUTCHours() * 3600 + beijing.getUTCMinutes() * 60 + beijing.getUTCSeconds();
-    const day = beijing.getUTCDay();
-    const started = seconds >= SHIFT_START ? day : seconds < SHIFT_END ? (day + 6) % 7 : -1;
-    const working = started >= 0 && workday(started);
-    let remaining;
-    if (working) remaining = (SHIFT_END - seconds + DAY) % DAY;
-    else {
-      // The next shift starts at 23:00 on the first workday from today.
-      let ahead = seconds < SHIFT_START ? 0 : 1;
-      while (!workday((day + ahead) % 7)) ahead++;
-      remaining = ahead * DAY + SHIFT_START - seconds;
-    }
-    const days = Math.floor(remaining / DAY), hours = Math.floor(remaining % DAY / 3600), minutes = Math.floor(remaining % 3600 / 60);
-    text("work-status", working ? "工作中" : day === 0 || day === 6 ? "周末" : "休息时间");
+    const { working, label, remainingSeconds: remaining } = window.XHYWorkSchedule.scheduleAt(now);
+    const days = Math.floor(remaining / 86400), hours = Math.floor(remaining % 86400 / 3600), minutes = Math.floor(remaining % 3600 / 60);
+    text("work-status", label);
     text("work-countdown", `${working ? "距下班" : "距开工"} ${days ? `${days} 天 ${hours} 小时` : `${hours} 小时 ${String(minutes).padStart(2, "0")} 分`}`);
     setData($("work-dot"), "working", working);
   }
@@ -166,9 +149,9 @@
   // Header clocks. Denver follows its daylight-saving changes (UTC−6 in
   // summer, UTC−7 in winter); New Delhi stays at UTC+5:30.
   const clocks = [
+    { id: "denver-clock", zone: workZone, name: "丹佛时间 · 工作时区" },
     { id: "clock", zone, name: "北京时间" },
     { id: "gmt-clock", zone: "UTC", name: "格林尼治时间" },
-    { id: "denver-clock", zone: "America/Denver", name: "丹佛时间" },
     { id: "delhi-clock", zone: "Asia/Kolkata", name: "新德里时间" },
   ];
   let titledMinute = -1;
@@ -188,7 +171,7 @@
         if (element.title !== title) element.title = title;
       }
     }
-    text("today", dateFormat("today", "zh-CN", { timeZone: zone, month: "long", day: "numeric", weekday: "short" }).format(now));
+    text("today", dateFormat("today", "zh-CN", { timeZone: workZone, month: "long", day: "numeric", weekday: "short" }).format(now));
     updateWorkSchedule(now);
     watchLive();
   }

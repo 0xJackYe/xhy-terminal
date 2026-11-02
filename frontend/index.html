@@ -8,7 +8,7 @@
 <script>(()=>{let t;try{t=localStorage.getItem('xhy-theme')}catch{}if(t!=='light'&&t!=='dark')t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.dataset.theme=t;document.querySelector('meta[name="theme-color"]').content=t==='dark'?'#0e0e0d':'#f6f5f2'})();</script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23191816'/%3E%3Cpath d='M9 11l5 5-5 5' stroke='%23f2f0eb' stroke-width='2.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3Crect x='16' y='19.5' width='8' height='2.4' rx='1.2' fill='%23ff7a3d'/%3E%3C/svg%3E">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-<link rel="stylesheet" href="/styles.css"><script src="/theme-bridge.js" defer></script><script src="/app.js" defer></script>
+<link rel="stylesheet" href="/styles.css"><script src="/theme-bridge.js" defer></script><script src="/work-schedule.js" defer></script><script src="/app.js" defer></script>
 </head>
 <body>
 <a class="skip-link" href="#main">跳到主要内容</a>
@@ -17,12 +17,12 @@
     <a class="wordmark" href="#overview" aria-label="XHY 个人终端首页"><span class="wordmark-prompt" aria-hidden="true">~/</span>xhy<span class="wordmark-caret" aria-hidden="true"></span></a>
     <nav class="navigation segmented" aria-label="主导航"><a href="#overview" data-nav="overview" aria-current="page" aria-keyshortcuts="1"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="2"/><rect x="13.5" y="3.5" width="7" height="7" rx="2"/><rect x="3.5" y="13.5" width="7" height="7" rx="2"/><rect x="13.5" y="13.5" width="7" height="7" rx="2"/></svg><span>总览</span></a><a href="#wallet" data-nav="wallet" aria-keyshortcuts="2"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5.5" width="18" height="14" rx="3.5"/><path d="M3 10h18M15.5 15h2.5"/></svg><span><span class="nav-long">加密</span>资产</span></a><a href="#travel" data-nav="travel" aria-keyshortcuts="3"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.6 21.2 9.5 17.4l-3.9-1.2.9-.9 3.2.3 2.6-2.6-6.5-3.9 1.2-1.2 7.8 1.6 3.4-3.4c.8-.8 2-.9 2.7-.2.7.7.6 1.9-.2 2.7l-3.4 3.4 1.6 7.8-1.2 1.2-3.9-6.5-2.6 2.6.3 3.2Z"/></svg><span><span class="nav-long">快速</span>出境</span></a></nav>
     <div class="utility" aria-label="时间与工作状态">
-      <span class="today-label" id="today"></span>
+      <span class="today-label" id="today" title="丹佛当地日期"></span>
+      <span class="clock"><span class="clock-label">丹佛</span><time id="denver-clock">--:--:--</time></span>
       <span class="clock"><span class="clock-label">北京</span><time id="clock">--:--:--</time></span>
       <span class="clock"><span class="clock-label">GMT</span><time id="gmt-clock">--:--:--</time></span>
-      <span class="clock"><span class="clock-label">丹佛</span><time id="denver-clock">--:--:--</time></span>
       <span class="clock"><span class="clock-label">新德里</span><time id="delhi-clock">--:--:--</time></span>
-      <span class="schedule-current" title="夜班：北京时间 23:00–次日 07:00，周一至周五"><span id="work-dot" class="status-dot" data-working="false" aria-hidden="true"></span><span id="work-status">休息时间</span><span id="work-countdown" class="work-countdown">--</span></span>
+      <span class="schedule-current" title="工作时间：丹佛当地周一至周五 09:00–17:00，夏冬令时自动同步"><span id="work-dot" class="status-dot" data-working="false" aria-hidden="true"></span><span id="work-status">休息时间</span><span id="work-countdown" class="work-countdown">--</span></span>
     </div>
     <div class="header-actions">
       <details class="sync-menu" id="sync-menu">
