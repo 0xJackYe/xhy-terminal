@@ -163,7 +163,7 @@ async function fixture(){
   DB.set('okx',{configured:true,connection_id:account.slice(0,24),status:'connected',last_success_at:iso(NOW),assets:[],summary:{}});
   DB.set('historical_rates',{});
   for(const r of original)DB.trades.set(r.id,{id:r.id,bill_id:r.bill_id,at_ms:r.at_ms,record_json:JSON.stringify(r)});
-  const calls=[];let unsafe=false,binance={wallets:wallets()};
+  const calls=[];let unsafe=false,binance={wallets:wallets()},price='120';
   async function fetcher(value,options={}){
     const u=new URL(value);calls.push({url:u,options});
     assert.equal(options.method,['/sapi/v3/asset/getUserAsset','/sapi/v1/asset/get-funding-asset'].includes(u.pathname)?'POST':'GET');
@@ -172,8 +172,8 @@ async function fixture(){
       if(u.pathname==='/api/v5/account/config')return ok([{perm:unsafe?'read_only,trade':'read_only'}]);
       if(u.pathname==='/api/v5/account/balance')return ok([{totalEq:'120',details:[{ccy:'BTC',cashBal:'1',eq:'1',liab:'0',availBal:'1'}]}]);
       if(u.pathname==='/api/v5/asset/balances')return ok([]);
-      if(u.pathname==='/api/v5/market/tickers')return ok([{instId:'BTC-USDT',last:'120',ts:String(NOW)}]);
-      if(u.pathname==='/api/v5/market/index-tickers')return ok([{instId:'BTC-USD',idxPx:'120',ts:String(NOW)}]);
+      if(u.pathname==='/api/v5/market/tickers')return ok([{instId:'BTC-USDT',last:price,ts:String(NOW)}]);
+      if(u.pathname==='/api/v5/market/index-tickers')return ok([{instId:'BTC-USD',idxPx:price,ts:String(NOW)}]);
       if(u.pathname==='/api/v5/account/bills-archive')return ok(bills());
     }
     if(u.hostname==='api-gcp.binance.com'){
@@ -187,7 +187,7 @@ async function fixture(){
     if(u.hostname==='api.frankfurter.dev')return new Response(JSON.stringify([{base:'USD',quote:'CNY',date:'2026-10-26',rate:7.2}]));
     throw new Error('unexpected request '+u.hostname+u.pathname);
   }
-  return {env,DB,account,fetcher,calls,setUnsafe:value=>{unsafe=value;},setBinance:value=>{binance=value;}};
+  return {env,DB,account,fetcher,calls,setUnsafe:value=>{unsafe=value;},setBinance:value=>{binance=value;},setPrice:value=>{price=value;}};
 }
 test('scheduled finance sync ingests DCA once, persists cost and serves all existing UI routes',async()=>{
   const f=await fixture(),result=await syncFinance(f.env,{fetch:f.fetcher,now:()=>NOW,force:true});assert.equal(result.ok,true);
@@ -217,16 +217,15 @@ test('a non-read-only key fails before balance and leaves the verified book inta
   const f=await fixture();f.setUnsafe(true);const result=await syncFinance(f.env,{fetch:f.fetcher,now:()=>NOW,force:true});assert.equal(result.ok,false);assert.equal(result.code,'read_only_required');assert.equal(f.calls.some(r=>r.url.pathname.endsWith('/balance')),false);assert.equal(f.DB.get('cost_book').cost,'100');
 });
 
-test('a fresh DCA and balance sync preserve the last verified price-change period without presenting it as recalculated',async()=>{
+test('a frozen imported price-change result is never shown as current; periods come from the balance history',async()=>{
   const f=await fixture(),end=NOW-86400000;
   f.DB.set('combined',{history:[],pnl:{week:{btc:null,usd:'12.34567890123456789',cny:'88.88888888888888888',start_at:iso(end-7*86400000),end_at:iso(end),reason:''}}});
   const synced=await syncFinance(f.env,{fetch:f.fetcher,now:()=>NOW,force:true});assert.equal(synced.ok,true);
   const response=await handleFinance(new Request('https://x.pages.dev/api/wallet/combined'),f.env,{}),view=await response.json();
-  assert.equal(view.pnl.week.usd,'12.34567890123456789');assert.equal(view.pnl.week.cny,'88.88888888888888888');
-  assert.equal(view.pnl.week.end_at,iso(end));assert.equal(view.pnl.week.as_of,iso(end));
-  assert.equal(view.pnl.week.status,'stale');assert.match(view.pnl.week.reason,/历史核算截至.*后续流水待核对/);
-  assert.equal(view.pnl.today.usd,null);assert.equal(view.pnl.today.end_at,null);
-  assert.equal(view.lifetime_pnl.status,'fresh');assert.equal(view.lifetime_pnl.metrics.remaining_cost,'160');
+  for(const key of ['week','month','days90']){
+    assert.equal(view.pnl[key].usd,null,key);assert.equal(view.pnl[key].cny,null,key);assert.equal(view.pnl[key].status,'unavailable',key);
+    assert.match(view.pnl[key].reason,/尚未覆盖完整周期/,key);
+  }
 });
 test('provider/network failure retains cache with explicit stale state',async()=>{
   const f=await fixture();await syncFinance(f.env,{fetch:f.fetcher,now:()=>NOW,force:true});f.DB.kv.delete('sync_lock');
@@ -245,4 +244,20 @@ test('mutation/path/query boundaries reject unsupported operations without netwo
   assert.equal((await handleFinance(new Request('https://x.pages.dev/api/wallet/okx/config',{method:'POST',body:'{}'}),f.env,{})).status,403);
   assert.equal((await handleFinance(new Request('https://x.pages.dev/api/wallet/proxy?resource=address&address=evil'),f.env,{})).status,400);
   assert.equal(await handleFinance(new Request('https://x.pages.dev/api/not-a-wallet'),f.env,{}),null);
+});
+test('the wallet price-change profit for today follows the price on the BTC held, and the page never receives the internal totals',async()=>{
+  const f=await fixture(),start=Math.floor((NOW+28800000)/86400000)*86400000-28800000;
+  // A snapshot from just before Beijing midnight, saved before running totals existed.
+  f.DB.set('combined',{ok:true,updated_at:iso(start-60000),history:[{timestamp:iso(start-60000),btc:'1.5',usd:'180',cny:'1296'}],pnl:{}});
+  assert.equal((await syncFinance(f.env,{fetch:f.fetcher,now:()=>NOW,force:true})).ok,true);
+  let today=f.DB.get('combined').pnl.today;assert.equal(today.status,'estimated');assert.equal(today.usd,'0');assert.equal(today.cny,'0');
+  // BTC rises from 120 to 130 on the 1.5 BTC held.
+  f.setPrice('130');f.DB.kv.delete('sync_lock');
+  assert.equal((await syncFinance(f.env,{fetch:f.fetcher,now:()=>NOW+120000,force:true})).ok,true);
+  today=f.DB.get('combined').pnl.today;assert.equal(today.usd,'15');assert.equal(today.cny,'108');
+  for(const key of ['week','month','days90'])assert.equal(f.DB.get('combined').pnl[key].status,'unavailable');
+  const response=await handleFinance(new Request('https://x.pages.dev/api/wallet/combined'),f.env,{}),body=await response.json();
+  assert.equal(body.pnl.today.usd,'15');assert.ok(body.history.length>=2);
+  assert.ok(body.history.every(point=>!['pnl_usd','pnl_cny','price_usd','fx'].some(field=>field in point)));
+  assert.ok(f.DB.get('combined').history.every(point=>'pnl_usd' in point),'the server keeps the running totals');
 });

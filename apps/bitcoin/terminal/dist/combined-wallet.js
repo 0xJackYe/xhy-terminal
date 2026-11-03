@@ -235,6 +235,8 @@
       node('combinedPnl').className=mode==='btc'||number===null?'':number<0?'negative':'positive';
       node('combinedPnlNote').textContent=mode==='btc'?'价差盈亏不以 BTC 计价':pnl&&pnl.reason||'剔除转账 · 含汇率变动';
       node('combinedPnlDates').textContent=pnl&&timestamp(pnl.start_at)!==null&&timestamp(pnl.end_at)!==null?beijing(pnl.start_at)+' — '+beijing(pnl.end_at)+' · 北京时间':'';
+      // The portal hides the note and dates; the value carries them as a tooltip.
+      node('combinedPnl').title=[node('combinedPnlNote').textContent,node('combinedPnlDates').textContent].filter(Boolean).join(' · ');
     }
     function renderLifetime(){
       const metrics=lifetime&&lifetime.metrics||{},kind=failed||lifetimeFailed?(hasLifetimeMetrics(lifetime)?'stale':'unavailable'):lifetime?lifetime.status:'loading';

@@ -1,6 +1,6 @@
 import {D,dec,txt,iso,beijingDate,normalizeBills,compareTrades,buildCostBook,appendCostBook,costView,positionView} from './cost-book.mjs';
 import {FinanceError,ExchangeClient,connectionIdentity,validateCredentials,encryptConfiguration,decryptConfiguration,normalizeOKX,normalizeBinance,binanceDetailFallbacks,COIN_CODE} from './exchange.mjs';
-import {preserveHistoricalPricePeriods} from './finance-price-periods.mjs';
+import {indexPriceChange,pricePeriods,PRICE_INDEX_FIELDS} from './finance-price-periods.mjs';
 import {appendRemainingCapital,buildRemainingCapital} from './annualized-math.mjs';
 import {syncBinanceTrades,BINANCE_TRADES_META} from './binance-trades.mjs';
 
@@ -242,15 +242,18 @@ export async function syncFinance(env,{fetch:fetcher=globalThis.fetch,now:clock=
     }
     let combined=emptyCombined(pnl);
     if(holdings){
-      const usd=dec(totalBTC).mul(btcUSD),point={timestamp:iso(clock()),btc:totalBTC,usd:txt(usd),cny:fx?txt(usd.mul(fx.rate)):null};
+      const usd=dec(totalBTC).mul(btcUSD),point={timestamp:iso(clock()),btc:totalBTC,usd:txt(usd),cny:fx?txt(usd.mul(fx.rate)):null,price_usd:btcUSD,fx:fx?.rate||null};
       const prior=Array.isArray(oldCombined.history)?oldCombined.history.filter(p=>Number.isFinite(Date.parse(p.timestamp))&&Date.parse(p.timestamp)>=clock()-365*86400000):[];
       // Preserve verified imported history, appending actual new observations.
       const history=[...prior];if(!history.length||clock()-Date.parse(history.at(-1).timestamp)>=60000)history.push(point);else history[history.length-1]=point;
-      const trimmed=history.length>2500?history.filter((_,i)=>i===history.length-1||i%Math.ceil(history.length/2400)===0):history;
-      const periods=preserveHistoricalPricePeriods(oldCombined.pnl,clock());
+      // Running price-change totals are added before thinning, so dropping old
+      // snapshots never changes a period's result.
+      const indexed=indexPriceChange(history);
+      const trimmed=indexed.length>2500?indexed.filter((_,i)=>i===indexed.length-1||i%Math.ceil(indexed.length/2400)===0):indexed;
+      const periods=pricePeriods(trimmed,clock());
       const sourcesBTC=[{id:'offline',label:'离线钱包',btc:chain.btc,status:chainError?'stale':'fresh',updated_at:chain.updated_at},{id:'okx',label:'欧易',btc:okx.summary.btc_holdings_total,status:'fresh',updated_at:okx.last_success_at}];
       if(binanceBTC!=null)sourcesBTC.push({id:'binance',label:'币安',btc:binanceBTC,status:binanceError?'stale':'fresh',updated_at:binance.observed_at});
-      combined={ok:true,stale:!!chainError||!!binanceError,updated_at:iso(clock()),goal_btc:'1',totals:{btc:totalBTC,usd:txt(usd),cny:fx?txt(usd.mul(fx.rate)):null},sources:sourcesBTC,quotes:{btc_usd:btcUSD,usd_cny:fx?.rate||null},history:trimmed,pnl:periods,coverage:{complete:false,note:'已保留迁移前的真实余额历史；云端持续追加新快照。价格变动盈亏保留原核算区间，并注明历史截止时间。'},lifetime_pnl:pnl};
+      combined={ok:true,stale:!!chainError||!!binanceError,updated_at:iso(clock()),goal_btc:'1',totals:{btc:totalBTC,usd:txt(usd),cny:fx?txt(usd.mul(fx.rate)):null},sources:sourcesBTC,quotes:{btc_usd:btcUSD,usd_cny:fx?.rate||null},history:trimmed,pnl:periods,coverage:{complete:false,note:'已保留迁移前的真实余额历史；云端每分钟追加新快照。价格变动盈亏按快照间的价格变化计算，买入、转入和转出不计入盈亏。'},lifetime_pnl:pnl};
     }
     const currentCredentials=await credentials(env,'okx');if(await connectionIdentity(currentCredentials)!==account)throw new FinanceError('account_changed');
     const write=[['okx',okx],['portfolio',portfolio],['combined',combined],['btc_cost',costPublic],['btc_pnl',pnl],['market',{price_usdt:price,btc_usd:btcUSD,usd_cny:fx?.rate||null,updated_at:iso(clock())}],['sync_status',{ok:true,last_success_ms:clock(),last_attempt_ms:now,cost_error:costError||null,chain_error:chainError,binance_error:binanceError,binance_trades_error:binanceTradesError}]];
@@ -283,7 +286,12 @@ async function cachedPublic(env,key){
     else if(key==='btc_cost'||key==='btc_pnl'){value.status='stale';value.error=status?.error||'云端持仓快照待更新。';}
     else value.stale=true;
   }
-  if(key==='combined')value.lifetime_pnl=await cachedPublic(env,'btc_pnl');
+  if(key==='combined'){
+    value.lifetime_pnl=await cachedPublic(env,'btc_pnl');
+    // The running totals behind 价格变动盈亏 stay on the server; the chart
+    // needs only each snapshot's time, BTC and value.
+    if(Array.isArray(value.history))value.history=value.history.map(point=>{const copy={...point};for(const field of PRICE_INDEX_FIELDS)delete copy[field];return copy;});
+  }
   return value;
 }
 
