@@ -715,6 +715,12 @@
       if (demo) data = (await import("/demo.js")).demoOverview();
       else {
         const response = await fetch("/api/overview", { headers: { Accept: "application/json" }, cache: "no-store", signal: controller.signal });
+        // The cloud login lasts seven days. When it has expired, sign in again
+        // and come back here, instead of keeping old numbers on screen.
+        if (response.status === 401 && !local) {
+          location.assign(`/auth/login?returnTo=${encodeURIComponent(location.pathname + location.search + location.hash)}`);
+          return;
+        }
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         data = await response.json();
       }
