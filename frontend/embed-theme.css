@@ -7,6 +7,8 @@ html[data-xhy-theme] {
   --xhy-text: #191816;
   --xhy-muted: #5f5c55;
   --xhy-line: #e6e3dc;
+  --xhy-line-strong: #d6d2c9;
+  --xhy-faint: #736f68;
   --xhy-accent: #191816;
   --xhy-accent-soft: #eeece7;
   --xhy-button: #191816;
@@ -40,6 +42,8 @@ html[data-xhy-theme="dark"] {
   --xhy-text: #f2f0eb;
   --xhy-muted: #b0ada5;
   --xhy-line: #2c2b28;
+  --xhy-line-strong: #3a3934;
+  --xhy-faint: #8c8981;
   --xhy-accent: #f2f0eb;
   --xhy-accent-soft: #21211e;
   --xhy-button: #f2f0eb;

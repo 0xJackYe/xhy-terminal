@@ -205,7 +205,11 @@
       root.dataset.xhyTheme = theme;
       root.dataset.xhySurface = /^\/travel(?:\.html)?$/.test(doc.location.pathname) ? "travel" : /^\/diet(?:\/|$)/.test(doc.location.pathname) ? "diet" : /\/wallet\.html$/.test(doc.location.pathname) ? "wallet" : "btc";
       root.style.colorScheme = theme;
-      if (doc.head && !doc.querySelector('link[data-xhy-embed-theme]')) {
+      // The portal's phone interface shows the page title itself.
+      if (embedded && document.documentElement.dataset.ui) root.dataset.xhyUi = document.documentElement.dataset.ui;
+      // The travel page is built on the portal's own design and needs no
+      // restyling; the older Diet and Bitcoin apps get the shared embed theme.
+      if (doc.head && root.dataset.xhySurface !== "travel" && !doc.querySelector('link[data-xhy-embed-theme]')) {
         // embed-dense.css only applies inside the portal frame: it re-flows each
         // page so its content fits one window under the shell header.
         for (const href of ["/embed-theme.css", "/embed-dense.css"]) {

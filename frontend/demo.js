@@ -34,6 +34,19 @@ function chart(now) {
   return history.slice(-121);
 }
 
+// Thirty days of the BTC held, valued every eight hours: two buys step the
+// balance up while the price wanders towards today's.
+const HELD = 0.61234567;
+const trend = (() => {
+  const points = [], steps = 90;
+  for (let i = 0; i < steps; i++) {
+    const held = i < 30 ? 0.55234567 : i < 64 ? 0.58234567 : HELD;
+    const value = 61800 + (open - 61800) * i / steps + Math.sin(i / 7) * 1400 + Math.sin(i / 2.3) * 380;
+    points.push([started - (steps - i) * 8 * 3600000, Math.round(held * value * 100) / 100]);
+  }
+  return points;
+})();
+
 const recent = [5, 2, 0].map((daysAgo, index) => ({
   kind: "threshold", metric: "daily_change", threshold_pct: [3.5, 2.5, 2.5][index],
   change_pct: [-3.52, 2.6, 2.51][index], price: [63120.2, 61001.2, 67698.4][index],
@@ -60,7 +73,9 @@ export function demoOverview() {
     services: { btc: { status: "online" } },
     wallet: {
       status: "online", updatedAt, complete: true, stale: false,
-      totalUsd: 49432.17, totalCny: 351957, btcHoldings: 0.61234567, btcHoldingsStale: false,
+      totalUsd: 49432.17, totalCny: 351957, btcHoldings: HELD, btcHoldingsStale: false,
+      trend: [...trend, [now, Math.round(HELD * price * 100) / 100]],
+      priceChange: { usd: (HELD * (price - open)).toFixed(2), cny: (HELD * (price - open) * 7.12).toFixed(2), reason: null },
       pnl: { status: "fresh", averageCost: "58210.44", price: price.toFixed(2), unrealized: ((price - 58210.44) * 0.61234567).toFixed(2), returnPct: ((price / 58210.44 - 1) * 100).toFixed(2) },
       totalProfit: { status: "estimated", profit_usdt: (49432.17 + 1200 - 41850).toFixed(2), contributed_usdt: "41850.00", withdrawn_usdt: "1200.00", market_value_usdt: "49432.17" },
       assets: [

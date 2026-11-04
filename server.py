@@ -135,7 +135,38 @@ def wallet_overview(portfolio, combined):
             "thresholdUsd": portfolio.get("threshold_usd"), "excludedUsd": portfolio.get("excluded_usd"),
             "unpricedCurrencies": portfolio.get("unpriced_currencies", []),
             "liabilitiesUsd": portfolio.get("liabilities_usd"), "conversionQuotes": portfolio.get("conversion_quotes", {}),
-            "pnl": lifetime_summary(combined.get("lifetime_pnl") if isinstance(combined, dict) else None)}
+            "pnl": lifetime_summary(combined.get("lifetime_pnl") if isinstance(combined, dict) else None),
+            "trend": balance_trend(combined.get("history") if isinstance(combined, dict) else None),
+            "priceChange": price_change(((combined or {}).get("pnl") or {}).get("today") if isinstance(combined, dict) else None)}
+
+
+def balance_trend(history, days=30, limit=90, now=None):
+    """The wallet card's balance line: BTC holdings' USD value over 30 days, ~90 points."""
+    now = time.time() * 1000 if now is None else now
+    points = []
+    for row in history or []:
+        try:
+            at = dt.datetime.fromisoformat(str(row["timestamp"]).replace("Z", "+00:00")).timestamp() * 1000
+            value = float(row["usd"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if math.isfinite(at) and math.isfinite(value) and value >= 0 and now - days * 86400000 <= at <= now:
+            points.append([int(at), value])
+    points.sort()
+    step = max(1, math.ceil(len(points) / limit))
+    sampled = points[::step]
+    if points and sampled[-1] is not points[-1]:
+        sampled.append(points[-1])
+    return sampled
+
+
+def price_change(row):
+    if not isinstance(row, dict):
+        return None
+    text = lambda value: value if isinstance(value, str) else None
+    reason = row.get("reason")
+    return {"usd": text(row.get("usd")), "cny": text(row.get("cny")),
+            "reason": reason[:200] if isinstance(reason, str) else None}
 
 
 def lifetime_summary(lifetime):

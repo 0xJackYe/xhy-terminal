@@ -60,16 +60,19 @@
         <p class="metric-context" id="wallet-cny">正在读取钱包估值</p>
       </div>
       <dl class="stat-grid">
-        <div><dt id="wallet-btc-label">BTC 持仓</dt><dd class="mono"><span id="wallet-btc">—</span><small>BTC</small></dd></div>
+        <div><dt id="wallet-btc-label">BTC 持仓</dt><dd><span id="wallet-btc">—</span><small>BTC</small></dd></div>
         <div><dt>持仓均价 · USDT</dt><dd><span id="wallet-avg-cost">—</span></dd></div>
         <div><dt>BTC 浮盈 · USDT</dt><dd><span id="wallet-unrealized">—</span><small id="wallet-return"></small></dd></div>
         <div id="wallet-total-cell"><dt>累计盈亏 · USDT</dt><dd><span id="wallet-total-profit">—</span><small id="wallet-total-return"></small></dd></div>
       </dl>
+      <div class="section-label"><span>BTC 余额走势 · <span id="wallet-trend-span">30 天</span></span><span class="trend-change" id="wallet-price-change" title="北京时间今日的价格变动盈亏：持有的 BTC × 今日价格变化，买入与转账不计入">今日价格盈亏<strong id="wallet-price-change-value">—</strong></span></div>
+      <div class="sparkline wallet-trend" id="wallet-trend" role="img" aria-label="近 30 天 BTC 余额市值走势" data-empty="true"><svg viewBox="0 0 300 80" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="trend-fill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity=".16"/><stop offset="1" stop-color="currentColor" stop-opacity="0"/></linearGradient></defs><path class="spark-area" fill="url(#trend-fill)"/><path class="spark-line" vector-effect="non-scaling-stroke"/></svg><span class="spark-caption" id="wallet-trend-scale" aria-hidden="true"></span></div>
       <div class="section-label"><span>存放位置</span><span id="wallet-location-note"></span></div>
       <div class="location-split" id="wallet-locations" aria-hidden="true"></div>
       <ul class="location-legend" id="wallet-location-legend"><li class="inline-empty">正在读取</li></ul>
       <div class="section-label"><span>币种分布</span><span id="wallet-asset-count"></span></div>
       <div id="wallet-assets" class="asset-list"><p class="inline-empty">正在读取持仓</p></div>
+      <div class="goal-row" id="wallet-goal-row" hidden><span>攒到 1 BTC</span><span class="goal-track" id="wallet-goal-track" role="progressbar" aria-label="攒到 1 BTC" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="wallet-goal-fill"></span></span><strong id="wallet-goal">—</strong></div>
       <p class="card-note" id="wallet-note" hidden></p><span id="wallet-module-updated" class="sr-only"></span>
     </article>
     <article class="card card-alerts" style="--i:1" aria-labelledby="alerts-title">

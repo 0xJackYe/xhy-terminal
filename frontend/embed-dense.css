@@ -13,6 +13,29 @@
 :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(.button, .primary-button, .secondary-button) { min-height: 30px !important; padding-block: 4px; }
 :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(input, select):not([type="checkbox"]):not([type="radio"]) { min-height: 30px; height: 30px; }
 
+/* ---------- Bitcoin: controls in the portal's language ----------
+   A solid pill for the main action, an outlined pill for secondary ones and
+   quiet ghost pills for text actions and every panel-heading action (refresh,
+   connection settings, show records), whatever class the app gave them. A
+   disabled text action reports a state, such as blocked notifications, so it
+   reads as text rather than as a button. */
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(.primary-button, .secondary-button, .text-button) { display: inline-flex; align-items: center; justify-content: center; gap: 4px; min-height: 30px !important; padding: 4px 14px !important; border-radius: 999px !important; font-size: 12.5px !important; font-weight: 550; line-height: 1.3; text-decoration: none !important; white-space: nowrap; box-shadow: none !important; transition: opacity .18s ease, color .18s ease, border-color .18s ease, background-color .18s ease, transform .18s cubic-bezier(.22,1,.36,1); }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .primary-button { border: 1px solid transparent !important; background: var(--xhy-button) !important; color: var(--xhy-on-button) !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .primary-button:hover:not(:disabled) { opacity: .88; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .secondary-button { border: 1px solid var(--xhy-line-strong) !important; background: transparent !important; color: var(--xhy-text) !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .secondary-button:is(:hover:not(:disabled), [aria-pressed="true"]) { border-color: var(--xhy-faint) !important; background: var(--xhy-soft) !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .text-button { border: 1px solid transparent !important; background: transparent !important; color: var(--xhy-muted) !important; padding-inline: 10px !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .text-button:is(:hover:not(:disabled), [aria-expanded="true"]) { background: var(--xhy-soft) !important; color: var(--xhy-text) !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(.primary-button, .secondary-button, .text-button):active:not(:disabled) { transform: scale(.97); }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(.primary-button, .secondary-button):disabled { opacity: .5; cursor: progress; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .text-button:disabled { padding-inline: 4px !important; background: transparent !important; color: var(--xhy-faint) !important; opacity: 1 !important; cursor: default; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(.combined-heading, .btc-cost-heading, .portfolio-heading, .okx-heading, .section-heading) :is(.secondary-button, .text-button) { min-height: 26px !important; padding: 2px 10px !important; border-color: transparent !important; background: transparent !important; color: var(--xhy-muted) !important; font-size: 12px !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(.combined-heading, .btc-cost-heading, .portfolio-heading, .okx-heading, .section-heading) :is(.secondary-button, .text-button):is(:hover:not(:disabled), [aria-expanded="true"]) { background: var(--xhy-soft) !important; color: var(--xhy-text) !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .notification-actions { align-items: center; gap: 4px 6px !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .notification-actions select { height: 30px; min-height: 30px; padding: 0 10px; border: 1px solid var(--xhy-line-strong) !important; border-radius: 999px !important; background: transparent !important; color: var(--xhy-text); font-size: 12.5px !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(.alarm-actions, .email-actions) { align-items: center; gap: 8px !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .alarm-actions .primary-button { flex: 1; }
+
 /* ---------- Bitcoin: price alerts ---------- */
 :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #price-alert { min-height: 0; padding-block: 6px !important; }
 :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #connectionNotice { margin: 0 0 6px; padding: 6px 12px; }
@@ -192,3 +215,13 @@
 :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(.combined-state, .btc-cost-state, .okx-state, .portfolio-state):is(.stale, .unavailable, .error) { display: none !important; }
 :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #cryptoPortfolioPanel:has(.portfolio-state.stale) .portfolio-message { display: none !important; }
 :root[data-xhy-embedded="true"][data-xhy-surface="wallet"] body .wallet-sync[data-state="error"], :root[data-xhy-embedded="true"][data-xhy-surface="wallet"] body .wallet-notes:has(> .wallet-sync[data-state="error"]:only-child) { display: none !important; }
+
+/* ---------- Bitcoin: segmented choices ----------
+   The balance chart's currency and range and the allocation view switch use
+   the portal's own segmented control: a soft track with the chosen option
+   raised. The period select beside the price-change profit is a pill too. */
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(.combined-controls > [role="group"], .portfolio-tabs) { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 2px; border: 0 !important; border-radius: 999px !important; background: var(--xhy-soft) !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(.combined-controls button, .portfolio-tabs button) { min-height: 24px !important; padding: 2px 10px !important; border: 0 !important; border-radius: 999px !important; background: transparent !important; color: var(--xhy-muted) !important; font-size: 12px !important; font-weight: 500; box-shadow: none !important; transition: background-color .18s ease, color .18s ease; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(.combined-controls button, .portfolio-tabs button):hover:not([aria-pressed="true"]) { color: var(--xhy-text) !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(.combined-controls button, .portfolio-tabs button)[aria-pressed="true"] { background: var(--xhy-panel) !important; color: var(--xhy-text) !important; box-shadow: 0 1px 2px rgb(0 0 0 / .08), 0 0 0 1px var(--xhy-line) !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #combinedPnlPeriod { height: 28px; min-height: 28px; padding: 0 10px; border: 1px solid var(--xhy-line-strong) !important; border-radius: 999px !important; font-size: 12.5px !important; }

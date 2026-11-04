@@ -215,6 +215,9 @@
     const visible = assets.slice(0, 8);
     renderPnl(wallet.pnl);
     renderTotalProfit(wallet.totalProfit);
+    renderTrend(wallet.trend, wallet.status);
+    renderPriceChange(wallet.priceChange, wallet.status);
+    renderGoal(wallet.btcHoldings);
     renderLocations(Array.isArray(wallet.locations) ? wallet.locations : [], wallet);
     text("wallet-asset-count", assets.length ? `${number(assets.length)} 种${assets.length > visible.length ? ` · 显示前 ${visible.length}` : ""}` : "");
     const total = finite(wallet.totalUsd) && Number(wallet.totalUsd) > 0 ? Number(wallet.totalUsd) : assets.reduce((sum, asset) => sum + Math.max(0, Number(asset.usd_value)), 0);
@@ -297,6 +300,76 @@
       ? (typeof data.reason === "string" && data.reason ? data.reason : local ? "本机终端不核算累计盈亏，请在云端终端查看。" : "累计盈亏需要已核对的投入、提出记录。")
       : `当前市值 ${fixed(data.market_value_usdt)} + 已提出 ${fixed(data.withdrawn_usdt)} − 累计投入 ${fixed(data.contributed_usdt)}（USDT）`;
     if (cell.title !== title) cell.title = title;
+  }
+
+  // Thirty days of the BTC held, valued in USD. Buys and transfers move the line
+  // as much as the price does, so it is drawn in the brand colour rather than
+  // as profit (green) or loss (red).
+  let trendDrawn = false;
+  function renderTrend(points, status) {
+    const chart = $("wallet-trend");
+    const valid = (Array.isArray(points) ? points : []).filter((point) => Array.isArray(point) && finite(point[0]) && finite(point[1])).map((point) => [Number(point[0]), Number(point[1])]).sort((a, b) => a[0] - b[0]);
+    setData(chart, "empty", valid.length < 2);
+    if (valid.length < 2) {
+      text("wallet-trend-span", "30 天");
+      text("wallet-trend-scale", "");
+      setData(chart, "emptyText", status === "offline" ? "钱包连接恢复后显示走势" : "余额历史积累后显示走势");
+      const label = "BTC 余额走势：暂无足够的余额历史";
+      if (chart.getAttribute("aria-label") !== label) chart.setAttribute("aria-label", label);
+      return;
+    }
+    const values = valid.map((point) => point[1]);
+    const low = Math.min(...values), high = Math.max(...values);
+    // A flat balance sits in the middle of the chart instead of on its floor.
+    const pad = high > low ? 0 : Math.max(1, Math.abs(high) * .005);
+    const bottom = low - pad, span = high + pad - bottom;
+    const start = valid[0][0], end = valid[valid.length - 1][0], width = end - start || 1;
+    const x = (time) => ((time - start) / width * 300).toFixed(1);
+    const y = (value) => (76 - (value - bottom) / span * 72).toFixed(1);
+    const line = valid.map((point, index) => `${index ? "L" : "M"}${x(point[0])},${y(point[1])}`).join("");
+    const svg = chart.querySelector("svg"), path = svg.querySelector(".spark-line");
+    if (path.getAttribute("d") !== line) {
+      path.setAttribute("d", line);
+      svg.querySelector(".spark-area").setAttribute("d", `${line}L300,80L0,80Z`);
+    }
+    const days = (end - start) / 86400000;
+    const spanText = days >= 1.5 ? `${number(days, 0)} 天` : `${number(Math.max(1, days * 24), 0)} 小时`;
+    text("wallet-trend-span", spanText);
+    text("wallet-trend-scale", high > low ? `低 ${money(low, 0)} · 高 ${money(high, 0)}` : money(high, 0));
+    const label = `近 ${spanText} BTC 余额市值走势，从 ${money(values[0], 0)} 到 ${money(values[values.length - 1], 0)}`;
+    if (chart.getAttribute("aria-label") !== label) chart.setAttribute("aria-label", label);
+    if (!trendDrawn && !reducedMotion.matches) { chart.dataset.draw = "true"; trendDrawn = true; }
+  }
+
+  // Today's price-change profit (Beijing day): the BTC held × today's price
+  // move. Buys and transfers change the balance but are not counted.
+  const signedMoney = (value, symbol) => `${value > 0 ? "+" : value < 0 ? "−" : ""}${symbol}${fixed(Math.abs(value))}`;
+  function renderPriceChange(change, status) {
+    const data = change && typeof change === "object" ? change : {};
+    const usd = finite(data.usd) ? Number(data.usd) : null;
+    const value = $("wallet-price-change-value");
+    const className = tone(usd);
+    if (value.className !== className) value.className = className;
+    text("wallet-price-change-value", usd === null ? "—" : signedMoney(usd, "$"));
+    const parts = ["北京时间今日的价格变动盈亏：持有的 BTC × 今日价格变化，买入与转账不计入。"];
+    if (usd !== null && finite(data.cny)) parts.push(`人民币 ${signedMoney(Number(data.cny), "¥")}（含汇率变化）。`);
+    if (usd === null) parts.push(typeof data.reason === "string" && data.reason ? data.reason : status === "offline" ? "钱包服务暂未连接。" : local ? "本机终端在钱包页查看价格变动盈亏。" : "余额历史还没覆盖今天。");
+    const holder = $("wallet-price-change"), title = parts.join("");
+    if (holder.title !== title) holder.title = title;
+  }
+
+  // Progress towards 1 BTC, the same goal as the wallet page.
+  function renderGoal(holdings) {
+    const row = $("wallet-goal-row");
+    row.hidden = !finite(holdings);
+    if (!finite(holdings)) return;
+    const held = Math.max(0, Number(holdings)), ratio = clamp(held);
+    text("wallet-goal", held >= 1 ? "已达成" : `${fixed(ratio * 100, 2)}%`);
+    const track = $("wallet-goal-track"), now = (ratio * 100).toFixed(2);
+    if (track.getAttribute("aria-valuenow") !== now) track.setAttribute("aria-valuenow", now);
+    requestAnimationFrame(() => setStyle($("wallet-goal-fill"), "transform", `scaleX(${ratio})`));
+    const title = held >= 1 ? `已持有 ${number(held, 8)} BTC，达成 1 BTC 目标` : `已持有 ${number(held, 8)} BTC，还差 ${number(1 - held, 8)} BTC`;
+    if (row.title !== title) row.title = title;
   }
 
   const locationColors = { offline: "var(--accent)", okx: "var(--text)", binance: "var(--amber)" };

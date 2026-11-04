@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildOverview, priceChart } from '../overview.mjs';
+import { balanceTrend, buildOverview, priceChart } from '../overview.mjs';
 import { schemaSQL } from '../schema.mjs';
 import { createD1DiaryStore } from '../diary-store.mjs';
 import { testDatabase } from './auth-mail-fixture.mjs';
@@ -66,6 +66,39 @@ test('the intraday line keeps order and its latest point, and drops invalid poin
   assert.deepEqual(priceChart([{ time_ms: 3, price: 30 }, { time_ms: 1, price: 10 }, { time_ms: 2, price: 0 }, { time_ms: 'x', price: 5 }, null]), [[1, 10], [3, 30]]);
   const long = priceChart(Array.from({ length: 1441 }, (_, i) => ({ time_ms: i, price: 1 + i })));
   assert(long.length <= 122); assert.deepEqual(long.at(-1), [1440, 1441]); assert.deepEqual(long[0], [0, 1]);
+});
+
+test('the wallet balance line covers 30 days in at most ~90 points and ends on the latest snapshot', () => {
+  const now = Date.parse('2026-11-04T12:00:00Z'), at = ms => new Date(ms).toISOString();
+  assert.deepEqual(balanceTrend(null, now), []);
+  const history = [
+    { timestamp: at(now - 31 * DAY), usd: '1' },            // older than 30 days
+    { timestamp: at(now - 2 * DAY), usd: '120.5' },
+    { timestamp: 'not a date', usd: '5' }, { timestamp: at(now - DAY), usd: null }, { timestamp: at(now - DAY), usd: '-3' },
+    { timestamp: at(now - 3 * DAY), usd: '100' },            // out of order
+    { timestamp: at(now + 60000), usd: '999' },              // in the future
+    { timestamp: at(now), usd: '130' }, null];
+  assert.deepEqual(balanceTrend(history, now), [[now - 3 * DAY, 100], [now - 2 * DAY, 120.5], [now, 130]]);
+  const dense = Array.from({ length: 30 * 24 * 60 / 10 }, (_, i) => ({ timestamp: at(now - 30 * DAY + (i + 1) * 600000), usd: String(1000 + i) }));
+  const line = balanceTrend(dense, now);
+  assert(line.length <= 91); assert.deepEqual(line.at(-1), [now, 1000 + dense.length - 1]); assert.deepEqual(line[0], [now - 30 * DAY + 600000, 1000]);
+  assert(line.every((point, i) => !i || line[i - 1][0] < point[0]));
+});
+
+test('the overview wallet carries the balance line and today\'s price-change profit from the combined snapshot', async t => {
+  const env = testDatabase(schemaSQL), now = Date.now(), ctx = context(); t.after(() => env.sqlite.close()); cachedMarket(env, now);
+  const original = globalThis.fetch;
+  globalThis.fetch = async () => { throw Error('Cached overview must not request a model or exchange'); }; t.after(() => { globalThis.fetch = original; });
+  kv(env, 'finance_kv', 'portfolio', { complete: true, stale: false, updated_at: new Date(now).toISOString(), total_usd: '15000', assets: [], sources: [] }, now);
+  const history = [{ timestamp: new Date(now - DAY).toISOString(), btc: '0.17', usd: '13000' }, { timestamp: new Date(now).toISOString(), btc: '0.175', usd: '14000' }];
+  kv(env, 'finance_kv', 'combined', { totals: { btc: '0.175' }, stale: false, updated_at: new Date(now).toISOString(), history, pnl: { today: { usd: '-12.5', cny: '-89.1', status: 'estimated', reason: '' } } }, now);
+  const { wallet } = await buildOverview(env, ctx, now); await ctx.drain();
+  assert.deepEqual(wallet.trend, [[now - DAY, 13000], [now, 14000]]);
+  assert.deepEqual(wallet.priceChange, { usd: '-12.5', cny: '-89.1', reason: '' });
+  // Without a combined snapshot there is no line and no price change, never a made-up zero.
+  kv(env, 'finance_kv', 'combined', { totals: { btc: '0.175' }, stale: false }, now);
+  const empty = (await buildOverview(env, ctx, now)).wallet; await ctx.drain();
+  assert.deepEqual(empty.trend, []); assert.equal(empty.priceChange, null);
 });
 
 test('overview shows the newest eight alerts rather than the oldest eight', async t => {

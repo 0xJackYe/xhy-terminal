@@ -182,6 +182,14 @@
    root.navigator.geolocation.getCurrentPosition(p=>{if(disposed)return;position={lat:p.coords.latitude,lon:p.coords.longitude};$('travel-city').value='';$('travel-location-status').textContent='已按直线距离排列附近机场；交通时间仍需你自行核对。';renderAirports();},()=>{if(!disposed)$('travel-location-status').textContent='未取得位置，请手动输入城市或机场。';},{enableHighAccuracy:false,timeout:10000,maximumAge:300000});
   }
   const events=[[form,'submit',search],[form,'input',changed],[form,'change',changed],[$('travel-city'),'input',renderAirports],[$('travel-airports'),'change',airportChange],[$('travel-passport'),'change',passportChange],[$('travel-locate'),'click',locate],[$('travel-settings-form'),'submit',saveSettings]];
+  // The data-source settings open as a popover that closes like a menu.
+  const settingsMenu=$('travel-settings');
+  function closeSettings(event){
+   if(!settingsMenu?.open)return;
+   if(event.type==='keydown'){if(event.key==='Escape'){settingsMenu.open=false;settingsMenu.querySelector('summary')?.focus();}return;}
+   if(!settingsMenu.contains(event.target))settingsMenu.open=false;
+  }
+  if(settingsMenu&&typeof document.addEventListener==='function')events.push([document,'click',closeSettings],[document,'keydown',closeSettings]);
   events.forEach(([target,event,handler])=>target.addEventListener(event,handler));
   fetcher('/api/travel/config',{method:'GET',credentials:'same-origin',cache:'no-store',headers:{Accept:'application/json'}}).then(async r=>{
    const data=await r.json();if(!r.ok||!Array.isArray(data.airports)||!Array.isArray(data.destinations))throw new Error();

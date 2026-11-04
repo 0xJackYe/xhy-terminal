@@ -96,6 +96,32 @@ class OverviewTests(unittest.TestCase):
                                "unrealized": "900", "returnPct": "15.5", "cost": "5800"})
         self.assertIsNone(server.lifetime_summary({"status": "loading", "metrics": {}}))
 
+    def test_balance_trend_covers_thirty_days_and_keeps_the_latest_point(self):
+        now = dt.datetime(2026, 11, 4, 12, tzinfo=dt.timezone.utc).timestamp() * 1000
+        iso = lambda ms: dt.datetime.fromtimestamp(ms / 1000, dt.timezone.utc).isoformat(timespec="milliseconds")
+        day = 86400000
+        history = [{"timestamp": iso(now - 31 * day), "usd": "1"}, {"timestamp": iso(now - 2 * day), "usd": "120.5"},
+                   {"timestamp": "bad", "usd": "5"}, {"timestamp": iso(now - day), "usd": None},
+                   {"timestamp": iso(now - day), "usd": "-3"}, {"timestamp": iso(now - 3 * day), "usd": "100"},
+                   {"timestamp": iso(now + 60000), "usd": "999"}, {"timestamp": iso(now), "usd": "130"}, None, "x"]
+        self.assertEqual(server.balance_trend(history, now=now),
+                         [[int(now - 3 * day), 100.0], [int(now - 2 * day), 120.5], [int(now), 130.0]])
+        dense = [{"timestamp": iso(now - 30 * day + (i + 1) * 600000), "usd": str(1000 + i)} for i in range(4320)]
+        line = server.balance_trend(dense, now=now)
+        self.assertLessEqual(len(line), 91)
+        self.assertEqual(line[-1], [int(now), 1000.0 + 4319])
+        self.assertEqual(line, sorted(line))
+        self.assertEqual(server.balance_trend(None), [])
+
+    def test_wallet_overview_passes_todays_price_change_without_inventing_zero(self):
+        combined = {"totals": {"btc": "0.5"}, "stale": False,
+                    "pnl": {"today": {"usd": "12.5", "cny": None, "reason": "缺少人民币汇率。"}}}
+        result = server.wallet_overview({"complete": True, "stale": False}, combined)
+        self.assertEqual(result["priceChange"], {"usd": "12.5", "cny": None, "reason": "缺少人民币汇率。"})
+        self.assertEqual(result["trend"], [])
+        self.assertIsNone(server.wallet_overview({"complete": True, "stale": False}, {"totals": {}})["priceChange"])
+        self.assertIsNone(server.price_change("today"))
+
     def test_price_chart_is_sorted_downsampled_and_keeps_the_latest_point(self):
         history = [{"time_ms": 1000 * i, "price": 100 + i} for i in reversed(range(500))]
         history.append({"time_ms": "bad", "price": 1})
