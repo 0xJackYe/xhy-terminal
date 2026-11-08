@@ -210,3 +210,64 @@ html[data-xhy-embedded="true"][data-xhy-ui="mobile"] .travel-title{display:none}
 html[data-xhy-embedded="true"][data-xhy-ui="mobile"] .travel-intro{margin-bottom:12px}
 @media (hover:none){input,select{font-size:16px}}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:1ms!important;transition-duration:1ms!important}}
+
+/* ---------- One screen, no scrolling ----------
+   Wide windows: conditions beside results, sized to the window, with a long
+   flight list scrolling inside its card. Narrow windows and phones: one part
+   at a time (出发地 · 条件 · 方案) with the compare button always in reach.
+   Inside the portal the tabs already name the page, so the title is left out. */
+.travel-sections{display:none}
+html[data-xhy-embedded="true"] .travel-title{display:none}
+html[data-xhy-embedded="true"] .travel-intro{justify-content:flex-end;margin:0 0 8px}
+html[data-xhy-embedded="true"] .travel-page{padding:10px 0}
+.travel-page{display:flex;flex-direction:column;height:100vh;height:100dvh}
+.travel-layout{flex:1 1 auto;min-height:0;align-items:stretch}
+.travel-form{min-height:0;overflow:auto;overscroll-behavior:contain}
+.travel-side{min-height:0;grid-template-rows:minmax(0,1fr) auto}
+.travel-results{display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.flight-list{flex:1 1 auto;min-height:0;overflow:auto;overscroll-behavior:contain}
+@media (min-width:1080px){
+  .travel-card{padding:14px 16px}
+  legend{margin-bottom:8px}
+  fieldset+fieldset{margin-top:12px;padding-top:10px}
+  .field-note{margin-top:6px}
+  .airport-options{margin-top:8px}
+  .form-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:10px 12px}
+  .form-actions{margin-top:12px;padding-top:12px}
+  .form-status{margin-top:6px}
+}
+@media (max-width:1079px){
+  .travel-page{padding:10px 16px 12px}
+  html[data-xhy-embedded="true"] .travel-page{padding:8px 0 10px}
+  .travel-sections{display:inline-flex;flex:none;align-self:flex-start;gap:2px;margin:0 0 10px;padding:3px;border-radius:999px;background:var(--soft)}
+  .travel-sections button{min-height:30px;padding:0 16px;border:0;border-radius:999px;background:transparent;color:var(--muted);font-size:13px;font-weight:550;transition:background-color .18s ease,color .18s ease}
+  .travel-sections button[aria-pressed="true"]{background:var(--panel);color:var(--text);box-shadow:0 1px 2px rgb(0 0 0 / .08),0 0 0 1px var(--line)}
+  .travel-intro{display:none}
+  #travel-main[data-section="results"] .travel-intro{display:flex;margin:0 0 8px}
+  .travel-layout{grid-template-rows:minmax(0,1fr)}
+  #travel-main[data-section="results"] .travel-form,#travel-main:not([data-section="results"]) .travel-side{display:none}
+  .travel-form{display:flex;flex-direction:column}
+  #travel-main[data-section="origin"] :is(.timing-fieldset,.country-fieldset),#travel-main[data-section="conditions"] .origin-fieldset{display:none}
+  #travel-main[data-section="conditions"] .timing-fieldset{margin-top:0;padding-top:0;border-top:0}
+  #travel-main[data-section="origin"] .origin-fieldset{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
+  #travel-main[data-section="origin"] .airport-options{flex:1 1 auto;min-height:0;overflow:auto;align-content:start;overscroll-behavior:contain}
+  .travel-form .form-actions{margin-top:auto;padding-top:12px}
+  .form-grid>.field:has(select:not(#travel-sort)){grid-column:auto}
+  #travel-other-passport-field{grid-column:auto}
+}
+/* The note under the countries already says every destination's conditions
+   need checking, so the chips drop their repeated tag. */
+.country-option small{display:none}
+html[data-xhy-embedded="true"] .provider-heading{flex-direction:row;align-items:center;gap:6px 14px}
+@media (max-width:640px){
+  .travel-card{padding:12px}
+  legend{margin-bottom:8px}
+  fieldset+fieldset{margin-top:12px;padding-top:10px}
+  .form-grid{gap:10px}
+  input,select,.number-control{height:36px}
+  .number-control input{height:34px}
+  .country-fieldset>.field-note{display:none}
+}
+/* Short windows: the location and country notes give way first. */
+@media (min-width:1080px) and (max-height:640px){#airport-note,.country-fieldset>.field-note{display:none}}
+@media (max-width:1079px) and (max-height:560px){.form-actions .field-note,#travel-entry-notes{display:none!important}}

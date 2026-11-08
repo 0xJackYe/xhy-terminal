@@ -154,6 +154,7 @@
     const html=resultHtml(data);$('travel-summary').innerHTML=html.summary;$('travel-flight-list').innerHTML=html.flights;$('travel-manual-links').innerHTML=html.links;$('travel-manual-links').hidden=!html.links;resultActive=true;providerText(data.provider);
     const at=formattedTime(data.generated_at,'Asia/Shanghai');$('travel-updated').textContent=at.clock==='—'?'':'核对于 '+at.date+' '+at.clock+' 北京时间';
     status(data.provider.status==='live'?'已读取候选；请在购票前复核余票与证件条件。':'已整理官方查询 / 购票入口，尚不能确定最快可成行航班。');
+    showSection('results');
     root.XHYMotion?.enter($('travel-results'),{y:4,duration:220});
    }catch(error){
     if(disposed||current!==sequence)return;
@@ -182,6 +183,16 @@
    root.navigator.geolocation.getCurrentPosition(p=>{if(disposed)return;position={lat:p.coords.latitude,lon:p.coords.longitude};$('travel-city').value='';$('travel-location-status').textContent='已按直线距离排列附近机场；交通时间仍需你自行核对。';renderAirports();},()=>{if(!disposed)$('travel-location-status').textContent='未取得位置，请手动输入城市或机场。';},{enableHighAccuracy:false,timeout:10000,maximumAge:300000});
   }
   const events=[[form,'submit',search],[form,'input',changed],[form,'change',changed],[$('travel-city'),'input',renderAirports],[$('travel-airports'),'change',airportChange],[$('travel-passport'),'change',passportChange],[$('travel-locate'),'click',locate],[$('travel-settings-form'),'submit',saveSettings]];
+  // On a narrow screen the page shows one part at a time (出发地 · 条件 · 方案)
+  // so nothing needs scrolling; a finished search opens 方案 by itself.
+  function showSection(value){
+   if(!['origin','conditions','results'].includes(value))return;
+   $('travel-main').dataset.section=value;
+   for(const button of $('travel-sections').querySelectorAll('button[data-section]'))button.setAttribute('aria-pressed',String(button.dataset.section===value));
+  }
+  function chooseSection(event){const button=event.target?.closest?.('button[data-section]');if(button)showSection(button.dataset.section);}
+  events.push([$('travel-sections'),'click',chooseSection]);
+  showSection('origin');
   // The data-source settings open as a popover that closes like a menu.
   const settingsMenu=$('travel-settings');
   function closeSettings(event){

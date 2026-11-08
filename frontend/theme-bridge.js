@@ -168,6 +168,48 @@
   // Portal shortcuts keep working while focus is inside an embedded project:
   // ⌘K / Ctrl+K always, and 1 2 3 T / ? whenever no field is being typed in
   // and the project has not used the key itself.
+  // On a narrow page (a phone) the Bitcoin pages show one section at a time,
+  // chosen in the terminal's top bar, so each fits the screen without
+  // scrolling: 行情 · 警报 · 邮件 for alerts, 持仓 · 分布 · 定投 for the wallet.
+  // Wide windows show every section side by side and hide the switch (CSS).
+  const SECTIONS = {
+    alerts: { page: "alertsPage", items: [["market", "行情"], ["alarm", "警报"], ["email", "邮件"]] },
+    wallet: { page: "walletPage", items: [["holdings", "持仓"], ["allocation", "分布"], ["dca", "定投"]] },
+  };
+  function connectSections(doc) {
+    const win = doc.defaultView;
+    if (win.__xhySections || !/^\/btc\/?$/.test(doc.location.pathname)) return;
+    const bar = doc.querySelector(".topbar");
+    if (!bar) return;
+    win.__xhySections = true;
+    const root = doc.documentElement, group = doc.createElement("div");
+    group.className = "xhy-sections";
+    group.setAttribute("role", "group");
+    group.setAttribute("aria-label", "页面分区");
+    bar.append(group);
+    const current = () => Object.keys(SECTIONS).find(key => { const page = doc.getElementById(SECTIONS[key].page);return page && !page.hidden; });
+    const render = () => {
+      const key = current();
+      group.hidden = !key;
+      if (!key) return;
+      const chosen = root.dataset["xhySection" + key[0].toUpperCase() + key.slice(1)] || SECTIONS[key].items[0][0];
+      root.dataset["xhySection" + key[0].toUpperCase() + key.slice(1)] = chosen;
+      const html = SECTIONS[key].items.map(([value, label]) => '<button type="button" data-section="' + value + '" aria-pressed="' + (value === chosen) + '">' + label + "</button>").join("");
+      if (group.innerHTML !== html) group.innerHTML = html;
+    };
+    group.addEventListener("click", event => {
+      const button = event.target.closest?.("button[data-section]"), key = current();
+      if (!button || !key) return;
+      root.dataset["xhySection" + key[0].toUpperCase() + key.slice(1)] = button.dataset.section;
+      render();
+      win.scrollTo?.(0, 0);
+    });
+    // The terminal's router shows the page first; follow it on the next tick.
+    win.addEventListener("hashchange", () => win.setTimeout(render, 0));
+    render();
+    win.setTimeout(render, 0);
+  }
+
   function connectShortcuts(doc) {
     const win = doc.defaultView;
     if (win.top === win || win.__xhyShortcuts) return;
@@ -226,6 +268,7 @@
       connectDocumentHeight(doc);
       connectProjectMotion(doc);
       connectShortcuts(doc);
+      connectSections(doc);
     }
     if (!observed.has(doc)) {
       let queued = false;
