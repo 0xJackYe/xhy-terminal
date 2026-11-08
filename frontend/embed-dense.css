@@ -168,7 +168,7 @@
 :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .portfolio-content { display: grid !important; grid-template-columns: 92px minmax(0, 1fr) !important; gap: 14px !important; align-items: center; margin-top: 8px !important; }
 :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .portfolio-chart { min-height: 92px !important; }
 :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .portfolio-chart svg { width: 92px !important; height: 92px !important; }
-:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .portfolio-legend { max-height: max(120px, calc(var(--xhy-vh, 900px) - 470px)); overflow: auto; overscroll-behavior: contain; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .portfolio-legend { overflow: visible; }
 :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .portfolio-legend table { width: 100%; }
 :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .portfolio-legend :is(th, td) { padding-block: 4px !important; font-size: 12px !important; }
 :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .portfolio-legend :is(thead th, tbody th) { background: transparent !important; }
@@ -279,7 +279,7 @@
   :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-annual-metric dt { font-size: 11px !important; }
   :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-annual-metric dd { font-size: 13px !important; }
   :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-readout { display: none !important; }
-  :root[data-xhy-embedded="true"][data-xhy-surface="btc"][data-xhy-section-wallet="holdings"] body :is(.combined-chart, .combined-chart svg) { height: max(96px, calc(100vh - 470px)) !important; min-height: 96px !important; }
+  :root[data-xhy-embedded="true"][data-xhy-surface="btc"][data-xhy-section-wallet="holdings"] body :is(.combined-chart, .combined-chart svg) { height: max(96px, calc(100vh / var(--xhy-fit, 1) - 470px)) !important; min-height: 96px !important; }
 }
 
 /* BTC 定投与成本 on a wide screen: the three figures in one row. */
@@ -291,7 +291,7 @@
 /* Short windows keep everything on screen by leaving out secondary lines. */
 @media (max-height: 540px) {
   :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-lifetime > details, :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #alertsPage .chart-footer { display: none !important; }
-  :root[data-xhy-embedded="true"][data-xhy-surface="btc"][data-xhy-section-wallet="holdings"] body :is(.combined-chart, .combined-chart svg) { height: max(70px, calc(100vh - 444px)) !important; min-height: 70px !important; }
+  :root[data-xhy-embedded="true"][data-xhy-surface="btc"][data-xhy-section-wallet="holdings"] body :is(.combined-chart, .combined-chart svg) { height: max(70px, calc(100vh / var(--xhy-fit, 1) - 444px)) !important; min-height: 70px !important; }
 }
 @media (min-width: 1000px) and (max-height: 640px) {
   :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(#cryptoPortfolioPanel, #dcaDiaryPanel, #btcCostPanel) { padding-block: 6px !important; }
@@ -334,3 +334,5 @@
 /* Data refreshes by itself and the portal's reload button reloads the page,
    so the wallet panels' own 刷新 buttons are left out here. */
 :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #walletPage :is(#combinedRefresh, #portfolioRefresh, #btcCostRefresh) { display: none !important; }
+/* The diary's squares may get smaller in a narrow column rather than scroll sideways. */
+@media (min-width: 1000px) { :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .dca-diary { --dca-cell: 4px; } :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .dca-diary-scroll { overflow-x: hidden; } }

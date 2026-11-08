@@ -203,6 +203,7 @@
       root.dataset["xhySection" + key[0].toUpperCase() + key.slice(1)] = button.dataset.section;
       render();
       win.scrollTo?.(0, 0);
+      win.__xhyFitReset?.();
       win.XHYMotion?.enter(doc.getElementById(SECTIONS[key].page), { y: 4, duration: 220 });
     });
     // Explanations float over the wallet page (CSS); a click elsewhere or Esc
@@ -218,6 +219,47 @@
     win.addEventListener("hashchange", () => win.setTimeout(render, 0));
     render();
     win.setTimeout(render, 0);
+  }
+
+  // A page inside the portal never scrolls: when the window is too small for
+  // everything on it, the page is drawn a little smaller (down to 70%) instead
+  // of showing a scroll bar. --xhy-fit lets full-height layouts keep filling
+  // the window at that scale. Re-measured after every layout change; a window
+  // resize, page switch or section switch starts again from full size.
+  function connectFit(doc) {
+    const win = doc.defaultView;
+    if (win.__xhyFit || win.parent === win || !doc.body) return;
+    win.__xhyFit = true;
+    const root = doc.documentElement;
+    let zoom = 1, frame = 0;
+    const set = value => {
+      zoom = value;
+      doc.body.style.zoom = value === 1 ? "" : String(value);
+      root.style.setProperty("--xhy-fit", String(value));
+    };
+    const measure = () => {
+      frame = 0;
+      // The page, and any card whose height is set by the window (the travel
+      // form), must show all of its content.
+      let ratio = win.innerHeight / root.scrollHeight;
+      for (const box of doc.querySelectorAll(".travel-form")) if (box.clientHeight && box.scrollHeight > box.clientHeight + 1) ratio = Math.min(ratio, box.clientHeight / box.scrollHeight);
+      if (ratio < 0.998 && zoom > 0.7) {
+        set(Math.max(0.7, Math.floor(zoom * ratio * 1000) / 1000));
+        frame = win.requestAnimationFrame(measure);
+      }
+    };
+    const schedule = reset => {
+      if (reset && zoom !== 1) set(1);
+      if (!frame) frame = win.requestAnimationFrame(measure);
+    };
+    // Content that grows inside a fixed-height box does not resize the body,
+    // so any change to the page is a reason to measure again (once a frame).
+    new win.ResizeObserver(() => schedule(false)).observe(doc.body);
+    new win.MutationObserver(() => schedule(false)).observe(doc.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ["hidden", "class", "open"] });
+    win.addEventListener("resize", () => schedule(true));
+    win.addEventListener("hashchange", () => schedule(true));
+    win.__xhyFitReset = () => schedule(true);
+    schedule(false);
   }
 
   function connectShortcuts(doc) {
@@ -279,6 +321,7 @@
       connectProjectMotion(doc);
       connectShortcuts(doc);
       connectSections(doc);
+      connectFit(doc);
     }
     if (!observed.has(doc)) {
       let queued = false;

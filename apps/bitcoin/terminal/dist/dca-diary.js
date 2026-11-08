@@ -220,9 +220,11 @@
       const text = describe(time,current());
       tip.firstChild.textContent = text.title;tip.lastChild.textContent = text.detail;tip.hidden = false;
       // Centred above the square, kept inside the panel.
-      const box = panel.getBoundingClientRect(), rect = cell.getBoundingClientRect(), width = tip.offsetWidth, height = tip.offsetHeight;
-      const left = Math.min(Math.max(rect.left+rect.width/2-box.left-width/2,4),box.width-width-4), top = rect.top-box.top-height-6;
-      tip.style.left = left+'px';tip.style.top = (top < 0 ? rect.bottom-box.top+6 : top)+'px';
+      // Screen positions are scaled when the page is drawn smaller; the tip is
+      // placed in the panel's own units.
+      const box = panel.getBoundingClientRect(), rect = cell.getBoundingClientRect(), scale = box.width / (panel.offsetWidth || box.width) || 1;
+      const width = tip.offsetWidth, height = tip.offsetHeight, x = (rect.left+rect.width/2-box.left)/scale, above = (rect.top-box.top)/scale-height-6;
+      tip.style.left = Math.min(Math.max(x-width/2,4),box.width/scale-width-4)+'px';tip.style.top = (above < 0 ? (rect.bottom-box.top)/scale+6 : above)+'px';
       return text;
     }
     function focusDay(time) {

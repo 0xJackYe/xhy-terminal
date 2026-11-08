@@ -271,3 +271,7 @@ html[data-xhy-embedded="true"] .provider-heading{flex-direction:row;align-items:
 /* Short windows: the location and country notes give way first. */
 @media (min-width:1080px) and (max-height:640px){#airport-note,.country-fieldset>.field-note{display:none}}
 @media (max-width:1079px) and (max-height:560px){.form-actions .field-note,#travel-entry-notes{display:none!important}}
+/* Inside the portal nothing scrolls: the form shows in full and the page is
+   drawn smaller if needed (theme-bridge.js), filling the window at that scale. */
+html[data-xhy-embedded="true"] .travel-page{height:calc(100vh / var(--xhy-fit,1))}
+html[data-xhy-embedded="true"] .travel-form{overflow:visible}

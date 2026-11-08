@@ -1087,6 +1087,32 @@
     }
   }
 
+  // The overview never scrolls either: on a window too short for the cards
+  // they are drawn a little smaller (down to 70%) instead of a scroll bar.
+  const shell = document.querySelector("main"), board = $("overview-view");
+  let boardZoom = 1, fitFrame = 0;
+  function fitBoard() {
+    fitFrame = 0;
+    if (state.view !== "overview" || board.hidden || !shell.scrollHeight) return;
+    // The page area, and every card's own content, must fit.
+    let ratio = shell.clientHeight / shell.scrollHeight;
+    for (const card of board.querySelectorAll(".card")) if (card.clientHeight && card.scrollHeight > card.clientHeight + 1) ratio = Math.min(ratio, card.clientHeight / card.scrollHeight);
+    if (ratio < 0.998 && boardZoom > 0.7) {
+      boardZoom = Math.max(0.7, Math.floor(boardZoom * ratio * 1000) / 1000);
+      board.style.zoom = String(boardZoom);
+      fitFrame = requestAnimationFrame(fitBoard);
+    }
+  }
+  function refitBoard(reset) {
+    if (reset && boardZoom !== 1) { boardZoom = 1; board.style.zoom = ""; }
+    if (!fitFrame) fitFrame = requestAnimationFrame(fitBoard);
+  }
+  new ResizeObserver(() => refitBoard(false)).observe(board);
+  // Cards fill a fixed-height board, so new content shows only as overflow.
+  new MutationObserver(() => refitBoard(false)).observe(board, { childList: true, subtree: true, characterData: true });
+  addEventListener("resize", () => refitBoard(true));
+  addEventListener("hashchange", () => refitBoard(true));
+
   // The connection popover closes like a menu: outside click or Escape.
   const syncMenu = $("sync-menu");
   // On phones the sheet's dimmed backdrop is the menu's own ::before, so a tap

@@ -548,3 +548,6 @@ html[data-ui="mobile"]:not([data-view="overview"]) main { padding: 0 0 env(safe-
 @media (min-width: 681px) and (max-height: 700px) {
   .card-wallet .goal-row { display: none !important; }
 }
+/* Inside a card only the charts give way; every other line keeps its height. */
+.card > * { flex-shrink: 0; }
+.card > .sparkline { flex-shrink: 1; }
