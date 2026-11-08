@@ -36,6 +36,8 @@ ROUTES = {
     "/btc-cost.css": STATIC / "btc-cost.css",
     "/crypto-portfolio.js": STATIC / "crypto-portfolio.js",
     "/crypto-portfolio.css": STATIC / "crypto-portfolio.css",
+    "/dca-diary.js": STATIC / "dca-diary.js",
+    "/dca-diary.css": STATIC / "dca-diary.css",
     "/wallet.html": WALLET / "wallet.html",
     "/audio/alert.wav": ROOT / "terminal" / "audio" / "alert.wav",
     "/audio/alert-2.wav": ROOT / "terminal" / "audio" / "alert-2.wav",

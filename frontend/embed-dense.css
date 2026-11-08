@@ -95,7 +95,7 @@
 :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(.portfolio-footer, .btc-cost-footer, .combined-footer) { margin: 6px 0 0 !important; padding: 0 !important; border: 0 !important; color: var(--xhy-muted, var(--muted)); font-size: 11.5px; }
 
 /* Panels: flat, evenly spaced. */
-:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(.combined-wallet, .btc-cost, .crypto-portfolio, .okx-wallet) { margin: 0 !important; padding-block: 10px !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(.combined-wallet, .btc-cost, .crypto-portfolio, .okx-wallet, .dca-diary) { margin: 0 !important; padding-block: 10px !important; }
 :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(.combined-heading, .btc-cost-heading, .portfolio-heading, .okx-heading) { min-height: 26px; margin: 0 0 8px !important; }
 :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(.combined-heading, .btc-cost-heading, .portfolio-heading, .okx-heading) :is(.secondary-button, .text-button) { min-height: 26px !important; padding: 2px 8px !important; font-size: 12px !important; }
 :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(.combined-message, .btc-cost-message, .portfolio-message, .okx-message) { margin: 0 0 6px !important; }
@@ -186,13 +186,14 @@
 :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .btc-cost-track { grid-column: 1 / -1; margin: 0 !important; }
 
 @media (min-width: 1000px) {
-  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #walletPage:not([hidden]) { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); grid-template-areas: "combined portfolio" "combined cost" "combined okx"; grid-template-rows: auto auto 1fr; align-items: start; }
+  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #walletPage:not([hidden]) { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); grid-template-areas: "combined portfolio" "combined diary" "combined cost" "combined okx"; grid-template-rows: auto auto auto 1fr; align-items: start; }
   :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #combinedWalletPanel { grid-area: combined; align-self: stretch; padding-right: 24px !important; border-right: 1px solid var(--xhy-line) !important; }
   :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #cryptoPortfolioPanel { grid-area: portfolio; }
+  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #dcaDiaryPanel { grid-area: diary; }
   :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #btcCostPanel { grid-area: cost; }
   :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #okxWalletPanel { grid-area: okx; }
-  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(#cryptoPortfolioPanel, #btcCostPanel, #okxWalletPanel) { padding-inline: 24px 0 !important; border: 0 !important; }
-  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(#btcCostPanel, #okxWalletPanel) { border-top: 1px solid var(--xhy-line) !important; }
+  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(#cryptoPortfolioPanel, #dcaDiaryPanel, #btcCostPanel, #okxWalletPanel) { padding-inline: 24px 0 !important; border: 0 !important; }
+  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(#dcaDiaryPanel, #btcCostPanel, #okxWalletPanel) { border-top: 1px solid var(--xhy-line) !important; }
 }
 @media (min-width: 1000px) and (max-width: 1199px) {
   /* The portal header takes a second row at this width. */
@@ -202,9 +203,10 @@
   /* One column in the same reading order: holdings, allocation, DCA. */
   :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #walletPage:not([hidden]) { display: flex; flex-direction: column; }
   :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #cryptoPortfolioPanel { order: 1; }
-  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #btcCostPanel { order: 2; }
-  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #okxWalletPanel { order: 3; }
-  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(#cryptoPortfolioPanel, #btcCostPanel, #okxWalletPanel) { border: 0 !important; border-top: 1px solid var(--xhy-line) !important; }
+  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #dcaDiaryPanel { order: 2; }
+  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #btcCostPanel { order: 3; }
+  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #okxWalletPanel { order: 4; }
+  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(#cryptoPortfolioPanel, #dcaDiaryPanel, #btcCostPanel, #okxWalletPanel) { border: 0 !important; border-top: 1px solid var(--xhy-line) !important; }
   :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(.combined-chart, .combined-chart svg) { height: 160px !important; }
 }
 
@@ -220,8 +222,18 @@
    The balance chart's currency and range and the allocation view switch use
    the portal's own segmented control: a soft track with the chosen option
    raised. The period select beside the price-change profit is a pill too. */
-:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(.combined-controls > [role="group"], .portfolio-tabs) { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 2px; border: 0 !important; border-radius: 999px !important; background: var(--xhy-soft) !important; }
-:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(.combined-controls button, .portfolio-tabs button) { min-height: 24px !important; padding: 2px 10px !important; border: 0 !important; border-radius: 999px !important; background: transparent !important; color: var(--xhy-muted) !important; font-size: 12px !important; font-weight: 500; box-shadow: none !important; transition: background-color .18s ease, color .18s ease; }
-:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(.combined-controls button, .portfolio-tabs button):hover:not([aria-pressed="true"]) { color: var(--xhy-text) !important; }
-:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(.combined-controls button, .portfolio-tabs button)[aria-pressed="true"] { background: var(--xhy-panel) !important; color: var(--xhy-text) !important; box-shadow: 0 1px 2px rgb(0 0 0 / .08), 0 0 0 1px var(--xhy-line) !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(.combined-controls > [role="group"], .portfolio-tabs, .dca-diary-range) { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 2px; border: 0 !important; border-radius: 999px !important; background: var(--xhy-soft) !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(.combined-controls button, .portfolio-tabs button, .dca-diary-range button) { min-height: 24px !important; padding: 2px 10px !important; border: 0 !important; border-radius: 999px !important; background: transparent !important; color: var(--xhy-muted) !important; font-size: 12px !important; font-weight: 500; box-shadow: none !important; transition: background-color .18s ease, color .18s ease; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(.combined-controls button, .portfolio-tabs button, .dca-diary-range button):hover:not([aria-pressed="true"]) { color: var(--xhy-text) !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(.combined-controls button, .portfolio-tabs button, .dca-diary-range button)[aria-pressed="true"] { background: var(--xhy-panel) !important; color: var(--xhy-text) !important; box-shadow: 0 1px 2px rgb(0 0 0 / .08), 0 0 0 1px var(--xhy-line) !important; }
 :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #combinedPnlPeriod { height: 28px; min-height: 28px; padding: 0 10px; border: 1px solid var(--xhy-line-strong) !important; border-radius: 999px !important; font-size: 12.5px !important; }
+
+/* ---------- Bitcoin: 定投日记 ----------
+   Under the allocation, flat like its neighbours, in the portal's type. */
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .dca-diary { padding-inline: 0; --dca-0: var(--xhy-soft); --dca-surface: var(--xhy-bg); }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .dca-diary-heading { min-height: 26px; margin: 0 0 6px !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .dca-diary-since { font-size: 11.5px !important; color: var(--xhy-muted) !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .dca-diary-summary { margin: 0 0 8px !important; font-size: 12px !important; line-height: 1.5 !important; color: var(--xhy-muted) !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(.dca-diary-foot, .dca-diary-message) { font-size: 11px !important; color: var(--xhy-muted) !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .dca-diary-tip { background: var(--xhy-text) !important; color: var(--xhy-bg) !important; font-size: 11.5px !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .dca-diary-tip :is(strong, span) { color: inherit !important; }

@@ -520,7 +520,7 @@ html[data-xhy-theme][data-xhy-surface="btc"] body .page {
 }
 html[data-xhy-theme][data-xhy-surface="btc"] body :is(.chart-panel,
   .alarm-panel, .email-panel, .alert-history, .combined-wallet, .btc-cost,
-  .crypto-portfolio, .okx-wallet) {
+  .crypto-portfolio, .okx-wallet, .dca-diary) {
   border: 0;
   border-top: 1px solid var(--xhy-line);
   border-radius: 0;
@@ -730,7 +730,7 @@ html[data-xhy-theme][data-xhy-surface="diet"] body .meal-summary-kcal small{font
 html[data-xhy-theme][data-xhy-surface="btc"] body .topbar{height:44px;gap:24px}
 html[data-xhy-theme][data-xhy-surface="btc"] body .topbar nav{gap:26px}
 html[data-xhy-theme][data-xhy-surface="btc"] body .hero{padding-block:10px}
-html[data-xhy-theme][data-xhy-surface="btc"] body :is(.chart-panel,.alarm-panel,.email-panel,.alert-history,.combined-wallet,.btc-cost,.crypto-portfolio,.okx-wallet){padding:14px 0;margin-top:12px}
+html[data-xhy-theme][data-xhy-surface="btc"] body :is(.chart-panel,.alarm-panel,.email-panel,.alert-history,.combined-wallet,.btc-cost,.crypto-portfolio,.okx-wallet,.dca-diary){padding:14px 0;margin-top:12px}
 html[data-xhy-theme][data-xhy-surface="btc"] body .combined-wallet{margin-top:0;padding-top:14px}
 html[data-xhy-theme][data-xhy-surface="btc"] body :is(h2,.wallet-heading h2){font-size:18px}
 html[data-xhy-theme][data-xhy-surface="btc"] body h3{font-size:16px}
@@ -807,7 +807,7 @@ html[data-xhy-theme][data-xhy-surface="wallet"] body .wallet-notes{padding-block
 }
 @media(max-width:760px){
   html[data-xhy-theme] body :is(.button,.primary-button,.secondary-button){min-height:38px}
-  html[data-xhy-theme][data-xhy-surface="btc"] body :is(.chart-panel,.alarm-panel,.email-panel,.alert-history,.combined-wallet,.btc-cost,.crypto-portfolio,.okx-wallet){padding-block:12px}
+  html[data-xhy-theme][data-xhy-surface="btc"] body :is(.chart-panel,.alarm-panel,.email-panel,.alert-history,.combined-wallet,.btc-cost,.crypto-portfolio,.okx-wallet,.dca-diary){padding-block:12px}
   html[data-xhy-theme][data-xhy-surface="btc"] body .monitor-grid{gap:14px}
   html[data-xhy-theme][data-xhy-surface="btc"] body :is(.combined-sources,.combined-pnl,.btc-cost-quantity,.btc-cost-daily){padding-left:0}
   html[data-xhy-theme][data-xhy-surface="btc"] body .portfolio-content{grid-template-columns:1fr;gap:8px}

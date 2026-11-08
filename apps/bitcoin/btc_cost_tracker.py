@@ -7,7 +7,7 @@ FIFO/average accounting basis and never sends an order to an exchange.
 from collections import defaultdict
 import copy
 import datetime as dt
-from decimal import Decimal, InvalidOperation, localcontext
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation, localcontext
 import hashlib
 import re
 import threading
@@ -250,6 +250,61 @@ def daily_progress(records, now_ms):
                 'bought_btc': text(bought), 'remaining_plan_usdt': text(max(Decimal(0), 20 - spent))}
 
 
+DCA_DIARY_START = '2024-12-14'
+DCA_FIELDS = ['date', 'btc', 'usdt', 'buys']
+SATOSHI, CENT = Decimal('0.00000001'), Decimal('0.01')
+
+
+def dca_diary(records, coverage_start_ms=None, start=DCA_DIARY_START):
+    """定投日记: the BTC bought on each Beijing day, net of BTC fees, as the
+    ledger counts it, from the first purchase on 2024-12-14.  A recorded buy
+    before that date moves the start back rather than being hidden.  This
+    local ledger has no minute rates, so a day with a fill priced in another
+    currency leaves its USDT value unknown instead of counting it as zero.
+    Sales are not purchases and are left out."""
+    days = {}
+    with localcontext() as context:
+        context.prec = 256
+        for row in records or []:
+            if not isinstance(row, dict) or row.get('side') != 'buy':
+                continue
+            try:
+                btc, at = number(row['btc_net']), millis(row['at_ms'])
+            except (KeyError, CostValidationError):
+                continue
+            if btc <= 0:
+                continue
+            day = days.setdefault(iso(at)[:10], {'btc': Decimal(0), 'usdt': Decimal(0), 'priced': True, 'buys': 0})
+            day['btc'] += btc
+            day['buys'] += 1
+            try:
+                if not day['priced'] or row.get('quote_ccy') != 'USDT':
+                    raise CostValidationError('unpriced')
+                day['usdt'] += number(row['quote_amount'])
+            except (KeyError, CostValidationError):
+                day['priced'] = False
+        listed, total_btc, total_usdt, priced, buys = [], Decimal(0), Decimal(0), True, 0
+        for date in sorted(days):
+            day = days[date]
+            total_btc += day['btc']
+            buys += day['buys']
+            if day['priced']:
+                total_usdt += day['usdt']
+            else:
+                priced = False
+            listed.append([date, text(day['btc'].quantize(SATOSHI, ROUND_HALF_UP)),
+                           text(day['usdt'].quantize(CENT, ROUND_HALF_UP)) if day['priced'] else None, day['buys']])
+        first = listed[0][0] if listed else None
+        try:
+            coverage = iso(millis(coverage_start_ms))[:10] if coverage_start_ms is not None else None
+        except CostValidationError:
+            coverage = None
+        return {'start_date': first if first and first < start else start, 'first_buy_date': first,
+                'coverage_start_date': coverage, 'fields': list(DCA_FIELDS), 'days': listed,
+                'totals': {'days': len(listed), 'buys': buys, 'btc': text(total_btc.quantize(SATOSHI, ROUND_HALF_UP)),
+                           'usdt': text(total_usdt.quantize(CENT, ROUND_HALF_UP)) if priced else None}}
+
+
 class BTCCostTracker:
     def __init__(self, okx_service, vault=None, client_factory=None, clock=time.time, interval=20):
         self.okx, self.clock = okx_service, clock
@@ -439,6 +494,27 @@ class BTCCostTracker:
         with self.okx.lock:
             self._switch_account()
             return self._read_public_for_current_account()
+
+    def read_dca_diary(self):
+        """The 定投日记 view of the same verified ledger, rebuilt only when it changes."""
+        with self.okx.lock:
+            self._switch_account()
+            with self.lock:
+                public = self._read_public_for_current_account()
+                now_ms = int(self.clock() * 1000)
+                base = {'status': public['status'], 'connection_id': public.get('connection_id'), 'venues': ['okx'],
+                        'as_of': public.get('last_success_at'), 'today': iso(now_ms)[:10],
+                        'timezone': 'Asia/Shanghai', 'error': public.get('error')}
+                if not self.state:
+                    return {**base, **dca_diary([])}
+                records = self.state['records']
+                key = (self.connection, len(records), records[-1]['id'] if records else None,
+                       self.state['coverage_start_ms'])
+                cached = getattr(self, '_dca_diary_cache', None)
+                if cached is None or cached[0] != key:
+                    cached = (key, dca_diary(records, self.state['coverage_start_ms']))
+                    self._dca_diary_cache = cached
+                return {**base, **copy.deepcopy(cached[1])}
 
     def _read_public_for_current_account(self):
         with self.lock:

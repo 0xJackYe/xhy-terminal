@@ -3,6 +3,7 @@ import {FinanceError,ExchangeClient,connectionIdentity,validateCredentials,encry
 import {indexPriceChange,pricePeriods,PRICE_INDEX_FIELDS} from './finance-price-periods.mjs';
 import {appendRemainingCapital,buildRemainingCapital} from './annualized-math.mjs';
 import {syncBinanceTrades,BINANCE_TRADES_META} from './binance-trades.mjs';
+import {dcaDiary} from './dca-diary.mjs';
 
 export const FINANCE_SCHEMA_SQL=`
 CREATE TABLE IF NOT EXISTS finance_kv (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_ms INTEGER NOT NULL);
@@ -269,6 +270,27 @@ async function schedule(env,ctx,force=false){
   if(force||!status||Date.now()-(status.last_attempt_ms||0)>55000)ctx.waitUntil(syncFinance(env,{force}).catch(()=>undefined));
 }
 async function activeOKX(env){try{const c=await credentials(env,'okx');return {configured:true,connection:(await connectionIdentity(c)).slice(0,24)};}catch{return {configured:false,connection:null};}}
+// 定投日记: rebuilt from the stored trades only when the cost book changes;
+// Binance fills count only while the book includes them, so the diary always
+// matches BTC 定投与成本.
+async function dcaDiaryPublic(env){
+  const cost=await cachedPublic(env,'btc_cost'),connection=cost.connection_id??null;
+  const base={status:cost.status,connection_id:connection,venues:Array.isArray(cost.venues)?cost.venues:['okx'],as_of:cost.last_success_at??null,today:beijingDate(Date.now()),timezone:'Asia/Shanghai',error:cost.error??null};
+  const [book,meta,cached]=await Promise.all([getFinanceSnapshot(env,'cost_book'),getFinanceSnapshot(env,'cost_meta'),getFinanceSnapshot(env,'dca_diary')]);
+  const strip=value=>{const {key,connection:_,...rest}=value;return rest;};
+  if(!connection||!cost.summary||!book||!meta?.complete){
+    if(connection&&cost.summary&&cached?.connection===connection)return {...base,status:'stale',...strip(cached)};
+    return {...base,status:cost.status==='loading'?'loading':'unavailable',error:cost.error||publicMessages.needs_history,...dcaDiary([])};
+  }
+  const key=[connection,book.trade_count,book.last_bill_id,book.binance_included===true,book.excluded_binance||0,meta.coverage_start_ms].join('|');
+  if(cached?.key===key&&cached.connection===connection)return {...base,...strip(cached)};
+  const rows=(await env.DB.prepare('SELECT record_json FROM finance_trades ORDER BY at_ms, length(bill_id), bill_id').all()).results||[];
+  const records=rows.map(row=>JSON.parse(row.record_json)).filter(row=>!isBinance(row)||book.binance_included===true);
+  const diary={key,connection,...dcaDiary(records,{rates:await getFinanceSnapshot(env,'historical_rates',{}),coverageStartMs:meta.coverage_start_ms})};
+  // The cache is only a shortcut: a failed write still serves the diary.
+  try{await putStatement(env,'dca_diary',diary,Date.now()).run();}catch{/* rebuilt on the next read */}
+  return {...base,...strip(diary)};
+}
 async function cachedPublic(env,key){
   const current=await activeOKX(env),snapshot=await getFinanceSnapshot(env,key),status=await getFinanceSnapshot(env,'sync_status');
   const okx=key==='okx'?snapshot:await getFinanceSnapshot(env,'okx');
@@ -329,7 +351,7 @@ async function publicProxy(request,env){
 }
 export async function handleFinance(request,env,ctx){
   const url=new URL(request.url),path=url.pathname;
-  const known=['/api/wallet/okx','/api/wallet/okx/config','/api/wallet/okx/refresh','/api/wallet/binance','/api/wallet/binance/config','/api/wallet/portfolio','/api/wallet/combined','/api/wallet/btc-cost','/api/wallet/btc-pnl','/api/wallet/proxy'];
+  const known=['/api/wallet/okx','/api/wallet/okx/config','/api/wallet/okx/refresh','/api/wallet/binance','/api/wallet/binance/config','/api/wallet/portfolio','/api/wallet/combined','/api/wallet/btc-cost','/api/wallet/btc-pnl','/api/wallet/btc-dca-diary','/api/wallet/proxy'];
   if(!known.includes(path))return null;
   try{
     if(path==='/api/wallet/proxy'){if(request.method!=='GET')return json({error:publicMessages.method},405);return await publicProxy(request,env);}
@@ -344,6 +366,7 @@ export async function handleFinance(request,env,ctx){
     if(request.method!=='GET')return json({error:publicMessages.method},405);
     await schedule(env,ctx);
     if(path==='/api/wallet/binance'){const portfolio=await cachedPublic(env,'portfolio');return json(portfolio.binance);}
+    if(path==='/api/wallet/btc-dca-diary')return json(await dcaDiaryPublic(env));
     const key={'/api/wallet/okx':'okx','/api/wallet/portfolio':'portfolio','/api/wallet/combined':'combined','/api/wallet/btc-cost':'btc_cost','/api/wallet/btc-pnl':'btc_pnl'}[path];
     return json(await cachedPublic(env,key));
   }catch(error){const e=safeError(error);return json(e,error instanceof FinanceError?error.status:503);}

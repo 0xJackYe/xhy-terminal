@@ -8,8 +8,8 @@ import threading
 import time
 import unittest
 
-from btc_cost_tracker import (BTCCostTracker, CostValidationError, MAX_OFFLINE_MS,
-                              normalize_bills, merge_trades, summarize)
+from btc_cost_tracker import (BTCCostTracker, CostValidationError, DCA_DIARY_START, MAX_OFFLINE_MS,
+                              dca_diary, normalize_bills, merge_trades, summarize)
 from okx_wallet_service import OKXVault, identity
 
 
@@ -169,6 +169,51 @@ class NormalizationTests(unittest.TestCase):
         self.assertEqual(currencies['ETH']['net_invested'], '0.025')
         self.assertEqual(today['buy_spent_usdt'], '100')
         self.assertEqual(today['remaining_plan_usdt'], '0')
+
+
+class DCADiaryTests(unittest.TestCase):
+    BJ = dt.timezone(dt.timedelta(hours=8))
+
+    def at(self, *args):
+        return int(dt.datetime(*args, tzinfo=self.BJ).timestamp() * 1000)
+
+    def test_buys_are_grouped_by_beijing_day_net_of_fees_and_sales_are_left_out(self):
+        rows = normalize_bills(
+            trade(at=self.at(2024, 12, 14, 0, 30), trade_id=1, size='0.0003', price='66666', fee_btc='-0.0000003')
+            + trade(at=self.at(2024, 12, 14, 23, 59, 59), trade_id=2, size='0.0002', price='100000', fee_btc='0')
+            + trade(at=self.at(2024, 12, 15, 0, 0), trade_id=3, size='0.0002', price='100000', fee_btc='0')
+            + trade(side='sell', at=self.at(2024, 12, 15, 9), trade_id=4, size='0.0001', price='100000', fee_btc='0'))
+        diary = dca_diary(rows, coverage_start_ms=self.at(2024, 12, 14))
+        self.assertEqual(DCA_DIARY_START, '2024-12-14')
+        self.assertEqual(diary['start_date'], '2024-12-14')
+        self.assertEqual(diary['first_buy_date'], '2024-12-14')
+        self.assertEqual(diary['coverage_start_date'], '2024-12-14')
+        self.assertEqual(diary['fields'], ['date', 'btc', 'usdt', 'buys'])
+        # 19.9998 + 20 USDT on the first day, shown to the cent.
+        self.assertEqual(diary['days'], [['2024-12-14', '0.0004997', '40', 2], ['2024-12-15', '0.0002', '20', 1]])
+        self.assertEqual(diary['totals'], {'days': 2, 'buys': 3, 'btc': '0.0006997', 'usdt': '60'})
+
+    def test_other_currencies_leave_the_day_unpriced_and_rounding_matches_the_cloud(self):
+        rows = normalize_bills(trade(at=self.at(2025, 3, 2, 10), trade_id=1, size='0.0005', price='100000',
+                                     fee_btc='0', quote='USDC')
+                               + trade(at=self.at(2025, 3, 3, 10), trade_id=2, size='0.000123456789',
+                                       price='162000.6', fee_btc='0'))
+        diary = dca_diary(rows)
+        self.assertEqual(diary['days'], [['2025-03-02', '0.0005', None, 1], ['2025-03-03', '0.00012346', '20', 1]])
+        self.assertIsNone(diary['totals']['usdt'])
+        self.assertEqual(diary['start_date'], '2024-12-14')
+
+    def test_empty_or_malformed_rows_invent_nothing_and_an_earlier_buy_moves_the_start(self):
+        self.assertEqual(dca_diary(None), {'start_date': '2024-12-14', 'first_buy_date': None, 'coverage_start_date': None,
+                                           'fields': ['date', 'btc', 'usdt', 'buys'], 'days': [],
+                                           'totals': {'days': 0, 'buys': 0, 'btc': '0', 'usdt': '0'}})
+        good = normalize_bills(trade(at=self.at(2024, 12, 10, 9), trade_id=1, size='0.001', fee_btc='0'))
+        bad = [None, 'row', {'side': 'buy'}, {'side': 'buy', 'btc_net': 'x', 'at_ms': NOW},
+               {'side': 'buy', 'btc_net': '0', 'at_ms': NOW, 'quote_ccy': 'USDT', 'quote_amount': '1'}]
+        diary = dca_diary(good + bad, coverage_start_ms='bad')
+        self.assertEqual(diary['start_date'], '2024-12-10')
+        self.assertEqual(len(diary['days']), 1)
+        self.assertIsNone(diary['coverage_start_date'])
 
 
 class TrackerTests(unittest.TestCase):
@@ -481,3 +526,31 @@ class TrackerTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class TrackerDiaryTests(unittest.TestCase):
+    setUp, tearDown = TrackerTests.setUp, TrackerTests.tearDown
+    make_tracker, seed = TrackerTests.make_tracker, TrackerTests.seed
+
+    def test_read_dca_diary_matches_the_ledger_and_is_rebuilt_only_after_a_new_trade(self):
+        empty = self.tracker.read_dca_diary()
+        self.assertEqual(empty['status'], 'unavailable')
+        self.assertEqual(empty['days'], [])
+        self.seed()
+        diary = self.tracker.read_dca_diary()
+        self.assertEqual(diary['status'], 'fresh')
+        self.assertEqual(diary['venues'], ['okx'])
+        self.assertEqual(diary['timezone'], 'Asia/Shanghai')
+        self.assertEqual(diary['days'], [['2026-10-26', '0.000999', '100', 1]])
+        self.assertEqual(diary['coverage_start_date'], '2026-09-26')
+        self.assertNotIn('fixture-secret', str(diary))
+        cached = self.tracker._dca_diary_cache
+        self.tracker.read_dca_diary()
+        self.assertIs(self.tracker._dca_diary_cache, cached)
+        diary['days'].append(['tampered'])
+        self.assertEqual(len(self.tracker.read_dca_diary()['days']), 1)
+        self.now[0] += 10000
+        self.factory.rows = trade() + trade(trade_id=2, at=self.now[0]-1, size='0.00002', price='100000', fee_btc='0')
+        self.assertTrue(self.tracker.refresh_once())
+        self.assertEqual(self.tracker.read_dca_diary()['days'], [['2026-10-26', '0.001019', '102', 2]])
+

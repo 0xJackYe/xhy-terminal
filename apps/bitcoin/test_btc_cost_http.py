@@ -20,6 +20,12 @@ class CostService:
         return {'status':'fresh', 'summary':{'net_bought_btc':'0.0684981895130917'},
                 'plan_daily_usdt':'20', 'recent_trades':[]}
 
+    def read_dca_diary(self):
+        self.calls += 1
+        if self.fail:
+            raise RuntimeError('secret-private-internal-error')
+        return {'status':'fresh', 'start_date':'2024-12-14', 'days':[['2024-12-14','0.0003','20',1]]}
+
 
 class BTCCostHTTPTests(unittest.TestCase):
     def setUp(self):
@@ -70,3 +76,16 @@ class BTCCostHTTPTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+    def test_dca_diary_is_read_only_and_never_leaks_internal_errors(self):
+        status, headers, data = self.call('/api/wallet/btc-dca-diary')
+        self.assertEqual(status, 200)
+        self.assertEqual(data['days'], [['2024-12-14', '0.0003', '20', 1]])
+        self.assertEqual(headers['Cache-Control'], 'no-store')
+        self.assertEqual(self.call('/api/wallet/btc-dca-diary?year=2025')[0], 400)
+        self.assertEqual(self.call('/api/wallet/btc-dca-diary', 'POST')[0], 405)
+        self.service.fail = True
+        status, _, data = self.call('/api/wallet/btc-dca-diary')
+        self.assertEqual(status, 503)
+        self.assertNotIn('secret', json.dumps(data))
+

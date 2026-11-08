@@ -1,0 +1,42 @@
+/* 定投日记: a GitHub-style board of the BTC bought each day. Level 0 is an
+   empty day; levels 1-4 step towards bitcoin orange (#f7931a). */
+.dca-diary{position:relative;padding:23px 25px;margin-top:16px;--dca-surface:var(--card,#fff);--dca-0:var(--soft,#eeece7);--dca-1:#fde4c6;--dca-2:#fbc98d;--dca-3:#f9ae53;--dca-4:#f7931a;--dca-cell:7px;--dca-gap:2px}
+body.dark .dca-diary,html[data-xhy-theme="dark"] .dca-diary{--dca-0:var(--soft,#262622);--dca-1:#573e1d;--dca-2:#8c5a1c;--dca-3:#c2771b;--dca-4:#f7931a}
+.dca-diary-heading{display:flex;align-items:center;justify-content:space-between;gap:8px 16px;flex-wrap:wrap}
+.dca-diary-heading>div:first-child{display:flex;align-items:baseline;gap:4px 10px;flex-wrap:wrap;min-width:0}
+.dca-diary-heading h2{margin:0;font-size:22px}
+.dca-diary-since{color:var(--muted);font-size:11px;font-variant-numeric:tabular-nums}
+.dca-diary-range{display:inline-flex;flex-wrap:wrap;gap:2px;padding:2px;border-radius:999px;background:var(--soft)}
+.dca-diary-range button{min-height:24px;padding:2px 10px;border:0;border-radius:999px;background:transparent;color:var(--muted);font:inherit;font-size:12px;cursor:pointer;transition:background-color .18s ease,color .18s ease}
+.dca-diary-range button:hover{color:var(--text)}
+.dca-diary-range button[aria-pressed="true"]{background:var(--panel,#fff);color:var(--text);box-shadow:0 1px 2px rgb(0 0 0 / .08),0 0 0 1px var(--line)}
+.dca-diary-summary{margin:10px 0 8px;color:var(--muted);font-size:12px;line-height:1.5;font-variant-numeric:tabular-nums}
+.dca-diary-scroll{overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:thin;padding:2px 0 4px;border-radius:6px}
+.dca-diary-scroll:has(>.dca-diary-grid:focus-visible){outline:2px solid var(--accent);outline-offset:2px}
+.dca-diary-grid{display:grid;grid-template-columns:14px repeat(var(--weeks,53),minmax(var(--dca-cell),15px));grid-template-rows:14px;grid-auto-rows:auto;gap:var(--dca-gap);min-width:calc(14px + var(--weeks,53) * (var(--dca-cell) + var(--dca-gap)));border-radius:4px;outline:none}
+.dca-diary-grid:focus-visible{outline:none}
+.dca-month{grid-row:1;align-self:end;color:var(--muted);font-size:10px;line-height:1;white-space:nowrap}
+.dca-weekday{grid-column:1;position:sticky;left:0;z-index:2;display:flex;align-items:center;align-self:stretch;color:var(--muted);font-size:9px;line-height:1;background:var(--dca-surface);box-shadow:var(--dca-gap) 0 0 var(--dca-surface)}
+.dca-cell{display:block;aspect-ratio:1;border-radius:2px;background:var(--dca-0);transition:outline-color .12s ease}
+.dca-cell[data-level="1"],.dca-diary-legend i[data-level="1"]{background:var(--dca-1)}
+.dca-cell[data-level="2"],.dca-diary-legend i[data-level="2"]{background:var(--dca-2)}
+.dca-cell[data-level="3"],.dca-diary-legend i[data-level="3"]{background:var(--dca-3)}
+.dca-cell[data-level="4"],.dca-diary-legend i[data-level="4"]{background:var(--dca-4)}
+.dca-cell.is-outside{visibility:hidden}
+.dca-cell.is-before{opacity:.4}
+.dca-cell.is-gap{background:repeating-linear-gradient(135deg,var(--dca-0) 0 2px,transparent 2px 4px)}
+.dca-cell.is-today{box-shadow:inset 0 0 0 1px var(--text)}
+.dca-cell[data-date]:hover,.dca-cell.is-focused{outline:1.5px solid var(--text);outline-offset:0}
+.dca-diary-foot{display:flex;align-items:center;justify-content:space-between;gap:6px 16px;flex-wrap:wrap;margin-top:8px;color:var(--muted);font-size:10.5px;line-height:1.5}
+.dca-diary-legend{display:inline-flex;align-items:center;gap:3px;white-space:nowrap}
+.dca-diary-legend i{display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--dca-0)}
+.dca-diary-legend i:first-of-type{margin-left:3px}
+.dca-diary-legend i:last-of-type{margin-right:3px}
+.dca-diary-message{margin:8px 0 0;color:var(--muted);font-size:11px;line-height:1.6}
+.dca-diary-tip{position:absolute;z-index:5;max-width:calc(100% - 8px);padding:7px 10px;border-radius:8px;background:var(--text);color:var(--bg);font-size:11.5px;line-height:1.45;white-space:nowrap;pointer-events:none;box-shadow:0 8px 24px -8px rgb(0 0 0 / .35)}
+.dca-diary-tip strong{display:block;font-weight:600}
+.dca-diary-tip span{display:block;opacity:.85;font-variant-numeric:tabular-nums}
+.dca-diary-live{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
+.focus-wallet .dca-diary{display:none!important}
+@media(max-width:640px){.dca-diary{padding:18px 16px;--dca-cell:11px;--dca-gap:3px}.dca-diary-heading h2{font-size:19px}}
+@media(prefers-reduced-motion:reduce){.dca-cell{transition:none}}

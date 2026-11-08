@@ -261,3 +261,39 @@ test('the wallet price-change profit for today follows the price on the BTC held
   assert.ok(body.history.every(point=>!['pnl_usd','pnl_cny','price_usd','fx'].some(field=>field in point)));
   assert.ok(f.DB.get('combined').history.every(point=>'pnl_usd' in point),'the server keeps the running totals');
 });
+test('the DCA diary lists each Beijing day of buys from the same trades as the cost book and rebuilds only when the book changes',async()=>{
+  const f=await fixture();await syncFinance(f.env,{fetch:f.fetcher,now:()=>NOW,force:true});
+  const read=async()=>{const r=await handleFinance(new Request('https://x.pages.dev/api/wallet/btc-dca-diary'),f.env,{});assert.equal(r.status,200);assert.equal(r.headers.get('cache-control'),'no-store');return r.json();};
+  const day=ms=>new Date(ms+28800000).toISOString().slice(0,10);
+  const body=await read(),buy=original[0];
+  assert.equal(body.status,'fresh');assert.deepEqual(body.venues,['okx']);assert.equal(body.timezone,'Asia/Shanghai');assert.equal(body.today,day(Date.now()));
+  assert.deepEqual(body.fields,['date','btc','usdt','buys']);assert.equal(JSON.stringify(body).includes(OKX.secret_key),false);
+  // The two buys (2 BTC a day ago, 0.5 BTC from the new bill) count; the sale does not.
+  const expected=new Map([[day(buy.at_ms),[2,200,1]]]);const late=day(NOW-60000),entry=expected.get(late);
+  if(entry)expected.set(late,[entry[0]+.5,entry[1]+60,entry[2]+1]);else expected.set(late,[.5,60,1]);
+  assert.deepEqual(body.days.map(([d,btc,usdt,buys])=>[d,Number(btc),Number(usdt),buys]),[...expected].sort().map(([d,v])=>[d,...v]));
+  assert.equal(body.totals.btc,'2.5');assert.equal(body.totals.buys,2);assert.equal(body.start_date,'2024-12-14');
+  assert.equal(body.coverage_start_date,day(NOW-86400000));assert.equal('key' in body||'connection' in body,false);
+  // Cached against the book: a stray row is ignored until the book changes.
+  const cached=f.DB.get('dca_diary');assert.ok(cached.key.includes('|3|'));
+  const binanceRow={...original[0],id:'binance-spot:BTCUSDT:9',bill_id:'90',counter_bill_id:'91',at_ms:NOW-30000,btc_net:'0.25',btc_gross:'0.25',quote_amount:'30',quote_gross:'30',venue:'binance'};
+  f.DB.trades.set(binanceRow.id,{id:binanceRow.id,bill_id:binanceRow.bill_id,at_ms:binanceRow.at_ms,record_json:JSON.stringify(binanceRow)});
+  assert.equal((await read()).totals.btc,'2.5');
+  // Binance fills count only once the cost book includes them.
+  const book=f.DB.get('cost_book');f.DB.set('cost_book',{...book,excluded_binance:1});
+  assert.equal((await read()).totals.btc,'2.5','a Binance fill outside the book stays out of the diary');
+  f.DB.set('cost_book',{...book,trade_count:4,binance_included:true,excluded_binance:0});
+  assert.equal((await read()).totals.btc,'2.75');
+});
+test('the DCA diary is empty, never invented, without a verified ledger or OKX connection',async()=>{
+  const f=await fixture();await syncFinance(f.env,{fetch:f.fetcher,now:()=>NOW,force:true});
+  const read=async()=>(await handleFinance(new Request('https://x.pages.dev/api/wallet/btc-dca-diary'),f.env,{})).json();
+  const meta=f.DB.get('cost_meta');f.DB.set('cost_meta',{...meta,complete:false});f.DB.kv.delete('dca_diary');
+  let body=await read();assert.equal(body.status,'unavailable');assert.deepEqual(body.days,[]);assert.equal(body.totals.btc,'0');assert.ok(body.error);
+  // A diary built earlier for the same account is shown as stale rather than dropped.
+  f.DB.set('cost_meta',meta);await read();f.DB.set('cost_meta',{...meta,complete:false});
+  body=await read();assert.equal(body.status,'stale');assert.equal(body.days.length>0,true);
+  f.DB.kv.delete('okx');body=await read();assert.equal(body.status,'unavailable');assert.deepEqual(body.days,[]);
+  assert.equal((await handleFinance(new Request('https://x.pages.dev/api/wallet/btc-dca-diary?all=1'),f.env,{})).status,400);
+  assert.equal((await handleFinance(new Request('https://x.pages.dev/api/wallet/btc-dca-diary',{method:'POST'}),f.env,{})).status,405);
+});
