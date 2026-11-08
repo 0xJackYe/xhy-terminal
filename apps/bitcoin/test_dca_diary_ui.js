@@ -160,7 +160,8 @@ async function check(name, fn) { await fn(); checks++; console.log('OK ' + name)
     assert.equal(h.requests[0].init.cache, 'no-store'); assert.equal(h.requests[0].init.method, 'GET');
     assert.equal(h.node('dcaDiarySince').textContent, '自 2024-12-14 起 · 5 天 · 0.00609257 BTC');
     assert.match(h.node('dcaDiarySince').title, /首笔买入 2024-12-14；累计买入 6 笔，约 400\.00 USDT/);
-    assert.equal(h.node('dcaDiarySummary').textContent, '近一年买入 3 天 · 0.00069707 BTC · 约 60.00 USDT · 最长连续 3 天 · 当前连续 3 天');
+    assert.equal(h.node('dcaDiarySummary').textContent, '近一年买入 3 天 · 0.00069707 BTC · 最长连续 3 天 · 当前连续 3 天');
+    assert.match(h.node('dcaDiarySummary').title, /约 60\.00 USDT/);
     assert.match(h.node('dcaDiaryRange').innerHTML, /data-range="recent" aria-pressed="true">近一年/); assert.match(h.node('dcaDiaryRange').innerHTML, /data-range="2024"/);
     assert.equal(h.node('dcaDiaryGrid').props['--weeks'], '53'); assert.match(h.node('dcaDiaryGrid').innerHTML, /data-date="2026-11-08"/);
     assert.equal(h.node('dcaDiaryMessage').hidden, true);
@@ -171,7 +172,8 @@ async function check(name, fn) { await fn(); checks++; console.log('OK ' + name)
   await check('choosing a year redraws the board for that year', async () => {
     const h = harness(); await h.settle();
     await h.node('dcaDiaryRange').fire('click', { target: { closest: () => ({ dataset: { range: '2024' } }) } });
-    assert.match(h.node('dcaDiarySummary').textContent, /^2024 年买入 2 天 · 0\.0053955 BTC · 约 340\.00 USDT · 最长连续 2 天$/);
+    assert.match(h.node('dcaDiarySummary').textContent, /^2024 年买入 2 天 · 0\.0053955 BTC · 最长连续 2 天$/);
+    assert.match(h.node('dcaDiarySummary').title, /约 340\.00 USDT/);
     assert.match(h.node('dcaDiaryRange').innerHTML, /data-range="2024" aria-pressed="true"/);
     assert.match(h.node('dcaDiaryGrid').innerHTML, /data-date="2024-12-14"/);
     h.controller.select('nonsense'); assert.match(h.node('dcaDiaryRange').innerHTML, /data-range="recent" aria-pressed="true"/);

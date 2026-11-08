@@ -233,8 +233,9 @@
 :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .dca-diary { padding-inline: 0; --dca-0: var(--xhy-soft); --dca-surface: var(--xhy-bg); }
 :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .dca-diary-heading { min-height: 26px; margin: 0 0 6px !important; }
 :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .dca-diary-since { font-size: 11.5px !important; color: var(--xhy-muted) !important; }
-:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .dca-diary-summary { margin: 0 0 8px !important; font-size: 12px !important; line-height: 1.5 !important; color: var(--xhy-muted) !important; }
-:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(.dca-diary-foot, .dca-diary-message) { font-size: 11px !important; color: var(--xhy-muted) !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .dca-diary-meta { margin: 0 0 8px !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .dca-diary-summary { margin: 0 !important; font-size: 12px !important; line-height: 1.5 !important; color: var(--xhy-muted) !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(.dca-diary-legend, .dca-diary-message) { font-size: 11px !important; color: var(--xhy-muted) !important; }
 :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .dca-diary-tip { background: var(--xhy-text) !important; color: var(--xhy-bg) !important; font-size: 11.5px !important; }
 :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .dca-diary-tip :is(strong, span) { color: inherit !important; }
 
@@ -296,3 +297,40 @@
   :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(#cryptoPortfolioPanel, #dcaDiaryPanel, #btcCostPanel) { padding-block: 6px !important; }
   :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(.portfolio-heading, .btc-cost-heading, .dca-diary-heading) { margin-bottom: 4px !important; }
 }
+
+/* ---------- Bitcoin wallet: nothing opens inline ----------
+   Explanations (逐年回测, 计算说明) and the Binance connection form float over
+   the page instead of pushing it taller, so the page never needs scrolling.
+   A click outside or Esc closes an explanation (theme-bridge.js). The
+   allocation note keeps to one line with the full text on hover. */
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-lifetime { position: relative; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-lifetime > details[open] { display: inline-block !important; margin-right: 18px !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-lifetime > details[open] > summary { color: var(--xhy-text) !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-lifetime > details[open] > :not(summary) { position: fixed; z-index: 30; left: 0; width: min(620px, 100%); top: 48px; max-height: calc(100vh - 60px); margin: 0 !important; padding: 12px 14px !important; overflow: auto; overscroll-behavior: contain; border: 1px solid var(--xhy-line) !important; border-radius: 12px; background: var(--xhy-panel) !important; box-shadow: 0 24px 48px -16px rgb(0 0 0 / .3); }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #cryptoPortfolioPanel { position: relative; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #portfolioSettings:not([hidden]) { position: absolute; z-index: 30; top: 42px; right: 0; width: min(440px, 100%); margin: 0 !important; padding: 14px !important; border: 1px solid var(--xhy-line) !important; border-radius: 12px; background: var(--xhy-panel) !important; box-shadow: 0 24px 48px -16px rgb(0 0 0 / .3); }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #portfolioValuationNote:not([hidden]) { display: block; margin: 4px 0 0 !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 11.5px !important; line-height: 1.5 !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #cryptoPortfolioPanel :is(th, td) { padding-block: 4px !important; }
+
+/* Wide wallet page: every header stays on one line however narrow the
+   column, so nothing wraps into an extra row; cut text shows in full on hover. */
+@media (min-width: 1000px) {
+  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .portfolio-chart-head { flex-direction: row !important; flex-wrap: wrap; align-items: flex-end !important; justify-content: space-between; }
+  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .portfolio-totals { grid-template-columns: repeat(3, auto) !important; gap: 4px 18px !important; }
+  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .dca-diary-heading { flex-wrap: nowrap; }
+  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .dca-diary-heading > div:first-child { flex: 1 1 0; min-width: 0; flex-wrap: nowrap; }
+  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(.dca-diary-since, .dca-diary-summary) { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .dca-diary-meta { flex-wrap: nowrap; }
+  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .dca-diary-summary { flex: 1 1 0; }
+  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body :is(.dca-diary-legend, .dca-diary-range) { flex: none; }
+}
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-lifetime > details[open]::before { content: ""; position: fixed; inset: 0; z-index: 29; background: rgb(14 14 13 / .28); animation: xhy-fade .18s ease; }
+@keyframes xhy-fade { from { opacity: 0; } }
+@media (max-width: 999px) {
+  :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-lifetime > details[open] > :not(summary) { left: 12px; right: 12px; width: auto; max-height: calc(100vh - 110px); }
+}
+/* The floating explanation takes no room, so its link keeps one line's height. */
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body .combined-lifetime > details { height: 22px; }
+/* Data refreshes by itself and the portal's reload button reloads the page,
+   so the wallet panels' own 刷新 buttons are left out here. */
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #walletPage :is(#combinedRefresh, #portfolioRefresh, #btcCostRefresh) { display: none !important; }

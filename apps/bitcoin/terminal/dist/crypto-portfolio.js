@@ -47,8 +47,19 @@
         id:mode==='location'?row.id:row.ccy,label:mode==='location'?LABELS[row.id]:typeof row.label==='string'&&row.label?row.label.slice(0,40):row.ccy,
         quantity:mode==='location'?null:row.quantity,value:row.usd_value,percentage:row.percentage,color:COLORS[index%COLORS.length]}));
   }
+  // The four largest coins keep their own slice and row; the rest share one
+  // "其他 N 种" slice so the donut and its table stay short on every screen.
+  // That row's tooltip lists each merged coin and its value.
+  const TOP_COINS=4,OTHER_COLOR='#9b968c';
+  function compact(items) {
+    if(items.length<=TOP_COINS+1)return items;
+    const sorted=[...items].sort((a,b)=>Number(b.value)-Number(a.value)),kept=sorted.slice(0,TOP_COINS),rest=sorted.slice(TOP_COINS);
+    const value=rest.reduce((total,row)=>total+Number(row.value),0),share=rest.reduce((total,row)=>total+row.percentage,0);
+    return [...kept,{id:'#other',label:'其他 '+rest.length+' 种',quantity:null,value:value.toFixed(8),percentage:Math.min(100,share),color:OTHER_COLOR,members:rest}];
+  }
+  const shown=(state,mode)=>mode==='currency'?compact(rows(state,mode)):rows(state,mode);
   function geometry(state,mode='currency') {
-    const items=rows(state,mode),sum=items.reduce((total,row)=>total+row.percentage,0);
+    const items=shown(state,mode),sum=items.reduce((total,row)=>total+row.percentage,0);
     if(!items.length||!finite(sum)||Math.abs(sum-100)>.05||new Set(items.map(row=>row.id)).size!==items.length)return null;
     const circumference=2*Math.PI*76;let offset=0;
     return items.map(row=>{const length=row.percentage/100*circumference,item={...row,length,offset,circumference};offset+=length;return item;});
@@ -62,9 +73,9 @@
   }
   function renderLegend(state,mode='currency') {
     if(mode==='location'&&state&&state.location_allocation_complete===false)return '';
-    const data=rows(state,mode);
+    const data=shown(state,mode);
     if(!data.length)return '';
-    return '<table><caption class="visually-hidden">'+(mode==='location'?'资产存放位置':'币种资产分布')+'</caption><thead><tr><th scope="col">'+(mode==='location'?'存放位置':'币种')+'</th><th scope="col">'+(mode==='location'?'':'数量')+'</th><th scope="col">美元价值</th><th scope="col">占比</th></tr></thead><tbody>'+data.map(row=>'<tr><th scope="row"><i class="portfolio-swatch" style="background:'+row.color+'" aria-hidden="true"></i>'+escape(row.label)+'</th><td>'+escape(mode==='location'?'':quantity(row.quantity))+'</td><td>'+money(row.value)+'</td><td>'+escape(percentage(row.percentage))+'</td></tr>').join('')+'</tbody></table>';
+    return '<table><caption class="visually-hidden">'+(mode==='location'?'资产存放位置':'币种资产分布')+'</caption><thead><tr><th scope="col">'+(mode==='location'?'存放位置':'币种')+'</th><th scope="col">'+(mode==='location'?'':'数量')+'</th><th scope="col">美元价值</th><th scope="col">占比</th></tr></thead><tbody>'+data.map(row=>'<tr'+(row.members?' class="portfolio-other" title="'+escape(row.members.map(member=>member.label+' '+money(member.value)).join(' · '))+'"':'')+'><th scope="row"><i class="portfolio-swatch" style="background:'+row.color+'" aria-hidden="true"></i>'+escape(row.label)+'</th><td>'+escape(mode==='location'?'':quantity(row.quantity))+'</td><td>'+money(row.value)+'</td><td>'+escape(percentage(row.percentage))+'</td></tr>').join('')+'</tbody></table>';
   }
   function renderSources(state) {
     const raw=state&&Array.isArray(state.sources)?state.sources:[],byId=new Map(raw.filter(row=>row&&Object.prototype.hasOwnProperty.call(LABELS,row.id)).map(row=>[row.id,row]));
@@ -114,7 +125,7 @@
       if(state&&positive(state.liabilities_usd))notes.push('负债另列 '+money(state.liabilities_usd)+'，未计入饼图');
       if(state&&typeof state.location_note==='string'&&state.location_note)notes.push(state.location_note.slice(0,300));
       if(state&&typeof state.scope_note==='string'&&state.scope_note)notes.push(state.scope_note.slice(0,300));
-      node('portfolioValuationNote').textContent=notes.join('；');node('portfolioValuationNote').hidden=!notes.length;
+      node('portfolioValuationNote').textContent=notes.join('；');node('portfolioValuationNote').title=notes.join('；');node('portfolioValuationNote').hidden=!notes.length;
       node('portfolioByCurrency').setAttribute('aria-pressed',String(mode==='currency'));node('portfolioByLocation').setAttribute('aria-pressed',String(mode==='location'));
       const threshold=state&&exact(state.threshold_usd,2),excluded=state&&money(state.excluded_usd);
       node('portfolioExcluded').textContent=threshold&&threshold!=='—'?'每个币种合计低于 $'+threshold+' 不纳入'+(excluded&&excluded!=='—'?' · 已排除 '+excluded:''):'';

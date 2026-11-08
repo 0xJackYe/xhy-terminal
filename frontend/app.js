@@ -212,14 +212,17 @@
     text("wallet-btc-label", `BTC 持仓${finite(wallet.btcHoldings) && wallet.btcHoldingsStale ? " · 已延迟" : ""}`);
     const list = $("wallet-assets");
     const assets = (Array.isArray(wallet.assets) ? wallet.assets : []).filter((asset) => asset && typeof asset.ccy === "string" && finite(asset.usd_value));
-    const visible = assets.slice(0, 8);
+    // The three largest coins, then one row for the rest, so the card keeps
+    // its height however many coins there are; the row's tooltip lists them.
+    const sorted = [...assets].sort((a, b) => Number(b.usd_value) - Number(a.usd_value));
+    const visible = sorted.length > 4 ? [...sorted.slice(0, 3), { ccy: "#other", label: `其他 ${sorted.length - 3} 种`, usd_value: sorted.slice(3).reduce((sum, asset) => sum + Number(asset.usd_value), 0), members: sorted.slice(3) }] : sorted;
     renderPnl(wallet.pnl);
     renderTotalProfit(wallet.totalProfit);
     renderTrend(wallet.trend, wallet.status);
     renderPriceChange(wallet.priceChange, wallet.status);
     renderGoal(wallet.btcHoldings);
     renderLocations(Array.isArray(wallet.locations) ? wallet.locations : [], wallet);
-    text("wallet-asset-count", assets.length ? `${number(assets.length)} 种${assets.length > visible.length ? ` · 显示前 ${visible.length}` : ""}` : "");
+    text("wallet-asset-count", assets.length ? `${number(assets.length)} 种` : "");
     const total = finite(wallet.totalUsd) && Number(wallet.totalUsd) > 0 ? Number(wallet.totalUsd) : assets.reduce((sum, asset) => sum + Math.max(0, Number(asset.usd_value)), 0);
     const signature = visible.map((asset) => asset.ccy).join("|");
     // Rebuild rows only when the set of coins changes; otherwise update in place.
@@ -250,7 +253,8 @@
       const ratio = total > 0 ? clamp(Number(asset.usd_value) / total) : 0;
       const share = row.querySelector(".asset-share"), value = row.querySelector(".asset-value");
       const shareText = total > 0 ? `${number(ratio * 100, 1)}%` : "", valueText = money(asset.usd_value);
-      const title = finite(asset.quantity) ? `${assetName(asset)} 持仓 ${number(asset.quantity, 8)}，估值 ${valueText}` : `${assetName(asset)} 估值 ${valueText}`;
+      const title = asset.members ? asset.members.map((member) => `${assetName(member)} ${money(member.usd_value)}`).join(" · ")
+        : finite(asset.quantity) ? `${assetName(asset)} 持仓 ${number(asset.quantity, 8)}，估值 ${valueText}` : `${assetName(asset)} 估值 ${valueText}`;
       if (share.textContent !== shareText) share.textContent = shareText;
       if (value.textContent !== valueText) value.textContent = valueText;
       if (row.title !== title) row.title = title;

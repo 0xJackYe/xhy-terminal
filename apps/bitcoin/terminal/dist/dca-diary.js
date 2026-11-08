@@ -159,9 +159,8 @@
   }
 
   const MARKUP = '<div class="dca-diary-heading"><div><h2 id="dcaDiaryTitle">定投日记</h2><small id="dcaDiarySince" class="dca-diary-since"></small></div><div id="dcaDiaryRange" class="dca-diary-range" role="group" aria-label="定投日记范围"></div></div>'+
-    '<p id="dcaDiarySummary" class="dca-diary-summary"></p>'+
+    '<div class="dca-diary-meta"><p id="dcaDiarySummary" class="dca-diary-summary" title="按北京时间计日"></p><span class="dca-diary-legend" title="越接近比特币橙，当天买入的 BTC 越多" aria-hidden="true">少<i data-level="0"></i><i data-level="1"></i><i data-level="2"></i><i data-level="3"></i><i data-level="4"></i>多</span></div>'+
     '<div id="dcaDiaryScroll" class="dca-diary-scroll"><div id="dcaDiaryGrid" class="dca-diary-grid" role="img" tabindex="0"></div></div>'+
-    '<div class="dca-diary-foot"><span id="dcaDiaryNote" class="dca-diary-note">按北京时间计日 · 越接近比特币橙，当天买入的 BTC 越多</span><span class="dca-diary-legend" aria-hidden="true">少<i data-level="0"></i><i data-level="1"></i><i data-level="2"></i><i data-level="3"></i><i data-level="4"></i>多</span></div>'+
     '<p id="dcaDiaryMessage" class="dca-diary-message" role="status" hidden></p>'+
     '<div id="dcaDiaryTip" class="dca-diary-tip" role="tooltip" hidden><strong></strong><span></span></div><span id="dcaDiaryLive" class="dca-diary-live" aria-live="polite"></span>';
 
@@ -199,11 +198,14 @@
       }
       const all = stats(data,data.start,data.today), part = stats(data,view.from,view.to);
       node('dcaDiarySince').textContent = '自 '+formatDate(data.start)+' 起'+(data.first === null ? '' : ' · '+all.days+' 天 · '+btcText(all.btc)+' BTC');
-      node('dcaDiarySince').title = data.first === null ? '' : '首笔买入 '+formatDate(data.first)+'；累计买入 '+all.buys+' 笔'+(all.usdt !== null ? '，约 '+usdtText(all.usdt)+' USDT' : '');
-      const summary = data.days.size || data.status === 'fresh' || data.status === 'stale'
-        ? view.label+'买入 '+part.days+' 天 · '+btcText(part.btc)+' BTC'+(part.usdt !== null && part.days ? ' · 约 '+usdtText(part.usdt)+' USDT' : '')+' · 最长连续 '+part.longest+' 天'+(part.current > 1 ? ' · 当前连续 '+part.current+' 天' : '')
+      node('dcaDiarySince').title = node('dcaDiarySince').textContent+(data.first === null ? '' : '\n首笔买入 '+formatDate(data.first)+'；累计买入 '+all.buys+' 笔'+(all.usdt !== null ? '，约 '+usdtText(all.usdt)+' USDT' : ''));
+      // One short line: days, BTC and streaks; the USDT spent is in its tooltip.
+      const known = data.days.size || data.status === 'fresh' || data.status === 'stale';
+      const summary = known
+        ? view.label+'买入 '+part.days+' 天 · '+btcText(part.btc)+' BTC · 最长连续 '+part.longest+' 天'+(part.current > 1 ? ' · 当前连续 '+part.current+' 天' : '')
         : data.status === 'loading' ? '正在读取定投记录' : '等待成本账本';
       node('dcaDiarySummary').textContent = summary;
+      node('dcaDiarySummary').title = known ? summary+(part.usdt !== null && part.days ? '\n约 '+usdtText(part.usdt)+' USDT' : '')+'\n按北京时间计日' : summary;
       grid.setAttribute('aria-label','定投日记 '+summary+'。用方向键逐日查看。');
       const message = failed ? data.days.size ? '同步暂未完成，保留上次的定投记录。' : '暂时无法读取定投记录，稍后自动重试。'
         : data.status === 'unavailable' ? (data.error || '导入已核对的成本账本后显示每天的定投。')

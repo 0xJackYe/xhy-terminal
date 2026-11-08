@@ -534,3 +534,17 @@ html[data-ui="mobile"]:not([data-view="overview"]) main { padding: 0 0 env(safe-
 @media (max-height: 640px) {
   :root[data-ui="mobile"] .card-alerts :is(.section-label:has(+ .threshold-meter), .threshold-meter, .threshold-list), :root[data-ui="mobile"] .card-wallet .section-label:has(+ .wallet-trend) { display: none !important; }
 }
+
+/* Short computer windows: the asset card's balance line may get thinner. */
+@media (min-width: 681px) and (max-height: 700px) {
+  .wallet-trend { min-height: 48px; }
+}
+/* Side-by-side cards are as tall as the window, never taller: their charts
+   give way first, and on short windows the goal line (also on 钱包走势). */
+@media (min-width: 681px) {
+  .board { grid-template-rows: minmax(0, 1fr); }
+  .board > .card { min-height: 0; }
+}
+@media (min-width: 681px) and (max-height: 700px) {
+  .card-wallet .goal-row { display: none !important; }
+}

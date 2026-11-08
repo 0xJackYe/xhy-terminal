@@ -190,7 +190,7 @@
    $('travel-main').dataset.section=value;
    for(const button of $('travel-sections').querySelectorAll('button[data-section]'))button.setAttribute('aria-pressed',String(button.dataset.section===value));
   }
-  function chooseSection(event){const button=event.target?.closest?.('button[data-section]');if(button)showSection(button.dataset.section);}
+  function chooseSection(event){const button=event.target?.closest?.('button[data-section]');if(!button)return;showSection(button.dataset.section);root.XHYMotion?.enter(button.dataset.section==='results'?$('travel-results'):form,{y:4,duration:200});}
   events.push([$('travel-sections'),'click',chooseSection]);
   showSection('origin');
   // The data-source settings open as a popover that closes like a menu.

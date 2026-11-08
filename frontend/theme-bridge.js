@@ -203,7 +203,17 @@
       root.dataset["xhySection" + key[0].toUpperCase() + key.slice(1)] = button.dataset.section;
       render();
       win.scrollTo?.(0, 0);
+      win.XHYMotion?.enter(doc.getElementById(SECTIONS[key].page), { y: 4, duration: 220 });
     });
+    // Explanations float over the wallet page (CSS); a click elsewhere or Esc
+    // closes them, as with any menu.
+    const closeExplanations = event => {
+      if (event.type === "keydown" && event.key !== "Escape") return;
+      // A tap on the dimmed backdrop lands on the details element itself.
+      for (const item of doc.querySelectorAll(".combined-lifetime > details[open]")) if (event.type === "keydown" || !item.contains(event.target) || event.target === item) item.open = false;
+    };
+    doc.addEventListener("click", closeExplanations);
+    doc.addEventListener("keydown", closeExplanations);
     // The terminal's router shows the page first; follow it on the next tick.
     win.addEventListener("hashchange", () => win.setTimeout(render, 0));
     render();

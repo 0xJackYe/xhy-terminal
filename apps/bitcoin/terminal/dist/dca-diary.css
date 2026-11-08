@@ -10,7 +10,8 @@ body.dark .dca-diary,html[data-xhy-theme="dark"] .dca-diary{--dca-0:var(--soft,#
 .dca-diary-range button{min-height:24px;padding:2px 10px;border:0;border-radius:999px;background:transparent;color:var(--muted);font:inherit;font-size:12px;cursor:pointer;transition:background-color .18s ease,color .18s ease}
 .dca-diary-range button:hover{color:var(--text)}
 .dca-diary-range button[aria-pressed="true"]{background:var(--panel,#fff);color:var(--text);box-shadow:0 1px 2px rgb(0 0 0 / .08),0 0 0 1px var(--line)}
-.dca-diary-summary{margin:10px 0 8px;color:var(--muted);font-size:12px;line-height:1.5;font-variant-numeric:tabular-nums}
+.dca-diary-meta{display:flex;align-items:baseline;justify-content:space-between;gap:4px 16px;flex-wrap:wrap;margin:10px 0 8px}
+.dca-diary-summary{margin:0;color:var(--muted);font-size:12px;line-height:1.5;font-variant-numeric:tabular-nums}
 .dca-diary-scroll{overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:thin;padding:2px 0 4px;border-radius:6px}
 .dca-diary-scroll:has(>.dca-diary-grid:focus-visible){outline:2px solid var(--accent);outline-offset:2px}
 .dca-diary-grid{display:grid;grid-template-columns:14px repeat(var(--weeks,53),minmax(var(--dca-cell),15px));grid-template-rows:14px;grid-auto-rows:auto;gap:var(--dca-gap);min-width:calc(14px + var(--weeks,53) * (var(--dca-cell) + var(--dca-gap)));border-radius:4px;outline:none}
@@ -27,7 +28,6 @@ body.dark .dca-diary,html[data-xhy-theme="dark"] .dca-diary{--dca-0:var(--soft,#
 .dca-cell.is-gap{background:repeating-linear-gradient(135deg,var(--dca-0) 0 2px,transparent 2px 4px)}
 .dca-cell.is-today{box-shadow:inset 0 0 0 1px var(--text)}
 .dca-cell[data-date]:hover,.dca-cell.is-focused{outline:1.5px solid var(--text);outline-offset:0}
-.dca-diary-foot{display:flex;align-items:center;justify-content:space-between;gap:6px 16px;flex-wrap:wrap;margin-top:8px;color:var(--muted);font-size:10.5px;line-height:1.5}
 .dca-diary-legend{display:inline-flex;align-items:center;gap:3px;white-space:nowrap}
 .dca-diary-legend i{display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--dca-0)}
 .dca-diary-legend i:first-of-type{margin-left:3px}
