@@ -68,19 +68,36 @@
       error:typeof data.error === 'string' && data.error ? data.error.slice(0,200) : null,asOf:typeof data.as_of === 'string' ? data.as_of : null};
   }
 
-  // Four orange levels from the quartiles of every buying day since the
-  // start, so a day keeps its colour whichever range is shown. Equal amounts
-  // round up: a steady daily buy shows as full orange, not as the palest.
-  function thresholds(days) {
-    const values = [...days.values()].map(day => day.btc).sort((a,b) => a-b);
-    if (!values.length) return null;
-    const quantile = share => values[Math.floor(share*(values.length-1))];
-    return [quantile(.25),quantile(.5),quantile(.75)];
+  // Six orange levels for what went in that day, in USDT, measured against
+  // the usual daily buy (the median buying day): under half of it is the
+  // palest, the usual buy sits in the middle (level 3), and bigger days keep
+  // getting deeper up to six times the usual and beyond. Every buying day
+  // since the start sets the scale, so a day keeps its colour whichever range
+  // is shown. A day bought without a USDT price is valued at the median price
+  // of the priced days; with no priced day at all, BTC amounts are compared.
+  const STEPS = [.5,.9,1.5,3,6];
+  function scale(days) {
+    const list = [...days.values()].filter(day => day.btc > 0);
+    if (!list.length) return null;
+    const median = values => values.sort((a,b) => a-b)[Math.floor((values.length-1)/2)];
+    const prices = list.filter(day => day.usdt !== null && day.usdt > 0).map(day => day.usdt/day.btc);
+    const price = prices.length ? median(prices) : null;
+    let unit = 'usdt', value = day => day.usdt !== null ? day.usdt : Math.round(day.btc*price), usual = price === null ? 0 : median(list.map(value));
+    if (!(usual > 0)) { unit = 'btc';value = day => day.btc;usual = median(list.map(value)); }
+    return {unit,usual,value,limits:STEPS.map(step => usual*step)};
   }
-  function level(amount, limits) {
-    if (!amount || amount <= 0) return 0;
-    if (!limits) return 4;
-    return amount >= limits[2] ? 4 : amount >= limits[1] ? 3 : amount >= limits[0] ? 2 : 1;
+  function level(day, measure) {
+    if (!day || !(day.btc > 0)) return 0;
+    if (!measure) return 3;
+    const amount = measure.value(day);
+    return 1+measure.limits.filter(limit => amount >= limit).length;
+  }
+  // The legend's hover text gives the bounds in whole USDT.
+  function legendText(measure) {
+    if (!measure) return '颜色越深，当天投入越多';
+    if (measure.unit === 'btc') return '颜色越深，当天买入的 BTC 越多；通常一天的买入量为中间色';
+    const cut = measure.limits.map(limit => grouped(Math.round(limit/100)));
+    return '颜色越深，当天投入越多（USDT）：'+cut[0]+' 以下 · '+cut[0]+'–'+cut[1]+' · '+cut[1]+'–'+cut[2]+' · '+cut[2]+'–'+cut[3]+' · '+cut[3]+'–'+cut[4]+' · '+cut[4]+' 以上';
   }
 
   // 近一年 (the 53 weeks ending this week) or one calendar year.
@@ -134,7 +151,7 @@
 
   // The grid as one HTML string: weekday labels, month labels, then a square
   // per day placed by week column and weekday row.
-  function gridHtml(view, model, limits) {
+  function gridHtml(view, model, measure) {
     const weeks = Math.round((view.gridEnd-view.gridStart+DAY)/(7*DAY));
     let html = '';
     // Every row gets a label cell so the pinned label column stays solid while
@@ -151,18 +168,43 @@
       for (let offset = 0;offset < 7;offset++) {
         const time = start+offset*DAY, state = cellState(time,view,model), position = 'grid-column:'+(column+2)+';grid-row:'+(offset+2);
         if (state === 'outside') { html += '<i class="dca-cell is-outside" style="'+position+'"></i>';continue; }
-        const day = model.days.get(time), value = state === 'day' ? level(day && day.btc,limits) : 0;
+        const day = model.days.get(time), value = state === 'day' ? level(day,measure) : 0;
         html += '<i class="dca-cell'+(state === 'day' ? '' : ' is-'+state)+(time === model.today ? ' is-today' : '')+'" data-level="'+value+'" data-date="'+formatDate(time)+'" style="'+position+'"></i>';
       }
     }
     return {html,weeks};
   }
 
-  const MARKUP = '<div class="dca-diary-heading"><div><h2 id="dcaDiaryTitle">定投日记</h2><small id="dcaDiarySince" class="dca-diary-since"></small></div><div id="dcaDiaryRange" class="dca-diary-range" role="group" aria-label="定投日记范围"></div></div>'+
-    '<div class="dca-diary-meta"><p id="dcaDiarySummary" class="dca-diary-summary" title="按北京时间计日"></p><span class="dca-diary-legend" title="越接近比特币橙，当天买入的 BTC 越多" aria-hidden="true">少<i data-level="0"></i><i data-level="1"></i><i data-level="2"></i><i data-level="3"></i><i data-level="4"></i>多</span></div>'+
+  // 定投记录: every buying day, newest first, for one year or all of them.
+  function records(model, year) {
+    const list = [];
+    for (const [time,day] of model.days) if (year === 'all' || new Date(time).getUTCFullYear() === Number(year)) list.push({time,...day});
+    return list.sort((a,b) => b.time-a.time);
+  }
+  // USDT paid per BTC that day, to the whole USDT.
+  function priceText(day) { return day.usdt !== null && day.btc > 0 ? grouped(Math.round(day.usdt*1e6/day.btc)) : '—'; }
+  function recordsSummary(list, label) {
+    if (!list.length) return label+' · 暂无定投记录';
+    let btc = 0, usdt = 0, priced = true, buys = 0, counted = true;
+    for (const day of list) { btc += day.btc;if (day.usdt === null) priced = false;else usdt += day.usdt;if (day.buys === null) counted = false;else buys += day.buys; }
+    return [label,list.length+' 天',counted ? buys+' 笔' : '',btcText(btc)+' BTC',priced ? '约 '+usdtText(usdt)+' USDT' : '',priced && btc ? '均价 '+grouped(Math.round(usdt*1e6/btc)) : ''].filter(Boolean).join(' · ');
+  }
+  function recordRows(list, measure, selected) {
+    return list.map(day => '<tr data-date="'+formatDate(day.time)+'"'+(day.time === selected ? ' class="is-selected"' : '')+'><td><i class="dca-swatch" data-level="'+level(day,measure)+'"></i>'+formatDate(day.time)+'<small>'+WEEKDAYS[weekday(day.time)]+'</small></td><td>'+btcText(day.btc)+'</td><td>'+usdtText(day.usdt)+'</td><td>'+priceText(day)+'</td><td>'+(day.buys === null ? '—' : day.buys)+'</td></tr>').join('');
+  }
+
+  const MARKUP = '<div class="dca-diary-heading"><div><h2 id="dcaDiaryTitle" title="查看全部定投记录">定投日记</h2><small id="dcaDiarySince" class="dca-diary-since"></small></div><div id="dcaDiaryRange" class="dca-diary-range" role="group" aria-label="定投日记范围"></div></div>'+
+    '<div class="dca-diary-meta"><p id="dcaDiarySummary" class="dca-diary-summary" title="按北京时间计日"></p><span id="dcaDiaryLegend" class="dca-diary-legend" title="颜色越深，当天投入越多" aria-hidden="true">少<i data-level="0"></i><i data-level="1"></i><i data-level="2"></i><i data-level="3"></i><i data-level="4"></i><i data-level="5"></i><i data-level="6"></i>多</span></div>'+
     '<div id="dcaDiaryScroll" class="dca-diary-scroll"><div id="dcaDiaryGrid" class="dca-diary-grid" role="img" tabindex="0"></div></div>'+
     '<p id="dcaDiaryMessage" class="dca-diary-message" role="status" hidden></p>'+
-    '<div id="dcaDiaryTip" class="dca-diary-tip" role="tooltip" hidden><strong></strong><span></span></div><span id="dcaDiaryLive" class="dca-diary-live" aria-live="polite"></span>';
+    '<div id="dcaDiaryTip" class="dca-diary-tip" role="tooltip" hidden><strong></strong><span></span></div><span id="dcaDiaryLive" class="dca-diary-live" aria-live="polite"></span>'+
+    // Clicking the diary opens every record over the page; it is paged to fit
+    // the window, so it never scrolls.
+    '<div id="dcaRecords" class="dca-records" hidden><div id="dcaRecordsPanel" class="dca-records-panel" role="dialog" aria-modal="true" aria-labelledby="dcaRecordsTitle" tabindex="-1">'+
+    '<div class="dca-records-head"><h3 id="dcaRecordsTitle">定投记录</h3><div id="dcaRecordsYears" class="dca-diary-range dca-records-years" role="group" aria-label="定投记录范围"></div><button type="button" id="dcaRecordsClose" class="dca-records-close" aria-label="关闭定投记录">×</button></div>'+
+    '<p id="dcaRecordsSummary" class="dca-records-summary"></p>'+
+    '<div id="dcaRecordsBody" class="dca-records-body"><table class="dca-records-table"><thead><tr><th scope="col">日期</th><th scope="col">BTC</th><th scope="col">USDT</th><th scope="col">均价</th><th scope="col">笔数</th></tr></thead><tbody id="dcaRecordsRows"></tbody></table></div>'+
+    '<div class="dca-records-pager"><button type="button" id="dcaRecordsNewer">‹ 较新</button><span id="dcaRecordsPage"></span><button type="button" id="dcaRecordsOlder">较早 ›</button></div></div></div>';
 
   function mount(options = {}) {
     const root = options.root || globalThis, document = options.document || root.document, panel = document && document.getElementById('dcaDiaryPanel');
@@ -172,7 +214,12 @@
     const node = id => document.getElementById(id);
     panel.classList.add('dca-diary','card');panel.setAttribute('aria-labelledby','dcaDiaryTitle');panel.innerHTML = MARKUP;
     let model = null, range = 'recent', view = null, timer = null, read = null, disposed = false, pageActive = true, failed = false, focused = null, sequence = 0, drawn = '';
-    const grid = node('dcaDiaryGrid'), tip = node('dcaDiaryTip'), scroller = node('dcaDiaryScroll');
+    const grid = node('dcaDiaryGrid'), tip = node('dcaDiaryTip'), scroller = node('dcaDiaryScroll'), sheet = node('dcaRecords'), dialog = node('dcaRecordsPanel');
+    // The records sit on the page itself, so no panel around the diary can
+    // clip or move them.
+    if (document.body && typeof document.body.append === 'function') document.body.append(sheet);
+    sheet.hidden = true;
+    let open = false, year = 'all', page = 0, selected = null, firstShown = null, opener = null, wheel = 0, wheelAt = 0, swipe = null;
     function active() { const page = node('walletPage');return !disposed && pageActive && !document.hidden && (!page || !page.hidden); }
     function cancelTimer() { if (timer !== null) clearTimer(timer);timer = null; }
     function schedule() { cancelTimer();if (active()) timer = setTimer(() => { timer = null;load(); },REFRESH_MS); }
@@ -189,9 +236,10 @@
       const rangeNode = node('dcaDiaryRange');
       if (rangeNode.innerHTML !== buttons) rangeNode.innerHTML = buttons;
       view = bounds(range,data);
-      const limits = thresholds(data.days), signature = [range,data.today,data.start,data.coverage,limits && limits.join(','),[...data.days].map(([time,day]) => time+':'+day.btc).join(';')].join('|');
+      const measure = scale(data.days), signature = [range,data.today,data.start,data.coverage,measure && measure.limits.join(','),[...data.days].map(([time,day]) => time+':'+day.btc+':'+day.usdt).join(';')].join('|');
+      node('dcaDiaryLegend').title = legendText(measure);
       if (signature !== drawn) {
-        const built = gridHtml(view,data,limits);
+        const built = gridHtml(view,data,measure);
         grid.style.setProperty('--weeks',String(built.weeks));grid.innerHTML = built.html;drawn = signature;focused = null;hideTip();
         // The latest weeks are the ones to see first when the grid scrolls.
         if (view.to === data.today && scroller.scrollWidth > scroller.clientWidth) scroller.scrollLeft = scroller.scrollWidth;
@@ -206,11 +254,106 @@
         : data.status === 'loading' ? '正在读取定投记录' : '等待成本账本';
       node('dcaDiarySummary').textContent = summary;node('dcaDiarySummary').dataset.state = known ? 'known' : 'pending';
       node('dcaDiarySummary').title = known ? summary+(part.usdt !== null && part.days ? '\n约 '+usdtText(part.usdt)+' USDT' : '')+'\n按北京时间计日' : summary;
-      grid.setAttribute('aria-label','定投日记 '+summary+'。用方向键逐日查看。');
+      grid.setAttribute('aria-label','定投日记 '+summary+'。用方向键逐日查看，回车打开全部记录。');
       const message = failed ? data.days.size ? '同步暂未完成，保留上次的定投记录。' : '暂时无法读取定投记录，稍后自动重试。'
         : data.status === 'unavailable' ? (data.error || '导入已核对的成本账本后显示每天的定投。')
         : data.coverage !== null && data.coverage > data.start ? '成本账本自 '+formatDate(data.coverage)+' 起，之前的日期未计入。' : '';
       node('dcaDiaryMessage').textContent = message;node('dcaDiaryMessage').hidden = !message;
+      if (open) renderRecords(firstShown);
+    }
+    // As many rows as the window has room for: the page never scrolls.
+    function capacity() {
+      const body = node('dcaRecordsBody'), height = body.clientHeight;
+      if (!height) return 12;
+      const head = body.querySelector('thead'), row = body.querySelector('tbody tr');
+      return Math.max(3,Math.floor((height-(head && head.offsetHeight || 28))/(row && row.offsetHeight || 30)));
+    }
+    // Draws the records page; keep (a date) keeps that record on screen.
+    function renderRecords(keep) {
+      const data = current(), years = [...new Set([...data.days.keys()].map(time => String(new Date(time).getUTCFullYear())))].sort((a,b) => b-a);
+      if (year !== 'all' && !years.includes(year)) year = 'all';
+      const chips = ['all',...years].map(value => '<button type="button" data-year="'+value+'" aria-pressed="'+(value === year)+'">'+(value === 'all' ? '全部' : value)+'</button>').join('');
+      if (node('dcaRecordsYears').innerHTML !== chips) node('dcaRecordsYears').innerHTML = chips;
+      const list = records(data,year), measure = scale(data.days);
+      node('dcaRecordsSummary').textContent = recordsSummary(list,year === 'all' ? '全部' : year+' 年');
+      // The first pass guesses the row height; once rows are drawn their real
+      // height decides, so the last row never falls below the panel.
+      let size = capacity();
+      for (let pass = 0;pass < 2;pass++) {
+        const pages = Math.max(1,Math.ceil(list.length/size));
+        if (keep !== null && keep !== undefined) { const index = list.findIndex(day => day.time <= keep);page = Math.floor((index < 0 ? list.length-1 : index)/size); }
+        page = Math.min(Math.max(page,0),pages-1);
+        const shown = list.slice(page*size,(page+1)*size);
+        if (keep === null || keep === undefined) keep = shown.length ? shown[0].time : null;
+        firstShown = shown.length ? shown[0].time : null;
+        node('dcaRecordsRows').innerHTML = recordRows(shown,measure,selected);
+        node('dcaRecordsPage').textContent = list.length ? (page+1)+' / '+pages : '';
+        node('dcaRecordsNewer').disabled = page === 0;node('dcaRecordsOlder').disabled = page >= pages-1;
+        const fitted = capacity();
+        if (fitted === size) break;
+        size = fitted;
+      }
+    }
+    function openRecords(time) {
+      if (!open) opener = document.activeElement || null;
+      open = true;sheet.hidden = false;hideTip();
+      selected = time === null || time === undefined ? null : time;
+      // A day opens all records at that day; otherwise the diary's year, if one is chosen.
+      year = selected === null && range !== 'recent' ? range : 'all';page = 0;
+      renderRecords(selected);
+      if (typeof dialog.focus === 'function') dialog.focus();
+    }
+    function closeRecords() {
+      if (!open) return;
+      open = false;sheet.hidden = true;selected = null;
+      if (opener && typeof opener.focus === 'function' && opener.isConnected) opener.focus();
+      opener = null;
+    }
+    function turn(step) { page += step;selected = null;renderRecords(); }
+    // A click anywhere on the diary opens the records, at the day clicked if
+    // it was a square; the range buttons keep their own job.
+    function openFrom(event) {
+      const target = event.target;
+      if (!target || typeof target.closest !== 'function' || target.closest('button, a, input, select, .dca-records')) return;
+      const cell = target.closest('.dca-cell[data-date]');
+      openRecords(cell ? parseDate(cell.dataset.date) : null);
+    }
+    function recordsClick(event) {
+      const target = event.target;
+      if (target === sheet) { closeRecords();return; }
+      if (!target || typeof target.closest !== 'function') return;
+      const chip = target.closest('button[data-year]');
+      if (chip) { year = chip.dataset.year;page = 0;selected = null;renderRecords();return; }
+      if (target.closest('#dcaRecordsClose')) closeRecords();
+      else if (target.closest('#dcaRecordsNewer')) turn(-1);
+      else if (target.closest('#dcaRecordsOlder')) turn(1);
+    }
+    function recordsKey(event) {
+      const moves = {ArrowLeft:-1,ArrowUp:-1,PageUp:-1,ArrowRight:1,ArrowDown:1,PageDown:1};
+      if (event.key === 'Escape') { event.preventDefault();closeRecords();return; }
+      if (event.key in moves) { event.preventDefault();turn(moves[event.key]);return; }
+      if (event.key === 'Home' || event.key === 'End') { event.preventDefault();page = event.key === 'Home' ? 0 : Infinity;selected = null;renderRecords();return; }
+      if (event.key !== 'Tab' || typeof sheet.querySelectorAll !== 'function') return;
+      // Tab stays inside the records while they are open.
+      const items = [...sheet.querySelectorAll('button:not([disabled])')], active = document.activeElement;
+      if (!items.length) return;
+      if (event.shiftKey && (active === items[0] || active === dialog)) { event.preventDefault();items[items.length-1].focus(); }
+      else if (!event.shiftKey && active === items[items.length-1]) { event.preventDefault();items[0].focus(); }
+    }
+    // The wheel and a swipe turn pages instead of scrolling.
+    function recordsWheel(event) {
+      event.preventDefault();
+      wheel += event.deltaY || event.deltaX || 0;
+      if (Math.abs(wheel) < 60) return;
+      const step = wheel > 0 ? 1 : -1;wheel = 0;
+      if (event.timeStamp-wheelAt < 280) return;
+      wheelAt = event.timeStamp;turn(step);
+    }
+    function swipeStart(event) { swipe = event.pointerType === 'mouse' ? null : {x:event.clientX,y:event.clientY}; }
+    function swipeEnd(event) {
+      if (!swipe) return;
+      const dx = event.clientX-swipe.x, dy = event.clientY-swipe.y, along = Math.abs(dy) > Math.abs(dx) ? dy : dx;swipe = null;
+      if (Math.abs(along) > 40) turn(along < 0 ? 1 : -1);
     }
     function cellFor(time) { return grid.querySelector('[data-date="'+formatDate(time)+'"]'); }
     function hideTip() { tip.hidden = true;const old = grid.querySelector('.is-focused');if (old) old.classList.remove('is-focused'); }
@@ -238,6 +381,7 @@
     }
     function keydown(event) {
       const moves = {ArrowLeft:-7,ArrowRight:7,ArrowUp:-1,ArrowDown:1};
+      if (event.key === 'Enter' || event.key === ' ') { event.preventDefault();openRecords(focused);return; }
       if (event.key === 'Escape') { hideTip();focused = null;return; }
       if (event.key === 'Home' || event.key === 'End') { event.preventDefault();focusDay(event.key === 'Home' ? view.from : view.to);return; }
       if (!(event.key in moves)) return;
@@ -272,15 +416,24 @@
       } catch (_) { if (!disposed && token.sequence === sequence && !token.cancelled) { failed = true;render(); } }
       finally { clearTimer(token.timeout);if (read === token) { read = null;schedule(); } }
     }
-    function visibility() { if (active()) load();else { cancelTimer();cancelRead();hideTip(); } }
+    function visibility() { if (active()) load();else { cancelTimer();cancelRead();hideTip();closeRecords(); } }
     function pageHide() { pageActive = false;visibility(); }
     function pageShow() { pageActive = true;visibility(); }
-    const events = [[node('dcaDiaryRange'),'click',choose],[grid,'pointerover',pointer],[grid,'pointerleave',leave],[grid,'keydown',keydown],[grid,'blur',() => { hideTip();focused = null; }],
+    const events = [[node('dcaDiaryRange'),'click',choose],[grid,'pointerover',pointer],[grid,'pointerleave',leave],[grid,'keydown',keydown],[grid,'blur',() => { if (!open) { hideTip();focused = null; } }],
+      [panel,'click',openFrom],[sheet,'click',recordsClick],[sheet,'keydown',recordsKey],[sheet,'wheel',recordsWheel,{passive:false}],[sheet,'pointerdown',swipeStart],[sheet,'pointerup',swipeEnd],
+      [root,'resize',() => { if (open) renderRecords(firstShown); }],
+      // Inside the portal the dimmed area is only this page: a click anywhere
+      // outside it (the portal's header or margins) closes the records too.
+      [root,'blur',() => { if (root.parent && root.parent !== root) closeRecords(); }],
       [document,'pointerdown',outside],[document,'visibilitychange',visibility],[root,'hashchange',visibility],[root,'pagehide',pageHide],[root,'pageshow',pageShow]];
-    for (const [target,event,handler] of events) target.addEventListener(event,handler);
-    function destroy() { disposed = true;cancelTimer();cancelRead();for (const [target,event,handler] of events) target.removeEventListener(event,handler);panel.__dcaDiaryController = null; }
-    const controller = {refresh:load,destroy,select:value => { range = String(value);render(); }};
+    for (const [target,event,handler,options] of events) target.addEventListener(event,handler,options);
+    function destroy() {
+      disposed = true;closeRecords();cancelTimer();cancelRead();for (const [target,event,handler,options] of events) target.removeEventListener(event,handler,options);
+      if (typeof sheet.remove === 'function' && sheet.parentNode !== panel) sheet.remove();
+      panel.__dcaDiaryController = null;
+    }
+    const controller = {refresh:load,destroy,select:value => { range = String(value);render(); },open:openRecords,close:closeRecords};
     panel.__dcaDiaryController = controller;render();if (active()) load();return controller;
   }
-  return {START,REFRESH_MS,parseDate,formatDate,beijingToday,weekday,monday,units,btcText,usdtText,normalize,thresholds,level,ranges,bounds,stats,cellState,describe,gridHtml,mount};
+  return {START,REFRESH_MS,STEPS,parseDate,formatDate,beijingToday,weekday,monday,units,btcText,usdtText,normalize,scale,level,legendText,ranges,bounds,stats,cellState,describe,gridHtml,records,priceText,recordsSummary,recordRows,mount};
 });

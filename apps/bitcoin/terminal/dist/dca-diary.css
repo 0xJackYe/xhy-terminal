@@ -1,7 +1,9 @@
-/* 定投日记: a GitHub-style board of the BTC bought each day. Level 0 is an
-   empty day; levels 1-4 step towards bitcoin orange (#f7931a). */
-.dca-diary{position:relative;padding:23px 25px;margin-top:16px;--dca-surface:var(--card,#fff);--dca-0:var(--soft,#eeece7);--dca-1:#fde4c6;--dca-2:#fbc98d;--dca-3:#f9ae53;--dca-4:#f7931a;--dca-cell:7px;--dca-gap:2px}
-body.dark .dca-diary,html[data-xhy-theme="dark"] .dca-diary{--dca-0:var(--soft,#262622);--dca-1:#573e1d;--dca-2:#8c5a1c;--dca-3:#c2771b;--dca-4:#f7931a}
+/* 定投日记: a GitHub-style board of what went in each day. Level 0 is an
+   empty day; levels 1-6 deepen through bitcoin orange (#f7931a, level 4) as
+   the day's buy grows past the usual one (level 3). */
+.dca-diary,.dca-records{--dca-0:var(--soft,#eeece7);--dca-1:#fde4c6;--dca-2:#fbc98d;--dca-3:#f9ae53;--dca-4:#f7931a;--dca-5:#d17208;--dca-6:#9a4c04}
+.dca-diary{position:relative;padding:23px 25px;margin-top:16px;--dca-surface:var(--card,#fff);--dca-cell:7px;--dca-gap:2px;cursor:pointer}
+body.dark :is(.dca-diary,.dca-records),html[data-xhy-theme="dark"] :is(.dca-diary,.dca-records){--dca-0:var(--soft,#262622);--dca-1:#4e3719;--dca-2:#7a521b;--dca-3:#a8691c;--dca-4:#f7931a;--dca-5:#ffb04f;--dca-6:#ffd396}
 .dca-diary-heading{display:flex;align-items:center;justify-content:space-between;gap:8px 16px;flex-wrap:wrap}
 .dca-diary-heading>div:first-child{display:flex;align-items:baseline;gap:4px 10px;flex-wrap:wrap;min-width:0}
 .dca-diary-heading h2{margin:0;font-size:22px}
@@ -23,6 +25,8 @@ body.dark .dca-diary,html[data-xhy-theme="dark"] .dca-diary{--dca-0:var(--soft,#
 .dca-cell[data-level="2"],.dca-diary-legend i[data-level="2"]{background:var(--dca-2)}
 .dca-cell[data-level="3"],.dca-diary-legend i[data-level="3"]{background:var(--dca-3)}
 .dca-cell[data-level="4"],.dca-diary-legend i[data-level="4"]{background:var(--dca-4)}
+.dca-cell[data-level="5"],.dca-diary-legend i[data-level="5"]{background:var(--dca-5)}
+.dca-cell[data-level="6"],.dca-diary-legend i[data-level="6"]{background:var(--dca-6)}
 .dca-cell.is-outside{visibility:hidden}
 .dca-cell.is-before{opacity:.4}
 .dca-cell.is-gap{background:repeating-linear-gradient(135deg,var(--dca-0) 0 2px,transparent 2px 4px)}
@@ -40,3 +44,35 @@ body.dark .dca-diary,html[data-xhy-theme="dark"] .dca-diary{--dca-0:var(--soft,#
 .focus-wallet .dca-diary{display:none!important}
 @media(max-width:640px){.dca-diary{padding:18px 16px;--dca-cell:11px;--dca-gap:3px}.dca-diary-heading h2{font-size:19px}}
 @media(prefers-reduced-motion:reduce){.dca-cell{transition:none}}
+/* 定投记录: every buying day over the page, newest first. It is paged to the
+   window's height, so it never scrolls; the wheel and a swipe turn pages. */
+.dca-records{position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;box-sizing:border-box;padding:16px;background:rgb(14 14 13 / .32);cursor:default;touch-action:none;overscroll-behavior:contain;animation:dca-fade .16s ease}
+.dca-records[hidden]{display:none}
+body.dark .dca-records,html[data-xhy-theme="dark"] .dca-records{background:rgb(0 0 0 / .55)}
+.dca-records-panel{display:flex;flex-direction:column;box-sizing:border-box;width:min(760px,100%);height:min(720px,100%);padding:16px 18px 14px;border:1px solid var(--line);border-radius:16px;background:var(--card,#fff);color:var(--text);box-shadow:0 28px 64px -24px rgb(0 0 0 / .45);outline:none;animation:dca-rise .22s cubic-bezier(.22,1,.36,1)}
+.dca-records-head{display:flex;align-items:center;flex-wrap:wrap;gap:8px 14px}
+.dca-records-head h3{margin:0;font-size:15px;font-weight:600}
+.dca-records-years{margin-left:auto}
+.dca-records-close{display:inline-grid;place-items:center;width:30px;height:30px;padding:0;border:0;border-radius:999px;background:transparent;color:var(--muted);font:inherit;font-size:20px;line-height:1;cursor:pointer;transition:background-color .18s ease,color .18s ease}
+.dca-records-close:hover{background:var(--soft);color:var(--text)}
+.dca-records-summary{margin:8px 0 6px;color:var(--muted);font-size:12px;line-height:1.5;font-variant-numeric:tabular-nums}
+.dca-records-body{flex:1 1 auto;min-height:0;overflow:hidden}
+.dca-records-table{width:100%;border-collapse:collapse;font-size:12.5px;font-variant-numeric:tabular-nums}
+.dca-records-table th{height:28px;padding:0 8px;border-bottom:1px solid var(--line);color:var(--muted);font-size:11.5px;font-weight:500;text-align:right;white-space:nowrap}
+.dca-records-table td{height:30px;padding:0 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+.dca-records-table :is(th,td):first-child{padding-left:4px;text-align:left}
+.dca-records-table :is(th,td):last-child{padding-right:4px}
+.dca-records-table td small{margin-left:6px;color:var(--muted);font-size:11px}
+.dca-records-table tr.is-selected td{background:var(--soft)}
+.dca-swatch{display:inline-block;width:10px;height:10px;margin-right:8px;border-radius:2px;background:var(--dca-0);vertical-align:-1px}
+.dca-swatch[data-level="1"]{background:var(--dca-1)}.dca-swatch[data-level="2"]{background:var(--dca-2)}.dca-swatch[data-level="3"]{background:var(--dca-3)}
+.dca-swatch[data-level="4"]{background:var(--dca-4)}.dca-swatch[data-level="5"]{background:var(--dca-5)}.dca-swatch[data-level="6"]{background:var(--dca-6)}
+.dca-records-pager{display:flex;align-items:center;justify-content:space-between;gap:8px;padding-top:10px}
+.dca-records-pager span{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
+.dca-records-pager button{min-height:30px;padding:4px 14px;border:1px solid var(--line);border-radius:999px;background:transparent;color:var(--text);font:inherit;font-size:12.5px;cursor:pointer;transition:background-color .18s ease,opacity .18s ease}
+.dca-records-pager button:hover:not(:disabled){background:var(--soft)}
+.dca-records-pager button:disabled{opacity:.4;cursor:default}
+@keyframes dca-fade{from{opacity:0}}
+@keyframes dca-rise{from{opacity:0;transform:translateY(8px) scale(.985)}}
+@media(max-width:640px){.dca-records{padding:10px}.dca-records-panel{height:100%;padding:14px 12px 12px}.dca-records-table{font-size:12px}.dca-records-table :is(th,td){padding:0 5px}.dca-records-table td small{display:none}}
+@media(prefers-reduced-motion:reduce){.dca-records,.dca-records-panel{animation:none}}

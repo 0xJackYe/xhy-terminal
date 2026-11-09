@@ -57,13 +57,20 @@ async function check(name, fn) { await fn(); checks++; console.log('OK ' + name)
     assert.deepEqual(reordered.days.get(D('2025-01-01')), { btc: 100000, usdt: null, buys: 1 });
   });
 
-  await check('four orange levels follow the quartiles of every buying day; equal amounts are full orange', () => {
-    const days = new Map([[1, { btc: 100 }], [2, { btc: 200 }], [3, { btc: 300 }], [4, { btc: 400 }], [5, { btc: 500 }]]);
-    const limits = api.thresholds(days);
-    assert.deepEqual(limits, [200, 300, 400]);
-    assert.deepEqual([0, 100, 200, 300, 400, 500].map(value => api.level(value, limits)), [0, 1, 2, 3, 4, 4]);
-    const steady = api.thresholds(new Map([[1, { btc: 20000 }], [2, { btc: 20000 }]]));
-    assert.equal(api.level(20000, steady), 4); assert.equal(api.thresholds(new Map()), null); assert.equal(api.level(5, null), 4); assert.equal(api.level(0, null), 0);
+  await check('six orange levels measure what went in against the usual daily buy, so bigger days keep getting deeper', () => {
+    // Cents of USDT and satoshis: a usual 20 USDT day, then 8, 12, 40, 99.50 and 320 USDT days.
+    const days = new Map([[1, { btc: 25000, usdt: 2000 }], [2, { btc: 25000, usdt: 2000 }], [3, { btc: 25000, usdt: 2000 }], [4, { btc: 50000, usdt: 4000 }], [5, { btc: 125000, usdt: 9950 }], [6, { btc: 400000, usdt: 32000 }], [7, { btc: 10000, usdt: 800 }]]);
+    const measure = api.scale(days);
+    assert.equal(measure.unit, 'usdt'); assert.equal(measure.usual, 2000);
+    assert.deepEqual(measure.limits, [1000, 1800, 3000, 6000, 12000]);
+    assert.deepEqual([7, 1, 4, 5, 6].map(key => api.level(days.get(key), measure)), [1, 3, 4, 5, 6], '8 → 1, the usual 20 → 3, 40 → 4, 99.50 → 5, 320 → 6');
+    assert.equal(api.level({ btc: 15000, usdt: 1200 }, measure), 2);
+    assert.equal(api.level(undefined, measure), 0); assert.equal(api.level({ btc: 0, usdt: 0 }, measure), 0);
+    assert.equal(api.level({ btc: 50000, usdt: null }, measure), 4, 'an unpriced day is valued at the median price paid');
+    const btcOnly = api.scale(new Map([[1, { btc: 100, usdt: null }], [2, { btc: 200, usdt: null }], [3, { btc: 300, usdt: null }]]));
+    assert.equal(btcOnly.unit, 'btc'); assert.equal(btcOnly.usual, 200); assert.equal(api.level({ btc: 1300, usdt: null }, btcOnly), 6);
+    assert.equal(api.scale(new Map()), null); assert.equal(api.level({ btc: 5, usdt: null }, null), 3);
+    assert.equal(api.legendText(measure), '颜色越深，当天投入越多（USDT）：10 以下 · 10–18 · 18–30 · 30–60 · 60–120 · 120 以上');
   });
 
   await check('近一年 is 53 whole weeks ending this week; a year covers its own days only', () => {
@@ -103,7 +110,7 @@ async function check(name, fn) { await fn(); checks++; console.log('OK ' + name)
   });
 
   await check('the grid places one square per day, hides days outside the range and labels months inside it', () => {
-    const model = api.normalize(DIARY), view = api.bounds('recent', model), limits = api.thresholds(model.days);
+    const model = api.normalize(DIARY), view = api.bounds('recent', model), limits = api.scale(model.days);
     const built = api.gridHtml(view, model, limits), cells = [...built.html.matchAll(/<i class="dca-cell([^"]*)"([^>]*)>/g)];
     assert.equal(built.weeks, 53); assert.equal(cells.length, 53 * 7);
     const outside = cells.filter(([, cls]) => cls.includes('is-outside'));
@@ -118,12 +125,29 @@ async function check(name, fn) { await fn(); checks++; console.log('OK ' + name)
     assert.equal((built.html.match(/class="dca-weekday"/g) || []).length, 7);
     const early = api.gridHtml(api.bounds('2024', model), model, limits).html;
     assert.match(early, /class="dca-cell is-before" data-level="0" data-date="2024-12-13"/);
-    assert.match(early, /class="dca-cell" data-level="4" data-date="2024-12-14"/);
+    assert.match(early, /class="dca-cell" data-level="6" data-date="2024-12-14"/, 'the 320 USDT first day is the deepest orange');
+    assert.match(built.html, /class="dca-cell" data-level="3" data-date="2026-11-07"/, 'a usual 20 USDT day sits in the middle');
   });
 
-  await check('the stylesheet steps to bitcoin orange in both themes and pins the weekday labels', () => {
-    assert.match(css, /--dca-4:#f7931a/); assert.match(css, /body\.dark \.dca-diary[^{]*\{[^}]*--dca-4:#f7931a/);
+  await check('the stylesheet deepens through bitcoin orange in both themes and pins the weekday labels', () => {
+    assert.match(css, /--dca-4:#f7931a;--dca-5:#d17208;--dca-6:#9a4c04/);
+    assert.match(css, /body\.dark :is\(\.dca-diary,\.dca-records\)[^{]*\{[^}]*--dca-4:#f7931a;--dca-5:#ffb04f;--dca-6:#ffd396/);
+    for (const level of [5, 6]) { assert.match(css, new RegExp('\\.dca-cell\\[data-level="' + level + '"\\]')); assert.match(css, new RegExp('\\.dca-swatch\\[data-level="' + level + '"\\]')); }
+    assert.match(css, /\.dca-records\{position:fixed;inset:0/); assert.match(css, /\.dca-records-body\{[^}]*overflow:hidden/);
     assert.match(css, /\.dca-weekday\{[^}]*position:sticky/); assert.match(css, /\.dca-cell\.is-outside\{visibility:hidden\}/);
+  });
+
+  await check('the records list every buying day newest first, with totals and the price paid', () => {
+    const model = api.normalize(DIARY), all = api.records(model, 'all');
+    assert.deepEqual(all.map(day => api.formatDate(day.time)), ['2026-11-08', '2026-11-07', '2026-11-06', '2024-12-15', '2024-12-14']);
+    assert.deepEqual(api.records(model, '2024').map(day => api.formatDate(day.time)), ['2024-12-15', '2024-12-14']);
+    assert.equal(api.priceText(all[0]), '79,577', '20 USDT for 0.00025133 BTC'); assert.equal(api.priceText({ btc: 100, usdt: null }), '—');
+    assert.equal(api.recordsSummary(all, '全部'), '全部 · 5 天 · 6 笔 · 0.00609257 BTC · 约 400.00 USDT · 均价 65,654');
+    assert.equal(api.recordsSummary([], '2025 年'), '2025 年 · 暂无定投记录');
+    assert.equal(api.recordsSummary([{ time: 0, btc: 100, usdt: null, buys: null }], '全部'), '全部 · 1 天 · 0.000001 BTC');
+    const rows = api.recordRows(all.slice(0, 2), api.scale(model.days), D('2026-11-07'));
+    assert.equal(rows, '<tr data-date="2026-11-08"><td><i class="dca-swatch" data-level="3"></i>2026-11-08<small>周日</small></td><td>0.00025133</td><td>20.00</td><td>79,577</td><td>1</td></tr>' +
+      '<tr data-date="2026-11-07" class="is-selected"><td><i class="dca-swatch" data-level="3"></i>2026-11-07<small>周六</small></td><td>0.00024574</td><td>20.00</td><td>81,387</td><td>1</td></tr>');
   });
 
   // ---------- the panel on a fake DOM ----------
@@ -192,12 +216,59 @@ async function check(name, fn) { await fn(); checks++; console.log('OK ' + name)
     assert.match(bad.node('dcaDiaryMessage').textContent, /暂时无法读取/);
   });
 
+  await check('clicking the diary opens every record at the day clicked; a year filters them and Esc closes', async () => {
+    const h = harness(); await h.settle();
+    const panel = h.node('dcaDiaryPanel'), sheet = h.node('dcaRecords');
+    assert.equal(sheet.hidden, true);
+    await panel.fire('click', { target: { closest: selector => selector.startsWith('button') ? {} : null } });
+    assert.equal(sheet.hidden, true, 'the range buttons keep their own job');
+    await panel.fire('click', { target: { closest: selector => selector.includes('dca-cell') ? { dataset: { date: '2024-12-14' } } : null } });
+    assert.equal(sheet.hidden, false);
+    assert.equal(h.node('dcaRecordsSummary').textContent, '全部 · 5 天 · 6 笔 · 0.00609257 BTC · 约 400.00 USDT · 均价 65,654');
+    assert.match(h.node('dcaRecordsRows').innerHTML, /<tr data-date="2024-12-14" class="is-selected"><td><i class="dca-swatch" data-level="6"><\/i>/);
+    assert.match(h.node('dcaRecordsYears').innerHTML, /^<button type="button" data-year="all" aria-pressed="true">全部<\/button><button type="button" data-year="2026" aria-pressed="false">2026/);
+    assert.equal(h.node('dcaRecordsPage').textContent, '1 / 1');
+    assert.equal(h.node('dcaRecordsNewer').disabled, true); assert.equal(h.node('dcaRecordsOlder').disabled, true);
+    await sheet.fire('click', { target: { closest: selector => selector === 'button[data-year]' ? { dataset: { year: '2026' } } : null } });
+    assert.match(h.node('dcaRecordsSummary').textContent, /^2026 年 · 3 天 · 3 笔/); assert.doesNotMatch(h.node('dcaRecordsRows').innerHTML, /2024-12-14/);
+    await sheet.fire('keydown', { key: 'Escape', preventDefault() {} });
+    assert.equal(sheet.hidden, true);
+    // Enter on the board opens the records too; leaving the wallet page closes them.
+    await h.node('dcaDiaryGrid').fire('keydown', { key: 'Enter', preventDefault() {} });
+    assert.equal(sheet.hidden, false); assert.match(h.node('dcaRecordsRows').innerHTML, /^<tr data-date="2026-11-08">/);
+    h.node('walletPage').hidden = true; await h.root.fire('hashchange');
+    assert.equal(sheet.hidden, true);
+  });
+
+  await check('the records are paged to the window: buttons, keys, the wheel and a swipe turn pages', async () => {
+    const days = Array.from({ length: 30 }, (_, index) => [api.formatDate(D('2026-10-10') + index * DAY), '0.00025', '20', 1]);
+    const h = harness({ responses: [{ ...structuredClone(DIARY), days }, { ...structuredClone(DIARY), days }] }); await h.settle();
+    const sheet = h.node('dcaRecords'), page = () => h.node('dcaRecordsPage').textContent, key = name => sheet.fire('keydown', { key: name, preventDefault() {} });
+    await h.node('dcaDiaryPanel').fire('click', { target: { closest: () => null } });
+    assert.equal(page(), '1 / 3'); assert.equal((h.node('dcaRecordsRows').innerHTML.match(/<tr /g) || []).length, 12);
+    assert.match(h.node('dcaRecordsRows').innerHTML, /^<tr data-date="2026-11-08">/);
+    await sheet.fire('click', { target: { closest: selector => selector === '#dcaRecordsOlder' ? {} : null } }); assert.equal(page(), '2 / 3');
+    await key('End'); assert.equal(page(), '3 / 3'); assert.equal(h.node('dcaRecordsOlder').disabled, true);
+    assert.match(h.node('dcaRecordsRows').innerHTML, /<tr data-date="2026-10-10">[^]*$/);
+    await key('ArrowLeft'); assert.equal(page(), '2 / 3');
+    await key('Home'); assert.equal(page(), '1 / 3'); assert.equal(h.node('dcaRecordsNewer').disabled, true);
+    await sheet.fire('wheel', { deltaY: 120, timeStamp: 1000, preventDefault() {} }); assert.equal(page(), '2 / 3');
+    await sheet.fire('wheel', { deltaY: 120, timeStamp: 1100, preventDefault() {} }); assert.equal(page(), '2 / 3', 'a burst of wheel turns one page at a time');
+    await sheet.fire('wheel', { deltaY: -30, timeStamp: 1500, preventDefault() {} }); assert.equal(page(), '2 / 3', 'a small nudge does nothing');
+    await sheet.fire('pointerdown', { pointerType: 'touch', clientX: 100, clientY: 300 }); await sheet.fire('pointerup', { pointerType: 'touch', clientX: 104, clientY: 200 });
+    assert.equal(page(), '3 / 3', 'a swipe up shows older records');
+    await sheet.fire('pointerdown', { pointerType: 'mouse', clientX: 100, clientY: 300 }); await sheet.fire('pointerup', { pointerType: 'mouse', clientX: 100, clientY: 100 });
+    assert.equal(page(), '3 / 3', 'a mouse drag is not a swipe');
+    await h.tick(); assert.equal(page(), '3 / 3', 'a refresh keeps the page in view');
+    await sheet.fire('click'); assert.equal(sheet.hidden, true, 'a click on the dimmed backdrop closes them');
+  });
+
   await check('a hidden wallet page reads nothing until it is shown; destroy removes every listener', async () => {
     const h = harness({ hidden: true }); await h.settle();
     assert.equal(h.requests.length, 0); assert.equal(h.timers.size, 0);
     h.node('walletPage').hidden = false; await h.root.fire('hashchange'); assert.equal(h.requests.length, 1);
     h.controller.destroy();
-    for (const node of [h.document, h.root, h.node('dcaDiaryGrid'), h.node('dcaDiaryRange')]) for (const list of Object.values(node.listeners)) assert.equal(list.length, 0);
+    for (const node of [h.document, h.root, h.node('dcaDiaryGrid'), h.node('dcaDiaryRange'), h.node('dcaDiaryPanel'), h.node('dcaRecords')]) for (const list of Object.values(node.listeners)) assert.equal(list.length, 0);
     assert.equal(api.mount({ root: {}, document: { getElementById: () => null } }), null);
   });
 
