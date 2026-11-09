@@ -1,9 +1,10 @@
 /* 定投日记: a GitHub-style board of what went in each day. Level 0 is an
-   empty day; levels 1-6 deepen through bitcoin orange (#f7931a, level 4) as
-   the day's buy grows past the usual one (level 3). */
+   empty day; levels 1-6 deepen through bitcoin orange (#f7931a) as the day's
+   buy grows past the usual one (level 3). On a dark page "deeper" means
+   brighter, as on GitHub. */
 .dca-diary,.dca-records{--dca-0:var(--soft,#eeece7);--dca-1:#fde4c6;--dca-2:#fbc98d;--dca-3:#f9ae53;--dca-4:#f7931a;--dca-5:#d17208;--dca-6:#9a4c04}
 .dca-diary{position:relative;padding:23px 25px;margin-top:16px;--dca-surface:var(--card,#fff);--dca-cell:7px;--dca-gap:2px;cursor:pointer}
-body.dark :is(.dca-diary,.dca-records),html[data-xhy-theme="dark"] :is(.dca-diary,.dca-records){--dca-0:var(--soft,#262622);--dca-1:#4e3719;--dca-2:#7a521b;--dca-3:#a8691c;--dca-4:#f7931a;--dca-5:#ffb04f;--dca-6:#ffd396}
+body.dark :is(.dca-diary,.dca-records),html[data-xhy-theme="dark"] :is(.dca-diary,.dca-records){--dca-0:var(--soft,#262622);--dca-1:#3d2a12;--dca-2:#5c3d14;--dca-3:#8a5716;--dca-4:#b86f16;--dca-5:#f7931a;--dca-6:#ffad47}
 .dca-diary-heading{display:flex;align-items:center;justify-content:space-between;gap:8px 16px;flex-wrap:wrap}
 .dca-diary-heading>div:first-child{display:flex;align-items:baseline;gap:4px 10px;flex-wrap:wrap;min-width:0}
 .dca-diary-heading h2{margin:0;font-size:22px}
@@ -50,10 +51,10 @@ body.dark :is(.dca-diary,.dca-records),html[data-xhy-theme="dark"] :is(.dca-diar
 .dca-records[hidden]{display:none}
 body.dark .dca-records,html[data-xhy-theme="dark"] .dca-records{background:rgb(0 0 0 / .55)}
 .dca-records-panel{display:flex;flex-direction:column;box-sizing:border-box;width:min(760px,100%);height:min(720px,100%);padding:16px 18px 14px;border:1px solid var(--line);border-radius:16px;background:var(--card,#fff);color:var(--text);box-shadow:0 28px 64px -24px rgb(0 0 0 / .45);outline:none;animation:dca-rise .22s cubic-bezier(.22,1,.36,1)}
-.dca-records-head{display:flex;align-items:center;flex-wrap:wrap;gap:8px 14px}
+.dca-records-head{position:relative;display:flex;align-items:center;flex-wrap:wrap;gap:8px 14px;padding-right:40px}
 .dca-records-head h3{margin:0;font-size:15px;font-weight:600}
 .dca-records-years{margin-left:auto}
-.dca-records-close{display:inline-grid;place-items:center;width:30px;height:30px;padding:0;border:0;border-radius:999px;background:transparent;color:var(--muted);font:inherit;font-size:20px;line-height:1;cursor:pointer;transition:background-color .18s ease,color .18s ease}
+.dca-records-close{position:absolute;top:-3px;right:-6px;display:inline-grid;place-items:center;width:30px;height:30px;padding:0;border:0;border-radius:999px;background:transparent;color:var(--muted);font:inherit;font-size:20px;line-height:1;cursor:pointer;transition:background-color .18s ease,color .18s ease}
 .dca-records-close:hover{background:var(--soft);color:var(--text)}
 .dca-records-summary{margin:8px 0 6px;color:var(--muted);font-size:12px;line-height:1.5;font-variant-numeric:tabular-nums}
 .dca-records-body{flex:1 1 auto;min-height:0;overflow:hidden}
@@ -75,4 +76,6 @@ body.dark .dca-records,html[data-xhy-theme="dark"] .dca-records{background:rgb(0
 @keyframes dca-fade{from{opacity:0}}
 @keyframes dca-rise{from{opacity:0;transform:translateY(8px) scale(.985)}}
 @media(max-width:640px){.dca-records{padding:10px}.dca-records-panel{height:100%;padding:14px 12px 12px}.dca-records-table{font-size:12px}.dca-records-table :is(th,td){padding:0 5px}.dca-records-table td small{display:none}}
+/* A phone keeps date, BTC, USDT and price; the number of buys is in the totals. */
+@media(max-width:520px){.dca-records-table :is(th,td):nth-child(5){display:none}.dca-records-table :is(th,td):nth-child(4){padding-right:4px}}
 @media(prefers-reduced-motion:reduce){.dca-records,.dca-records-panel{animation:none}}

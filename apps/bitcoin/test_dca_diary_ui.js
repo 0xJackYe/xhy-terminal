@@ -131,7 +131,7 @@ async function check(name, fn) { await fn(); checks++; console.log('OK ' + name)
 
   await check('the stylesheet deepens through bitcoin orange in both themes and pins the weekday labels', () => {
     assert.match(css, /--dca-4:#f7931a;--dca-5:#d17208;--dca-6:#9a4c04/);
-    assert.match(css, /body\.dark :is\(\.dca-diary,\.dca-records\)[^{]*\{[^}]*--dca-4:#f7931a;--dca-5:#ffb04f;--dca-6:#ffd396/);
+    assert.match(css, /body\.dark :is\(\.dca-diary,\.dca-records\)[^{]*\{[^}]*--dca-5:#f7931a;--dca-6:#ffad47/, 'on a dark page the biggest days are the brightest');
     for (const level of [5, 6]) { assert.match(css, new RegExp('\\.dca-cell\\[data-level="' + level + '"\\]')); assert.match(css, new RegExp('\\.dca-swatch\\[data-level="' + level + '"\\]')); }
     assert.match(css, /\.dca-records\{position:fixed;inset:0/); assert.match(css, /\.dca-records-body\{[^}]*overflow:hidden/);
     assert.match(css, /\.dca-weekday\{[^}]*position:sticky/); assert.match(css, /\.dca-cell\.is-outside\{visibility:hidden\}/);
