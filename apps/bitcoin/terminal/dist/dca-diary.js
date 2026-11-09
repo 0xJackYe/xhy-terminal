@@ -204,7 +204,7 @@
       const summary = known
         ? view.label+'买入 '+part.days+' 天 · '+btcText(part.btc)+' BTC · 最长连续 '+part.longest+' 天'+(part.current > 1 ? ' · 当前连续 '+part.current+' 天' : '')
         : data.status === 'loading' ? '正在读取定投记录' : '等待成本账本';
-      node('dcaDiarySummary').textContent = summary;
+      node('dcaDiarySummary').textContent = summary;node('dcaDiarySummary').dataset.state = known ? 'known' : 'pending';
       node('dcaDiarySummary').title = known ? summary+(part.usdt !== null && part.days ? '\n约 '+usdtText(part.usdt)+' USDT' : '')+'\n按北京时间计日' : summary;
       grid.setAttribute('aria-label','定投日记 '+summary+'。用方向键逐日查看。');
       const message = failed ? data.days.size ? '同步暂未完成，保留上次的定投记录。' : '暂时无法读取定投记录，稍后自动重试。'

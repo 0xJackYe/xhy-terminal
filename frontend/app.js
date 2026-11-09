@@ -207,7 +207,7 @@
   function renderWallet(wallet = {}) {
     setModuleStatus("wallet", wallet.status || "offline");
     animateNumber("wallet-usd", wallet.totalUsd, 2, { cents: true });
-    text("wallet-cny", finite(wallet.totalCny) ? `约 ¥${fixed(wallet.totalCny, 2)} CNY` : wallet.status === "offline" ? "暂时无法读取钱包估值" : "连接账户后显示资产总估值");
+    text("wallet-cny", finite(wallet.totalCny) ? `约 ¥${fixed(wallet.totalCny, 2)} CNY` : "");
     animateNumber("wallet-btc", wallet.btcHoldings, 8);
     text("wallet-btc-label", `BTC 持仓${finite(wallet.btcHoldings) && wallet.btcHoldingsStale ? " · 已延迟" : ""}`);
     const list = $("wallet-assets");
@@ -491,7 +491,7 @@
     setData(range, "ready", hasRange);
     if (hasRange) setStyle(range, "--pos", String(clamp((Number(alerts.price) - Number(alerts.dayLow)) / (Number(alerts.dayHigh) - Number(alerts.dayLow)))));
     const enabled = alerts.enabled ?? alerts.settings?.enabled;
-    text("alerts-enabled", enabled === true ? "已开启" : enabled === false ? "已暂停" : "未读取");
+    text("alerts-enabled", enabled === true ? "已开启" : enabled === false ? "已暂停" : "—");
     setData($("alerts-enabled"), "enabled", enabled);
     const thresholds = (Array.isArray(alerts.thresholds) ? alerts.thresholds : Array.isArray(alerts.settings?.thresholds_pct) ? alerts.settings.thresholds_pct : []).filter(finite).map(Number);
     const current = finite(changeValue) ? Math.abs(Number(changeValue)) : null;

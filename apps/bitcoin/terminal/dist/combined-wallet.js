@@ -78,7 +78,10 @@
   function renderChart(history, mode, range, now) {
     const chart = geometry(history,mode,range,now);
     if (!chart) return '<p class="combined-empty">该范围内暂无两个可核实的合计快照；不会用当前余额回填历史。</p>';
-    return '<svg viewBox="0 0 920 214" role="img" aria-label="'+(mode === 'btc'?'BTC 数量':'余额市值')+'合计走势"><path class="combined-axis" d="M14,190H906"/><path class="combined-chart-line" d="'+chart.path+'"/><text x="14" y="210">'+escape(beijing(chart.first.time,false))+'</text><text x="906" y="210" text-anchor="end">'+escape(beijing(chart.last.time,false))+'</text></svg>';
+    // The drawing stretches to whatever box it is given (the strokes keep their
+    // width); the two dates sit below it as text, so they never stretch.
+    return '<svg viewBox="0 0 920 196" preserveAspectRatio="none" role="img" aria-label="'+(mode === 'btc'?'BTC 数量':'余额市值')+'合计走势"><path class="combined-axis" d="M14,190H906"/><path class="combined-chart-line" d="'+chart.path+'"/></svg>'+
+      '<div class="combined-chart-dates" aria-hidden="true"><span>'+escape(beijing(chart.first.time,false))+'</span><span>'+escape(beijing(chart.last.time,false))+'</span></div>';
   }
   function goal(value) {
     const parts = decimal(value);

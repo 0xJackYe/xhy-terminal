@@ -472,12 +472,12 @@ kbd { display: inline-grid; place-items: center; min-width: 19px; height: 19px; 
 /* ================= One screen, no page scrolling =================
    The header and the current page are exactly one window tall: the overview's
    charts and the embedded pages take whatever height is left, so nothing sits
-   below the fold. Should a window be too small for a page anyway, only the
-   page area scrolls; the header and the page tabs never move. */
+   below the fold. A page too tall for the window draws smaller to fit (app.js,
+   theme-bridge.js); nothing ever scrolls or shows a scroll bar. */
 html { height: 100%; }
 body { height: 100vh; height: 100dvh; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 .site-header { flex: none; }
-main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; overscroll-behavior: contain; }
+main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 main > :is(.notice, .service-notice) { flex: none; }
 #overview-view:not([hidden]) { flex: 1 1 auto; min-height: 0; }
 #project-view:not([hidden]) { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
@@ -551,3 +551,13 @@ html[data-ui="mobile"]:not([data-view="overview"]) main { padding: 0 0 env(safe-
 /* Inside a card only the charts give way; every other line keeps its height. */
 .card > * { flex-shrink: 0; }
 .card > .sparkline { flex-shrink: 1; }
+
+/* ================= No notices =================
+   The portal shows figures, not messages. Connection notices and the project
+   hint stay out of sight but are still read out to screen readers; status
+   pills, card notes, chart captions and empty-state lines are left out. The
+   sync dot in the header shows freshness, and a figure not known yet reads —. */
+:is(#global-notice, .project-hint) { position: absolute !important; width: 1px; height: 1px; margin: -1px; padding: 0 !important; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0 !important; }
+:is(.module-status, .card-note, #wallet-location-note, #alerts-chart-caption, .inline-empty) { display: none !important; }
+.section-label:has(+ #alerts-recent > .inline-empty:only-child), #alerts-recent:has(> .inline-empty:only-child) { display: none !important; }
+

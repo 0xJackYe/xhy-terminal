@@ -205,20 +205,32 @@
       win.scrollTo?.(0, 0);
       win.__xhyFitReset?.();
       win.XHYMotion?.enter(doc.getElementById(SECTIONS[key].page), { y: 4, duration: 220 });
+      // A diary wider than a phone opens on its latest weeks, as it does when
+      // it first draws in view.
+      win.requestAnimationFrame(() => { for (const strip of doc.querySelectorAll(".dca-diary-scroll")) strip.scrollLeft = strip.scrollWidth; });
     });
-    // Explanations float over the wallet page (CSS); a click elsewhere or Esc
-    // closes them, as with any menu.
-    const closeExplanations = event => {
-      if (event.type === "keydown" && event.key !== "Escape") return;
-      // A tap on the dimmed backdrop lands on the details element itself.
-      for (const item of doc.querySelectorAll(".combined-lifetime > details[open]")) if (event.type === "keydown" || !item.contains(event.target) || event.target === item) item.open = false;
-    };
-    doc.addEventListener("click", closeExplanations);
-    doc.addEventListener("keydown", closeExplanations);
     // The terminal's router shows the page first; follow it on the next tick.
     win.addEventListener("hashchange", () => win.setTimeout(render, 0));
     render();
     win.setTimeout(render, 0);
+  }
+
+  // The portal shows no standing notices. A form's own result (saved, or why
+  // not) still shows for a few seconds after the person uses that form: the
+  // panel is marked while its result is wanted, and CSS shows it only then.
+  const FORMS = ".alarm-panel, .email-panel, .portfolio-settings";
+  function connectFeedback(doc) {
+    const win = doc.defaultView;
+    if (win.__xhyFeedback || win.parent === win) return;
+    win.__xhyFeedback = true;
+    const mark = event => {
+      const panel = event.target.closest?.(FORMS);
+      if (!panel) return;
+      panel.dataset.xhyActed = "true";
+      win.clearTimeout(panel.__xhyActed);
+      panel.__xhyActed = win.setTimeout(() => { delete panel.dataset.xhyActed; }, 8000);
+    };
+    for (const type of ["click", "submit", "change"]) doc.addEventListener(type, mark, true);
   }
 
   // A page inside the portal never scrolls: when the window is too small for
@@ -231,6 +243,12 @@
     if (win.__xhyFit || win.parent === win || !doc.body) return;
     win.__xhyFit = true;
     const root = doc.documentElement;
+    // An embedded page never shows a scroll bar: it fits by drawing smaller
+    // (below), and anything still taller at the smallest size is cut off
+    // rather than scrolled. The body never scrolls on its own, so whatever
+    // it holds counts towards the page height measured below.
+    root.style.setProperty("overflow", "hidden", "important");
+    doc.body.style.setProperty("overflow", "visible", "important");
     let zoom = 1, frame = 0;
     const set = value => {
       zoom = value;
@@ -321,6 +339,7 @@
       connectProjectMotion(doc);
       connectShortcuts(doc);
       connectSections(doc);
+      connectFeedback(doc);
       connectFit(doc);
     }
     if (!observed.has(doc)) {

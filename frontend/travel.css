@@ -275,3 +275,13 @@ html[data-xhy-embedded="true"] .provider-heading{flex-direction:row;align-items:
    drawn smaller if needed (theme-bridge.js), filling the window at that scale. */
 html[data-xhy-embedded="true"] .travel-page{height:calc(100vh / var(--xhy-fit,1))}
 html[data-xhy-embedded="true"] .travel-form{overflow:visible}
+/* Inside the portal the page shows no standing notices: the data-source
+   status, the privacy and booking notes, empty prompts, the source-missing
+   summary and the timing explanation stay out. What answers something you
+   just did (location, a failed search) still shows. */
+html[data-xhy-embedded="true"] :is(#travel-provider,#airport-note,#travel-defaults-status,.country-fieldset>.field-note,.form-actions>.field-note,.travel-side>.travel-notes,#travel-airports>.is-prompt,#travel-summary>.empty-inline,.result-summary.is-notice){display:none!important}
+html[data-xhy-embedded="true"] :is(#travel-location-status,#travel-form-status):empty{display:none!important}
+
+/* No scroll bars inside the portal: the page fits the window instead. */
+html[data-xhy-embedded="true"],html[data-xhy-embedded="true"] *{scrollbar-width:none}
+html[data-xhy-embedded="true"] ::-webkit-scrollbar{display:none}

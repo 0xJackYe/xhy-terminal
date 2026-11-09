@@ -51,7 +51,7 @@
   const live=data?.provider?.status==='live',flights=Array.isArray(data?.flights)?data.flights:[];
   const recommendation=data?.recommendation;
   let summary;
-  if(!live)summary='<p class="result-summary"><strong>尚未接通实时航班源。</strong>选择机场后可前往官方查询 / 购票；当前无法确定最快可成行的一班。</p>';
+  if(!live)summary='<p class="result-summary is-notice"><strong>尚未接通实时航班源。</strong>选择机场后可前往官方查询 / 购票；当前无法确定最快可成行的一班。</p>';
   else if(!flights.length)summary='<p class="result-summary">当前条件下没有可核实的直飞候选。可调整出发日期、准备时间或机场范围后重查。</p>';
   else if(confirmedCandidate(recommendation,live,now))summary='<p class="result-summary">当前较早的可行候选：<strong>'+escape(recommendation.flight_number||'待核实航班')+'</strong>。购票前仍须复核入境、交通和值机条件。</p>';
   else if(tentativeCandidate(data?.earliest_candidate,live,now)){
@@ -99,7 +99,7 @@
    const term=$('travel-city').value.trim().toLocaleLowerCase();
    let rows=config.airports.filter(a=>!term||[a.iata,a.name,a.city,...(Array.isArray(a.search_cities)?a.search_cities:[])].some(value=>String(value||'').toLocaleLowerCase().includes(term))||selected.has(a.iata));
    rows=[...rows].sort((a,b)=>Number(selected.has(b.iata))-Number(selected.has(a.iata))||(position?(haversine(position,a)??Infinity)-(haversine(position,b)??Infinity):0));
-   if(!term&&!position&&!selected.size){$('travel-airports').innerHTML='<p class="empty-inline">输入城市或机场名称后选择出发机场，也可以主动使用当前位置筛选。</p>';return;}
+   if(!term&&!position&&!selected.size){$('travel-airports').innerHTML='<p class="empty-inline is-prompt">输入城市或机场名称后选择出发机场，也可以主动使用当前位置筛选。</p>';return;}
    $('travel-airports').innerHTML=rows.length?rows.slice(0,16).map(a=>{
     const code=String(a.iata||'');if(!/^[A-Z]{3}$/.test(code))return '';
     const distance=position?haversine(position,a):null,value=selected.get(code);
