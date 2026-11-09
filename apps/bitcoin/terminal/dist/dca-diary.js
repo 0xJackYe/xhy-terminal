@@ -197,7 +197,8 @@
         if (view.to === data.today && scroller.scrollWidth > scroller.clientWidth) scroller.scrollLeft = scroller.scrollWidth;
       }
       const all = stats(data,data.start,data.today), part = stats(data,view.from,view.to);
-      node('dcaDiarySince').textContent = '自 '+formatDate(data.start)+' 起'+(data.first === null ? '' : ' · '+all.days+' 天 · '+btcText(all.btc)+' BTC');
+      const venueLabel = data.venues.includes('binance') ? ['okx','binance'].filter(venue => data.venues.includes(venue)).map(venue => venue === 'okx' ? '欧易' : '币安').join(' + ')+' · ' : '';
+      node('dcaDiarySince').textContent = venueLabel+'自 '+formatDate(data.start)+' 起'+(data.first === null ? '' : ' · '+all.days+' 天 · '+btcText(all.btc)+' BTC');
       node('dcaDiarySince').title = node('dcaDiarySince').textContent+(data.first === null ? '' : '\n首笔买入 '+formatDate(data.first)+'；累计买入 '+all.buys+' 笔'+(all.usdt !== null ? '，约 '+usdtText(all.usdt)+' USDT' : ''));
       // One short line: days, BTC and streaks; the USDT spent is in its tooltip.
       const known = data.days.size || data.status === 'fresh' || data.status === 'stale';

@@ -170,6 +170,13 @@ async function check(name, fn) { await fn(); checks++; console.log('OK ' + name)
     await h.tick(); assert.equal(h.requests.length, 2);
   });
 
+  await check('merged diary names both venues and removes an obsolete scope after a change', async () => {
+    const merged = structuredClone(DIARY); merged.venues = ['okx','binance'];
+    const h = harness({responses:[merged,structuredClone(DIARY)]}); await h.settle();
+    assert.match(h.node('dcaDiarySince').textContent, /^欧易 \+ 币安 · 自 2024-12-14/);
+    await h.tick(); assert.doesNotMatch(h.node('dcaDiarySince').textContent, /币安/);
+  });
+
   await check('choosing a year redraws the board for that year', async () => {
     const h = harness(); await h.settle();
     await h.node('dcaDiaryRange').fire('click', { target: { closest: () => ({ dataset: { range: '2024' } }) } });
