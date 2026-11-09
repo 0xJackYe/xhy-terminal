@@ -154,7 +154,8 @@ async function check(name, fn) { await fn(); checks++; console.log('OK ' + name)
     return { node: id => nodes.get(id), requests, timers, controller, settle, tick, document, root };
   }
 
-  await check('the panel reads the diary once, draws it and refreshes every five minutes', async () => {
+  await check('the panel reads the diary once, draws it and refreshes every thirty seconds', async () => {
+    assert.equal(api.REFRESH_MS, 30000);
     const h = harness(); await h.settle();
     assert.equal(h.requests.length, 1); assert.equal(h.requests[0].url, '/api/wallet/btc-dca-diary');
     assert.equal(h.requests[0].init.cache, 'no-store'); assert.equal(h.requests[0].init.method, 'GET');

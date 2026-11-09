@@ -1,5 +1,6 @@
 """Local Bitcoin dashboard; optional mail credentials stay in a local vault."""
 import argparse
+from contextlib import nullcontext
 import datetime as dt
 import json
 import math
@@ -258,6 +259,7 @@ class TerminalServer(ThreadingHTTPServer):
         self.okx_service = okx_service
         self.combined_service = combined_service
         self.cost_service = cost_service
+        self.okx_cost_service = None
         self.pnl_service = None
         self.portfolio_service = None
         self.stopping = threading.Event()
@@ -433,9 +435,14 @@ class TerminalHandler(BaseHTTPRequestHandler):
                 okx = self.server.okx_service
                 if okx is not None:
                     with okx.lock:
-                        view = self.server.combined_service.read_public()
-                        if self.server.pnl_service is not None:
-                            view['lifetime_pnl'] = self.server.pnl_service.read_public()
+                        portfolio = self.server.portfolio_service
+                        with portfolio.lock if portfolio is not None else nullcontext():
+                            view = self.server.combined_service.read_public()
+                            if portfolio is not None:
+                                from venue_holdings import with_binance_holdings
+                                view = with_binance_holdings(view, portfolio)
+                            if self.server.pnl_service is not None:
+                                view['lifetime_pnl'] = self.server.pnl_service.read_public()
                 else:
                     view = self.server.combined_service.read_public()
                 self.json(200, view)
@@ -668,6 +675,7 @@ def main():
             from btc_cost_tracker import BTCCostTracker
             server.cost_service = BTCCostTracker(okx_service)
             server.cost_service.start()
+            server.okx_cost_service = server.cost_service
         except Exception:
             server.cost_service = None
         try:
@@ -676,19 +684,30 @@ def main():
             server.combined_service.start()
         except Exception:
             server.combined_service = None
-        if server.cost_service is not None and server.combined_service is not None:
-            try:
-                from btc_pnl_service import BTCPnLService
-                server.pnl_service = BTCPnLService(server.cost_service, server.combined_service)
-                server.pnl_service.start()
-            except Exception:
-                server.pnl_service = None
         try:
             from crypto_portfolio_service import CryptoPortfolioService
             server.portfolio_service = CryptoPortfolioService(okx_service, server.combined_service)
             server.portfolio_service.start()
         except Exception:
             server.portfolio_service = None
+        if server.cost_service is not None and server.portfolio_service is not None:
+            try:
+                from merged_btc_cost import BinanceBTCTracker, MergedBTCCostTracker
+                binance_cost = BinanceBTCTracker(server.portfolio_service, server.cost_service)
+                server.cost_service = MergedBTCCostTracker(server.cost_service, binance_cost)
+                server.cost_service.start()
+            except Exception:
+                # Keep the verified OKX book available if the importer cannot start.
+                server.cost_service = server.okx_cost_service
+                print("币安成交历史暂未启动；已保存的成本账本保留。", flush=True)
+        if server.cost_service is not None and server.combined_service is not None:
+            try:
+                from btc_pnl_service import BTCPnLService
+                server.pnl_service = BTCPnLService(server.cost_service, server.combined_service,
+                    portfolio_service=server.portfolio_service)
+                server.pnl_service.start()
+            except Exception:
+                server.pnl_service = None
     url = "http://127.0.0.1:%s/" % args.port
     print("比特币终端：" + url, flush=True)
     print("价格警报按网页中保存的分档阈值触发。保持此程序运行及电脑开机联网。", flush=True)
@@ -704,6 +723,8 @@ def main():
             server.pnl_service.stop()
         if server.cost_service is not None:
             server.cost_service.stop()
+        if server.okx_cost_service is not None and server.okx_cost_service is not server.cost_service:
+            server.okx_cost_service.stop()
         if server.portfolio_service is not None:
             server.portfolio_service.stop()
         if server.combined_service is not None:

@@ -471,6 +471,16 @@ class AddressProviderTests(unittest.TestCase):
         result = self.source.refresh()
         self.assertEqual([row['time'] for row in result['prices']], sorted(row['time'] for row in self.chain['prices']))
 
+    def test_verified_chain_snapshot_survives_backend_restart(self):
+        result = self.source.refresh()
+        restarted = AddressSnapshots(self.proxy, clock=lambda: END / 1000)
+        self.assertEqual(result, restarted.snapshot)
+        before = self.source.snapshot_path.read_bytes()
+        self.proxy.failure = 'address'
+        with self.assertRaises(RuntimeError):
+            self.source.refresh()
+        self.assertEqual(before, self.source.snapshot_path.read_bytes())
+
     def test_empty_address_history_can_refresh(self):
         self.source.snapshot['transactions'] = []
         self.proxy.values['transactions'] = []

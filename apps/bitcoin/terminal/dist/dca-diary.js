@@ -13,7 +13,7 @@
   // 定投日记: one square per Beijing day since the first purchase on
   // 2024-12-14, like a GitHub contribution graph. The more BTC bought that
   // day, the closer the square is to bitcoin orange.
-  const START = '2024-12-14', DAY = 86400000, REFRESH_MS = 300000, REQUEST_TIMEOUT_MS = 15000;
+  const START = '2024-12-14', DAY = 86400000, REFRESH_MS = 30000, REQUEST_TIMEOUT_MS = 15000;
   const WEEKDAYS = ['周一','周二','周三','周四','周五','周六','周日'];
   const DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 

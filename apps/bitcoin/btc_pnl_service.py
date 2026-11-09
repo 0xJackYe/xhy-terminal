@@ -19,6 +19,7 @@ import urllib.request
 from btc_cost_tracker import number, text, iso
 from okx_account_reader import _verified_opener
 from okx_wallet_service import DIRECTORY, OKXVault, identity
+from venue_holdings import binance_btc_source
 
 ZERO = Decimal(0)
 INTERVAL = 20
@@ -221,11 +222,13 @@ class PublicPnLMarket:
 
 
 class BTCPnLService:
-    def __init__(self, cost_service, combined_service, vault=None, market=None, clock=time.time):
+    def __init__(self, cost_service, combined_service, vault=None, market=None, clock=time.time,
+                 portfolio_service=None):
         self.cost, self.combined, self.okx = cost_service, combined_service, cost_service.okx
         self.vault = vault or OKXVault(DIRECTORY.parent / 'btc-pnl')
         self.market = market or PublicPnLMarket(self.vault, clock=clock)
         self.clock = clock
+        self.portfolio = portfolio_service
         self.lock = threading.RLock()
         self.refresh_lock = threading.Lock()
         self.stop_event = threading.Event()
@@ -269,6 +272,7 @@ class BTCPnLService:
             if policy.get('identity') != account or policy.get('small_inflows_no_added_cost') is not True:
                 raise PnLError('needs_policy')
             snapshot = self.cost.accounting_snapshot()
+            venues = snapshot.get('venues', ['okx'])
             ledger = snapshot.get('ledger')
             if (snapshot.get('connection_id') != account[:24] or not ledger or not ledger.get('complete')
                     or snapshot.get('coverage_complete') is not True):
@@ -299,16 +303,37 @@ class BTCPnLService:
                     holding_btc = text(sum((number(r['btc']) for r in source_map.values()), ZERO))
                 holding_at = min((r['updated_at'] for r in source_map.values()),
                     key=lambda value:dt.datetime.fromisoformat(value.replace('Z','+00:00')).timestamp())
+            if 'binance' in venues:
+                if self.portfolio is None:
+                    raise PnLError('holdings_unavailable')
+                source = binance_btc_source(self.portfolio, now=self.clock())
+                if source.get('btc') is None:
+                    raise PnLError('holdings_unavailable')
+                with localcontext() as context:
+                    context.prec = 96
+                    holding_btc = text(number(holding_btc) + number(source['btc']))
+                balance_sources.append({key: value for key, value in source.items() if key != 'context'})
+                holding_stale = holding_stale or source['status'] != 'fresh'
+                holding_at = min((holding_at, source['updated_at']),
+                    key=lambda value: dt.datetime.fromisoformat(value.replace('Z', '+00:00')).timestamp())
             rates, evidence = {}, []
+            saved_rates = snapshot.get('historical_rates') or {}
             for ccy, minute in sorted({(r['quote_ccy'], r['at_ms'] // MINUTE * MINUTE)
                                       for r in ledger['records'] if r['side'] == 'buy' and r['quote_ccy'] != 'USDT'}):
-                rates[(ccy, minute)], source = self.market.historical_rate(ccy, minute)
-                evidence.append(source)
+                cached = saved_rates.get(ccy + ':' + str(minute))
+                if isinstance(cached, dict) and number(cached.get('close', '0')) > 0:
+                    rates[(ccy, minute)] = number(cached['close'])
+                    evidence.append(copy.deepcopy(cached))
+                else:
+                    rates[(ccy, minute)], source = self.market.historical_rate(ccy, minute)
+                    evidence.append(source)
             price, quote_at = self.market.quote()
             result = compute_position(ledger['records'], holding_btc, price, rates)
             now_ms = int(self.clock() * 1000)
             outdated = (snapshot.get('status') != 'fresh' or holding_stale
                         or now_ms - ledger['as_of_ms'] > 90000)
+            pending_binance = snapshot.get('binance_status') is not None and 'binance' not in venues
+            outdated = outdated or pending_binance
             delta = number(result['metrics']['nonspot_btc_adjustment']) - number(policy['verified_nonspot_adjustment_btc'])
             reconciliation = {'verified_at': policy['verified_at'],
                               'verified_adjustment_btc': policy['verified_nonspot_adjustment_btc'],
@@ -322,20 +347,25 @@ class BTCPnLService:
                 method='moving_weighted_average', as_of=iso(now_ms), ledger_as_of=iso(ledger['as_of_ms']),
                 holdings_as_of=holding_at, balance_sources=balance_sources, quote_at=quote_at,
                 coverage_start=iso(ledger['coverage_start_ms']), coverage_complete=True,
-                history_status=snapshot.get('status'), connection_id=account[:24],
+                history_status=snapshot.get('status'),
+                connection_id=snapshot.get('public_connection_id', account[:24]),
+                venues=venues, venue_context=snapshot.get('venue_context'),
                 refresh_interval_seconds=INTERVAL, historical_rates=evidence, reconciliation=reconciliation,
                 ignored_received_btc=policy.get('received_btc', '0'),
                 assumptions=[
                     '每笔定投以净到账 BTC 和含手续费的实际支出更新持仓平均买入价，后台自动刷新。',
                     '历史卖出仅按当时平均成本调整剩余数量与成本，卖出回款不计入当前浮盈。',
                     '按你的要求，两笔小额 Received 转入不追加原始成本；持仓成本与浮盈为估算。',
-                    'ETH、USDC 支付按成交当分钟 OKX/USDT 收盘价折算，不将 USDC 直接视为 USDT。',
+                    '跨币种支付按已核验的成交分钟 USDT 行情折算；币安第三币种手续费也计入买入成本。',
                     'Earn、历史合约净变动和提币/矿工费以实际持仓的期末数量调整体现，不重复加减。',
                     '持仓浮盈 = 当前总持仓 × BTC/USDT 现价 − 剩余持仓成本；浮盈率 = 浮盈 ÷ 剩余持仓成本。',
                     '平均买入价 = 剩余持仓成本 ÷ 实际 BTC 总持有；只计算当前长期持仓的浮盈。',
-                ], error=('持仓或历史含缓存，或有新的持仓数量调整待核对。' if outdated else None))
+                ], error=('币安历史正在导入或暂未完整读取，当前浮盈仅含已核验来源。' if pending_binance else
+                          '持仓或历史含缓存，或有新的持仓数量调整待核对。' if outdated else None))
             with self.okx.lock:
                 if self._account() != account:
+                    return False
+                if hasattr(self.cost, 'context_matches') and not self.cost.context_matches(snapshot):
                     return False
                 with self.lock:
                     self.view, self.error = result, None
@@ -354,6 +384,9 @@ class BTCPnLService:
             account = self._account()
             self._select(account)
             with self.lock:
+                if self.view and hasattr(self.cost, 'context_matches') and not self.cost.context_matches(self.view):
+                    self.view = None
+                    self.error = None
                 if not self.view:
                     return {'status': 'unavailable' if self.error else 'loading', 'estimated': True,
                             'currency': 'USDT', 'method': 'moving_weighted_average', 'metrics': {},

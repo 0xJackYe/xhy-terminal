@@ -6,6 +6,7 @@ import json
 import io
 import threading
 import unittest
+from unittest.mock import patch
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
@@ -202,6 +203,54 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(result['status'],'fresh')
         self.assertEqual(result['metrics']['unrealized_net'],'75')
         self.assertEqual(result['balance_sources'][1]['provider'],'Blockstream/confirmed')
+
+
+    def test_binance_cost_and_holdings_enter_position_together(self):
+        self.snapshot.update(venues=['okx', 'binance'], public_connection_id='two-venues',
+                             venue_context=('active',))
+        self.snapshot['ledger']['records'].append(row('buy', '0.5', '150', 5))
+        self.service.portfolio = object()
+        source = {'id': 'binance', 'btc': '0.5', 'status': 'fresh',
+                  'updated_at': iso(NOW), 'context': ('active',)}
+        with patch('btc_pnl_service.binance_btc_source', return_value=source):
+            self.assertTrue(self.service.refresh_once())
+        result = self.service.read_public()
+        self.assertEqual(result['metrics']['holdings_btc'], '1.6')
+        self.assertEqual(result['metrics']['remaining_cost'], '350')
+        self.assertEqual(result['metrics']['average_cost'], '218.75')
+        self.assertEqual(result['metrics']['unrealized_net'], '50')
+        self.assertTrue(result['reconciliation']['matched'])
+        self.assertEqual(result['connection_id'], 'two-venues')
+        self.assertEqual(result['venues'], ['okx', 'binance'])
+        self.assertNotIn('context', result['balance_sources'][-1])
+
+    def test_binance_historical_rate_does_not_fetch_an_okx_substitute(self):
+        self.snapshot.update(venues=['okx', 'binance'])
+        purchase = row('buy', '0.5', '150', 5, currency='USDC')
+        self.snapshot['ledger']['records'].append(purchase)
+        minute = purchase['at_ms'] // 60000 * 60000
+        self.snapshot['historical_rates'] = {'USDC:' + str(minute):
+            {'close': '1.01', 'source': 'Binance/1m-close'}}
+        self.service.portfolio = object()
+        self.market.historical_rate = lambda *args: self.fail('should use verified Binance rate')
+        with patch('btc_pnl_service.binance_btc_source', return_value={
+                'id': 'binance', 'btc': '0.5', 'status': 'fresh', 'updated_at': iso(NOW)}):
+            self.assertTrue(self.service.refresh_once())
+        self.assertEqual(self.service.read_public()['metrics']['remaining_cost'], '351.5')
+
+    def test_binance_account_change_during_price_read_discards_result(self):
+        current = [True]
+        self.cost.context_matches = lambda _: current[0]
+        self.market.during_quote = lambda: current.__setitem__(0, False)
+        self.assertFalse(self.service.refresh_once())
+        self.assertEqual(self.service.read_public()['metrics'], {})
+
+    def test_binance_scope_change_does_not_serve_old_position_cache(self):
+        current = [True]
+        self.cost.context_matches = lambda _: current[0]
+        self.assertTrue(self.service.refresh_once())
+        current[0] = False
+        self.assertEqual(self.service.read_public()['metrics'], {})
 
 
 class PublicMarketTests(unittest.TestCase):

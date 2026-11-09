@@ -242,7 +242,14 @@ class CryptoPortfolioService:
         return self.binance_status()
 
     def read_public(self):
-        live_connection = self.okx.read_public().get('connection_id')
+        # Every combined cost/holdings read uses OKX -> portfolio. Taking the
+        # opposite order here can block both account pollers indefinitely.
+        with self.okx.lock:
+            return self._read_public_locked()
+
+    def _read_public_locked(self):
+        online = self.okx.read_public()
+        live_connection = online.get('connection_id')
         with self.lock:
             value = copy.deepcopy(self.view) if self.view and live_connection == self.okx_connection else {
                 'updated_at': None, 'complete': False, 'stale': True, 'total_usd': None,
@@ -252,7 +259,6 @@ class CryptoPortfolioService:
             if value['updated_at'] and self.clock() - dt.datetime.fromisoformat(value['updated_at']).timestamp() > 90:
                 value['stale'] = True
                 value['complete'] = False
-            online = self.okx.read_public()
             for source in value['sources']:
                 if source['id'] == 'okx' and online.get('status') in {'stale', 'error', 'connecting', 'needs_credentials'}:
                     source['status'] = 'stale' if self.okx_data else online['status']
