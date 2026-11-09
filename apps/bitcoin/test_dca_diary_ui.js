@@ -178,7 +178,8 @@ async function check(name, fn) { await fn(); checks++; console.log('OK ' + name)
     return { node: id => nodes.get(id), requests, timers, controller, settle, tick, document, root };
   }
 
-  await check('the panel reads the diary once, draws it and refreshes every five minutes', async () => {
+  await check('the panel reads the diary once, draws it and refreshes every thirty seconds', async () => {
+    assert.equal(api.REFRESH_MS, 30000);
     const h = harness(); await h.settle();
     assert.equal(h.requests.length, 1); assert.equal(h.requests[0].url, '/api/wallet/btc-dca-diary');
     assert.equal(h.requests[0].init.cache, 'no-store'); assert.equal(h.requests[0].init.method, 'GET');
@@ -191,6 +192,13 @@ async function check(name, fn) { await fn(); checks++; console.log('OK ' + name)
     assert.equal(h.node('dcaDiaryMessage').hidden, true);
     assert.match(h.node('dcaDiaryGrid').attrs['aria-label'], /近一年买入 3 天/);
     await h.tick(); assert.equal(h.requests.length, 2);
+  });
+
+  await check('merged diary names both venues and removes an obsolete scope after a change', async () => {
+    const merged = structuredClone(DIARY); merged.venues = ['okx','binance'];
+    const h = harness({responses:[merged,structuredClone(DIARY)]}); await h.settle();
+    assert.match(h.node('dcaDiarySince').textContent, /^欧易 \+ 币安 · 自 2024-12-14/);
+    await h.tick(); assert.doesNotMatch(h.node('dcaDiarySince').textContent, /币安/);
   });
 
   await check('choosing a year redraws the board for that year', async () => {

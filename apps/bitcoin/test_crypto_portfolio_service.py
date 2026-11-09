@@ -237,6 +237,18 @@ class AggregateAssetsTests(unittest.TestCase):
 
 class ServiceTests(unittest.TestCase):
     def setUp(self):self.f=fixture();self.service=self.f.service
+
+    def test_portfolio_reads_keep_the_shared_exchange_lock_order(self):
+        original = self.f.okx.read_public
+        def checked_read():
+            if self.service.lock._is_owned():
+                self.assertTrue(self.f.okx.lock._is_owned(),
+                                'portfolio -> OKX would deadlock a combined account read')
+            return original()
+        self.f.okx.read_public = checked_read
+        self.service.read_public()
+        self.service.refresh_once()
+        self.service.read_public()
     def tearDown(self):
         for factory in [self.f.okx,self.f.factory]:
             if factory.release:factory.release.set()

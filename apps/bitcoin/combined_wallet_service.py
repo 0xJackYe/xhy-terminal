@@ -3,7 +3,9 @@ import copy
 import datetime as dt
 from decimal import Decimal, localcontext
 import json
+import os
 from pathlib import Path
+import tempfile
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -36,8 +38,10 @@ def fiat_text(value):
 class AddressSnapshots:
     def __init__(self, proxy, clock=time.time):
         self.proxy, self.clock = proxy, clock
-        self.snapshot = json.loads((ROOT / 'terminal/data/bitcoin-balance-snapshot.json').read_text(encoding='utf-8-sig'))
-        self.snapshot['fx'] = json.loads((ROOT / 'terminal/data/bitcoin-cny-rates.json').read_text(encoding='utf-8-sig'))
+        self.snapshot_path = ROOT / 'terminal/data/bitcoin-balance-snapshot.json'
+        self.snapshot = json.loads(self.snapshot_path.read_text(encoding='utf-8-sig'))
+        if not isinstance(self.snapshot.get('fx'), dict):
+            self.snapshot['fx'] = json.loads((ROOT / 'terminal/data/bitcoin-cny-rates.json').read_text(encoding='utf-8-sig'))
 
     def request(self, resource, **params):
         return json.loads(self.proxy.read({k: [v] for k, v in dict(resource=resource, **params).items()}))
@@ -83,6 +87,20 @@ class AddressSnapshots:
         price_rows = sorted((r for r in prices['prices'] if r['time'] >= first - 86400), key=lambda r: r['time'])
         result = normalize_onchain(summary, rows, price_rows, quote, fx,
                                    iso(int(self.clock() * 1000)), address)
+        # Keep the last reconciled snapshot across process/Windows restarts,
+        # rather than returning to the original repository migration snapshot.
+        temporary = None
+        try:
+            with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8',
+                    dir=str(self.snapshot_path.parent), prefix='.chain-', suffix='.tmp', delete=False) as output:
+                temporary = Path(output.name)
+                json.dump(result, output, ensure_ascii=False, allow_nan=False)
+                output.flush()
+                os.fsync(output.fileno())
+            os.replace(str(temporary), str(self.snapshot_path))
+        finally:
+            if temporary is not None:
+                temporary.unlink(missing_ok=True)
         self.snapshot = result
         return result
 

@@ -13,7 +13,7 @@
   // 定投日记: one square per Beijing day since the first purchase on
   // 2024-12-14, like a GitHub contribution graph. The more BTC bought that
   // day, the closer the square is to bitcoin orange.
-  const START = '2024-12-14', DAY = 86400000, REFRESH_MS = 300000, REQUEST_TIMEOUT_MS = 15000;
+  const START = '2024-12-14', DAY = 86400000, REFRESH_MS = 30000, REQUEST_TIMEOUT_MS = 15000;
   const WEEKDAYS = ['周一','周二','周三','周四','周五','周六','周日'];
   const DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
@@ -245,7 +245,8 @@
         if (view.to === data.today && scroller.scrollWidth > scroller.clientWidth) scroller.scrollLeft = scroller.scrollWidth;
       }
       const all = stats(data,data.start,data.today), part = stats(data,view.from,view.to);
-      node('dcaDiarySince').textContent = '自 '+formatDate(data.start)+' 起'+(data.first === null ? '' : ' · '+all.days+' 天 · '+btcText(all.btc)+' BTC');
+      const venueLabel = data.venues.includes('binance') ? ['okx','binance'].filter(venue => data.venues.includes(venue)).map(venue => venue === 'okx' ? '欧易' : '币安').join(' + ')+' · ' : '';
+      node('dcaDiarySince').textContent = venueLabel+'自 '+formatDate(data.start)+' 起'+(data.first === null ? '' : ' · '+all.days+' 天 · '+btcText(all.btc)+' BTC');
       node('dcaDiarySince').title = node('dcaDiarySince').textContent+(data.first === null ? '' : '\n首笔买入 '+formatDate(data.first)+'；累计买入 '+all.buys+' 笔'+(all.usdt !== null ? '，约 '+usdtText(all.usdt)+' USDT' : ''));
       // One short line: days, BTC and streaks; the USDT spent is in its tooltip.
       const known = data.days.size || data.status === 'fresh' || data.status === 'stale';
