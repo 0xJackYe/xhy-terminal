@@ -45,6 +45,17 @@ async function check(name, fn) { await fn(); checks++; console.log('OK ' + name)
     assert.equal(api.usdtText(1044500), '10,445.00'); assert.equal(api.usdtText(5), '0.05'); assert.equal(api.btcText(-1), '—'); assert.equal(api.usdtText(null), '—');
   });
 
+  await check('full precision decimal summaries round once without floating point or per-day drift', () => {
+    assert.equal(api.exactText('0.0030000147', 8), '0.00300001');
+    assert.equal(api.exactText('239.1147', 2, true), '239.11');
+    assert.equal(api.exactText('79704.509447903705271844', 0), '79,705');
+    assert.equal(api.exactText('99999.999999999999999999', 2, true), '100,000.00');
+    assert.equal(api.exactText('9007199254740993.005', 2, true), '9,007,199,254,740,993.01');
+    for (const value of ['-1', 'NaN', 'Infinity', '1e3', 1, '<script>']) assert.equal(api.exactText(value, 8), '—');
+    assert.equal(api.exactSummary({btc:'1',usdt:'100',average_buy_price:'100',buys:1,days:1}).btc, '1');
+    assert.equal(api.exactSummary({btc:'-1',usdt:'100',average_buy_price:'100',buys:1,days:1}), null);
+  });
+
   await check('the payload is checked and malformed days are dropped, never drawn', () => {
     assert.equal(api.normalize(null), null); assert.equal(api.normalize({ status: 'odd', days: [] }), null); assert.equal(api.normalize({ status: 'fresh', days: {} }), null);
     const model = api.normalize({ ...DIARY, venues: ['okx', 'evil'], days: [...DIARY.days, ['2025-02-30', '0.1', '1', 1], ['2025-03-01', '0', '0', 1], ['2025-03-02', '-0.1', '1', 1], 'x', ['2025-03-03', '0.000000001', '1', 1], ['2024-12-15', '0.00000539', null, 1]] });
@@ -142,9 +153,9 @@ async function check(name, fn) { await fn(); checks++; console.log('OK ' + name)
     assert.deepEqual(all.map(day => api.formatDate(day.time)), ['2026-11-08', '2026-11-07', '2026-11-06', '2024-12-15', '2024-12-14']);
     assert.deepEqual(api.records(model, '2024').map(day => api.formatDate(day.time)), ['2024-12-15', '2024-12-14']);
     assert.equal(api.priceText(all[0]), '79,577', '20 USDT for 0.00025133 BTC'); assert.equal(api.priceText({ btc: 100, usdt: null }), '—');
-    assert.equal(api.recordsSummary(all, '全部'), '全部 · 5 天 · 6 笔 · 0.00609257 BTC · 约 400.00 USDT · 均价 65,654');
+    assert.equal(api.recordsSummary(all, '全部'), '全部 · 5 天 · 6 笔 · 累计买入 0.00609257 BTC · 约 400.00 USDT · 历史买入均价 65,654');
     assert.equal(api.recordsSummary([], '2025 年'), '2025 年 · 暂无定投记录');
-    assert.equal(api.recordsSummary([{ time: 0, btc: 100, usdt: null, buys: null }], '全部'), '全部 · 1 天 · 0.000001 BTC');
+    assert.equal(api.recordsSummary([{ time: 0, btc: 100, usdt: null, buys: null }], '全部'), '全部 · 1 天 · 累计买入 0.000001 BTC');
     const rows = api.recordRows(all.slice(0, 2), api.scale(model.days), D('2026-11-07'));
     assert.equal(rows, '<tr data-date="2026-11-08"><td><i class="dca-swatch" data-level="3"></i>2026-11-08<small>周日</small></td><td>0.00025133</td><td>20.00</td><td>79,577</td><td>1</td></tr>' +
       '<tr data-date="2026-11-07" class="is-selected"><td><i class="dca-swatch" data-level="3"></i>2026-11-07<small>周六</small></td><td>0.00024574</td><td>20.00</td><td>81,387</td><td>1</td></tr>');
@@ -183,7 +194,7 @@ async function check(name, fn) { await fn(); checks++; console.log('OK ' + name)
     const h = harness(); await h.settle();
     assert.equal(h.requests.length, 1); assert.equal(h.requests[0].url, '/api/wallet/btc-dca-diary');
     assert.equal(h.requests[0].init.cache, 'no-store'); assert.equal(h.requests[0].init.method, 'GET');
-    assert.equal(h.node('dcaDiarySince').textContent, '自 2024-12-14 起 · 5 天 · 0.00609257 BTC');
+    assert.equal(h.node('dcaDiarySince').textContent, '自 2024-12-14 起 · 5 天 · 累计买入 0.00609257 BTC');
     assert.match(h.node('dcaDiarySince').title, /首笔买入 2024-12-14；累计买入 6 笔，约 400\.00 USDT/);
     assert.equal(h.node('dcaDiarySummary').textContent, '近一年买入 3 天 · 0.00069707 BTC · 最长连续 3 天 · 当前连续 3 天');
     assert.match(h.node('dcaDiarySummary').title, /约 60\.00 USDT/);
@@ -199,6 +210,43 @@ async function check(name, fn) { await fn(); checks++; console.log('OK ' + name)
     const h = harness({responses:[merged,structuredClone(DIARY)]}); await h.settle();
     assert.match(h.node('dcaDiarySince').textContent, /^欧易 \+ 币安 · 自 2024-12-14/);
     await h.tick(); assert.doesNotMatch(h.node('dcaDiarySince').textContent, /币安/);
+  });
+
+  await check('all and annual records use precise server buy totals and identify their historical purchase basis', async () => {
+    // Each daily display has already rounded to 0.001 BTC / 79.70 USDT.
+    // Their exact fills were 0.0010000049 BTC / 79.7049 USDT, so adding the
+    // rounded days would lose a satoshi and a cent and change the average.
+    const price = '79704.509447903705271844';
+    const precise = {...structuredClone(DIARY), days:[['2024-12-14','0.001','79.70',1],['2026-11-07','0.001','79.70',1],['2026-11-08','0.001','79.70',1]],
+      exact_totals:{btc:'0.0030000147',usdt:'239.1147',average_buy_price:price,buys:3,days:3},
+      exact_periods:{'2024':{btc:'0.0010000049',usdt:'79.7049',average_buy_price:price,buys:1,days:1},'2026':{btc:'0.0020000098',usdt:'159.4098',average_buy_price:price,buys:2,days:2}}};
+    const h = harness({responses:[precise]}); await h.settle();
+    assert.equal(h.node('dcaDiarySince').textContent, '自 2024-12-14 起 · 3 天 · 累计买入 0.00300001 BTC');
+    assert.match(h.node('dcaDiarySince').title, /239\.11 USDT/);
+    assert.match(h.node('dcaDiarySince').title, /不扣历史卖出/);
+    h.controller.open();
+    assert.equal(h.node('dcaRecordsSummary').textContent, '全部 · 3 天 · 3 笔 · 累计买入 0.00300001 BTC · 约 239.11 USDT · 历史买入均价 79,705');
+    assert.match(h.node('dcaRecordsSummary').title, /所选期间买入实付 USDT ÷ 净到账 BTC；不扣历史卖出/);
+    assert.match(h.node('dcaDiaryPanel').innerHTML, /<th scope="col">当日买入均价<\/th>/);
+    assert.doesNotMatch(h.node('dcaRecordsSummary').textContent, /持仓|净买入/);
+    await h.node('dcaRecords').fire('click', {target:{closest:selector => selector === 'button[data-year]' ? {dataset:{year:'2026'}} : null}});
+    assert.equal(h.node('dcaRecordsSummary').textContent, '2026 年 · 2 天 · 2 笔 · 累计买入 0.00200001 BTC · 约 159.41 USDT · 历史买入均价 79,705');
+    h.controller.select('2026');
+    assert.match(h.node('dcaDiarySummary').textContent, /^2026 年买入 2 天 · 0\.00200001 BTC/);
+    assert.match(h.node('dcaDiarySummary').title, /159\.41 USDT/);
+    assert.equal(h.node('dcaRecordsPage').textContent, '1 / 1');
+    assert.equal(api.priceText({btc:100000,usdt:7970}), '79,700', 'a daily row keeps its own daily purchase price');
+  });
+
+  await check('unpriced or invalid precise summaries never invent an average and legacy payloads still work', async () => {
+    const unpriced = {...structuredClone(DIARY),exact_totals:{btc:'0.00609257',usdt:null,average_buy_price:null,buys:6,days:5}};
+    const h = harness({responses:[unpriced]}); await h.settle();h.controller.open();
+    assert.equal(h.node('dcaRecordsSummary').textContent, '全部 · 5 天 · 6 笔 · 累计买入 0.00609257 BTC');
+    assert.doesNotMatch(h.node('dcaRecordsSummary').textContent, /均价|USDT/);
+    const invalid = {...structuredClone(DIARY),exact_totals:{btc:'-1',usdt:'0',average_buy_price:'0',buys:6,days:5},exact_periods:{'2026':{btc:'1',usdt:'0',average_buy_price:'NaN',buys:1,days:1},'<img>':{btc:'1',usdt:'0',average_buy_price:'0',buys:1,days:1}}};
+    const model = api.normalize(invalid);
+    assert.equal(model.exactTotals, null);assert.deepEqual(model.exactPeriods, {});
+    assert.match(api.recordsSummary(api.records(model,'all'),'全部',model.exactTotals), /历史买入均价 65,654$/);
   });
 
   await check('choosing a year redraws the board for that year', async () => {
@@ -232,7 +280,7 @@ async function check(name, fn) { await fn(); checks++; console.log('OK ' + name)
     assert.equal(sheet.hidden, true, 'the range buttons keep their own job');
     await panel.fire('click', { target: { closest: selector => selector.includes('dca-cell') ? { dataset: { date: '2024-12-14' } } : null } });
     assert.equal(sheet.hidden, false);
-    assert.equal(h.node('dcaRecordsSummary').textContent, '全部 · 5 天 · 6 笔 · 0.00609257 BTC · 约 400.00 USDT · 均价 65,654');
+    assert.equal(h.node('dcaRecordsSummary').textContent, '全部 · 5 天 · 6 笔 · 累计买入 0.00609257 BTC · 约 400.00 USDT · 历史买入均价 65,654');
     assert.match(h.node('dcaRecordsRows').innerHTML, /<tr data-date="2024-12-14" class="is-selected"><td><i class="dca-swatch" data-level="6"><\/i>/);
     assert.match(h.node('dcaRecordsYears').innerHTML, /^<button type="button" data-year="all" aria-pressed="true">全部<\/button><button type="button" data-year="2026" aria-pressed="false">2026/);
     assert.equal(h.node('dcaRecordsPage').textContent, '1 / 1');

@@ -43,7 +43,7 @@ def compute_position(records, holdings_btc, price_usdt, rates):
     """Exact Decimal book; rate lookup is keyed by (currency, UTC minute)."""
     with localcontext() as context:
         context.prec = 96
-        inventory = cost = bought = ZERO
+        inventory = cost = bought = buy_spent = ZERO
         buys = sells = 0
         seen = set()
         first = last = None
@@ -75,6 +75,7 @@ def compute_position(records, holdings_btc, price_usdt, rates):
                 inventory += quantity
                 cost += cash
                 bought += quantity
+                buy_spent += cash
                 buys += 1
                 if first_buy is None:
                     first_buy, first_price = at, cash / quantity
@@ -99,6 +100,9 @@ def compute_position(records, holdings_btc, price_usdt, rates):
             'spot_average_cost': cost / inventory if inventory else None,
             'holdings_btc': holdings, 'spot_inventory_btc': inventory,
             'known_net_bought_btc': inventory, 'bought_net_btc': bought,
+            'sold_btc': bought - inventory,
+            'historical_buy_spent_usdt': buy_spent,
+            'historical_average_buy_price': buy_spent / bought if bought else None,
             'nonspot_btc_adjustment': holdings - inventory,
             'market_value': market, 'price_usdt': price,
             'first_net_buy_price': first_price, 'last_net_buy_price': last_price,
@@ -359,7 +363,7 @@ class BTCPnLService:
                     '跨币种支付按已核验的成交分钟 USDT 行情折算；币安第三币种手续费也计入买入成本。',
                     'Earn、历史合约净变动和提币/矿工费以实际持仓的期末数量调整体现，不重复加减。',
                     '持仓浮盈 = 当前总持仓 × BTC/USDT 现价 − 剩余持仓成本；浮盈率 = 浮盈 ÷ 剩余持仓成本。',
-                    '平均买入价 = 剩余持仓成本 ÷ 实际 BTC 总持有；只计算当前长期持仓的浮盈。',
+                    '持仓摊薄成本价 = 剩余持仓成本 ÷ 实际 BTC 总持有；历史买入均价只统计买入，与卖出后的剩余持仓均价不同。',
                 ], error=('币安历史正在导入或暂未完整读取，当前浮盈仅含已核验来源。' if pending_binance else
                           '持仓或历史含缓存，或有新的持仓数量调整待核对。' if outdated else None))
             with self.okx.lock:

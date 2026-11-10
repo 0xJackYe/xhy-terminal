@@ -282,7 +282,7 @@ async function dcaDiaryPublic(env){
     if(connection&&cost.summary&&cached?.connection===connection)return {...base,status:'stale',...strip(cached)};
     return {...base,status:cost.status==='loading'?'loading':'unavailable',error:cost.error||publicMessages.needs_history,...dcaDiary([])};
   }
-  const key=[connection,book.trade_count,book.last_bill_id,book.binance_included===true,book.excluded_binance||0,meta.coverage_start_ms].join('|');
+  const key=['exact-summary-v1',connection,book.trade_count,book.last_bill_id,book.binance_included===true,book.excluded_binance||0,meta.coverage_start_ms].join('|');
   if(cached?.key===key&&cached.connection===connection)return {...base,...strip(cached)};
   const rows=(await env.DB.prepare('SELECT record_json FROM finance_trades ORDER BY at_ms, length(bill_id), bill_id').all()).results||[];
   const records=rows.map(row=>JSON.parse(row.record_json)).filter(row=>!isBinance(row)||book.binance_included===true);

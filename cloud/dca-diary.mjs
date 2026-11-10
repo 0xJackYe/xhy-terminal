@@ -24,12 +24,23 @@ export function dcaDiary(rows,{rates={},start=DCA_DIARY_START,coverageStartMs=nu
   }
   const dates=[...days.keys()].sort(),first=dates[0]||null;
   let btc=new D(0),usdt=new D(0),priced=true,buys=0;
+  const periods=new Map();
   const list=dates.map(date=>{
     const day=days.get(date);btc=btc.add(day.btc);buys+=day.buys;if(day.priced)usdt=usdt.add(day.usdt);else priced=false;
+    const year=date.slice(0,4),period=periods.get(year)||{btc:new D(0),usdt:new D(0),priced:true,buys:0,days:0};
+    period.btc=period.btc.add(day.btc);period.buys+=day.buys;period.days++;
+    if(day.priced)period.usdt=period.usdt.add(day.usdt);else period.priced=false;
+    periods.set(year,period);
     return [date,txt(day.btc.toDecimalPlaces(8)),day.priced?txt(day.usdt.toDecimalPlaces(2)):null,day.buys];
   });
+  // The calendar keeps display-rounded days for compatibility. Summaries
+  // must use ledger precision, never add those rounded BTC/USDT cells.
+  const exact=period=>({days:period.days,buys:period.buys,btc:txt(period.btc),usdt:period.priced?txt(period.usdt):null,
+    average_buy_price:period.priced&&period.btc.gt(0)?txt(period.usdt.div(period.btc)):null});
   return {start_date:first&&first<start?first:start,first_buy_date:first,
     coverage_start_date:Number.isSafeInteger(coverageStartMs)?beijingDate(coverageStartMs):null,
     fields:DCA_FIELDS,days:list,
-    totals:{days:list.length,buys,btc:txt(btc.toDecimalPlaces(8)),usdt:priced?txt(usdt.toDecimalPlaces(2)):null}};
+    totals:{days:list.length,buys,btc:txt(btc.toDecimalPlaces(8)),usdt:priced?txt(usdt.toDecimalPlaces(2)):null},
+    exact_totals:exact({days:list.length,buys,btc,usdt,priced}),
+    exact_periods:Object.fromEntries([...periods].map(([year,period])=>[year,exact(period)]))};
 }

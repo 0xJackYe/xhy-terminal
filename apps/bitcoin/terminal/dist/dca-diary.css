@@ -77,5 +77,5 @@ body.dark .dca-records,html[data-xhy-theme="dark"] .dca-records{background:rgb(0
 @keyframes dca-rise{from{opacity:0;transform:translateY(8px) scale(.985)}}
 @media(max-width:640px){.dca-records{padding:10px}.dca-records-panel{height:100%;padding:14px 12px 12px}.dca-records-table{font-size:12px}.dca-records-table :is(th,td){padding:0 5px}.dca-records-table td small{display:none}}
 /* A phone keeps date, BTC, USDT and price; the number of buys is in the totals. */
-@media(max-width:520px){.dca-records-table :is(th,td):nth-child(5){display:none}.dca-records-table :is(th,td):nth-child(4){padding-right:4px}}
+@media(max-width:520px){.dca-records-table :is(th,td):nth-child(5){display:none}.dca-records-table :is(th,td):nth-child(4){padding-right:4px}.dca-records-table th:nth-child(4){width:5em;white-space:normal;line-height:1.2}}
 @media(prefers-reduced-motion:reduce){.dca-records,.dca-records-panel{animation:none}}

@@ -27,6 +27,13 @@ test('new daily DCA updates average, quantity, cost and last buy time',()=>{
   const view=positionView(next,'1.5','120',{complete:true,as_of_ms:NOW,coverage_start_ms:NOW-86400000},{},NOW,'account');
   assert.equal(view.metrics.unrealized_net,'20');assert.equal(view.metrics.unrealized_return_pct,'12.5');
 });
+test('history, remaining spot and diluted cost bases reconcile separately after sales and inflows',()=>{
+  const book=buildCostBook([trade('buy','1','100',1),trade('sell','-0.5','75',2),trade('buy','0.5','150',3)]);
+  const m=positionView(book,'1.1','250',{},{},NOW,'account').metrics;
+  assert.equal(m.bought_net_btc,'1.5');assert.equal(m.sold_btc,'0.5');assert.equal(m.known_net_bought_btc,'1');assert.equal(m.nonspot_btc_adjustment,'0.1');
+  assert.equal(m.historical_buy_spent_usdt,'250');assert.equal(m.remaining_cost,'200');assert.equal(m.spot_average_cost,'200');
+  assert.ok(m.historical_average_buy_price.startsWith('166.666666'));assert.ok(m.average_cost.startsWith('181.818181'));assert.equal(m.unrealized_net,'75');
+});
 test('fees already included in net quantity and cash are not deducted twice',()=>{
   const row=trade('buy','.999','100.1',1);row.btc_gross='1';row.fee_btc='-.001';
   const book=buildCostBook([row]),p=positionView(book,'.999','120',{},{},NOW,'x');assert.equal(p.metrics.unrealized_net,'19.78');
@@ -273,7 +280,11 @@ test('the DCA diary lists each Beijing day of buys from the same trades as the c
   if(entry)expected.set(late,[entry[0]+.5,entry[1]+60,entry[2]+1]);else expected.set(late,[.5,60,1]);
   assert.deepEqual(body.days.map(([d,btc,usdt,buys])=>[d,Number(btc),Number(usdt),buys]),[...expected].sort().map(([d,v])=>[d,...v]));
   assert.equal(body.totals.btc,'2.5');assert.equal(body.totals.buys,2);assert.equal(body.start_date,'2024-12-14');
+  assert.equal(body.exact_totals.btc,'2.5');assert.equal(body.exact_totals.usdt,'260');assert.equal(body.exact_totals.average_buy_price,'104');
   assert.equal(body.coverage_start_date,day(NOW-86400000));assert.equal('key' in body||'connection' in body,false);
+  // A deployment must rebuild an old rounded-only cache even without a new fill.
+  const legacy=structuredClone(f.DB.get('dca_diary'));legacy.key=legacy.key.replace(/^exact-summary-v1\|/,'');delete legacy.exact_totals;delete legacy.exact_periods;f.DB.set('dca_diary',legacy);
+  assert.equal((await read()).exact_totals.average_buy_price,'104');
   // Cached against the book: a stray row is ignored until the book changes.
   const cached=f.DB.get('dca_diary');assert.ok(cached.key.includes('|3|'));
   const binanceRow={...original[0],id:'binance-spot:BTCUSDT:9',bill_id:'90',counter_bill_id:'91',at_ms:NOW-30000,btc_net:'0.25',btc_gross:'0.25',quote_amount:'30',quote_gross:'30',venue:'binance'};

@@ -284,6 +284,7 @@ def dca_diary(records, coverage_start_ms=None, start=DCA_DIARY_START):
             except (KeyError, CostValidationError):
                 day['priced'] = False
         listed, total_btc, total_usdt, priced, buys = [], Decimal(0), Decimal(0), True, 0
+        periods = {}
         for date in sorted(days):
             day = days[date]
             total_btc += day['btc']
@@ -292,8 +293,25 @@ def dca_diary(records, coverage_start_ms=None, start=DCA_DIARY_START):
                 total_usdt += day['usdt']
             else:
                 priced = False
+            period = periods.setdefault(date[:4], {'btc': Decimal(0), 'usdt': Decimal(0),
+                                                   'priced': True, 'buys': 0, 'days': 0})
+            period['btc'] += day['btc']
+            period['buys'] += day['buys']
+            period['days'] += 1
+            if day['priced']:
+                period['usdt'] += day['usdt']
+            else:
+                period['priced'] = False
             listed.append([date, text(day['btc'].quantize(SATOSHI, ROUND_HALF_UP)),
                            text(day['usdt'].quantize(CENT, ROUND_HALF_UP)) if day['priced'] else None, day['buys']])
+        # Calendar cells retain their display rounding. Summary quantities
+        # and prices come from the unrounded ledger amounts instead.
+        def exact(period):
+            return {'days': period['days'], 'buys': period['buys'], 'btc': text(period['btc']),
+                    'usdt': text(period['usdt']) if period['priced'] else None,
+                    'average_buy_price': text(period['usdt'] / period['btc'])
+                    if period['priced'] and period['btc'] > 0 else None}
+
         first = listed[0][0] if listed else None
         try:
             coverage = iso(millis(coverage_start_ms))[:10] if coverage_start_ms is not None else None
@@ -302,7 +320,10 @@ def dca_diary(records, coverage_start_ms=None, start=DCA_DIARY_START):
         return {'start_date': first if first and first < start else start, 'first_buy_date': first,
                 'coverage_start_date': coverage, 'fields': list(DCA_FIELDS), 'days': listed,
                 'totals': {'days': len(listed), 'buys': buys, 'btc': text(total_btc.quantize(SATOSHI, ROUND_HALF_UP)),
-                           'usdt': text(total_usdt.quantize(CENT, ROUND_HALF_UP)) if priced else None}}
+                           'usdt': text(total_usdt.quantize(CENT, ROUND_HALF_UP)) if priced else None},
+                'exact_totals': exact({'days': len(listed), 'buys': buys, 'btc': total_btc,
+                                       'usdt': total_usdt, 'priced': priced}),
+                'exact_periods': {year: exact(period) for year, period in periods.items()}}
 
 
 class BTCCostTracker:

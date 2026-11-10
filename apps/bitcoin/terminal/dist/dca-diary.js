@@ -45,6 +45,26 @@
   }
   function usdtText(cents) { return Number.isSafeInteger(cents) && cents >= 0 ? grouped(Math.floor(cents/100))+'.'+String(cents%100).padStart(2,'0') : '—'; }
 
+  // Summaries arrive before rounding individual calendar days. Keep their
+  // decimals as strings and round once for display, without Number conversion.
+  function decimalAmount(value) { return typeof value === 'string' && value.length <= 512 && /^\d+(?:\.\d+)?$/.test(value); }
+  function exactText(value, digits, fixed = false) {
+    if (!decimalAmount(value) || !Number.isInteger(digits) || digits < 0 || digits > 8) return '—';
+    const [whole,fraction = ''] = value.split('.');
+    let amount = BigInt(whole+fraction.slice(0,digits).padEnd(digits,'0'));
+    if (fraction.length > digits && fraction[digits] >= '5') amount++;
+    const text = amount.toString().padStart(digits+1,'0');
+    let tail = digits ? text.slice(-digits) : '';
+    if (!fixed) tail = tail.replace(/0+$/,'');
+    return grouped(digits ? text.slice(0,-digits) : text)+(tail ? '.'+tail : '');
+  }
+  function exactSummary(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value) || !decimalAmount(value.btc) ||
+        !(value.usdt === null || decimalAmount(value.usdt)) || !(value.average_buy_price === null || decimalAmount(value.average_buy_price)) ||
+        !Number.isSafeInteger(value.buys) || value.buys < 0 || !Number.isSafeInteger(value.days) || value.days < 0) return null;
+    return {btc:value.btc,usdt:value.usdt,average_buy_price:value.usdt === null ? null : value.average_buy_price,buys:value.buys,days:value.days};
+  }
+
   // The server's view, checked field by field; anything malformed is dropped
   // rather than drawn.
   function normalize(data) {
@@ -63,7 +83,14 @@
     }
     const first = days.size ? Math.min(...days.keys()) : null, fixed = parseDate(START);
     const start = parseDate(data.start_date) ?? (first !== null && first < fixed ? first : fixed);
+    const periods = {};
+    if (data.exact_periods && typeof data.exact_periods === 'object' && !Array.isArray(data.exact_periods)) {
+      for (const [year,value] of Object.entries(data.exact_periods)) if (/^\d{4}$/.test(year)) {
+        const summary = exactSummary(value);if (summary) periods[year] = summary;
+      }
+    }
     return {status:data.status,days,first,start:first !== null ? Math.min(start,first) : start,coverage:parseDate(data.coverage_start_date),today:parseDate(data.today),
+      exactTotals:exactSummary(data.exact_totals),exactPeriods:periods,
       venues:Array.isArray(data.venues) ? data.venues.filter(item => item === 'okx' || item === 'binance') : [],
       error:typeof data.error === 'string' && data.error ? data.error.slice(0,200) : null,asOf:typeof data.as_of === 'string' ? data.as_of : null};
   }
@@ -183,11 +210,13 @@
   }
   // USDT paid per BTC that day, to the whole USDT.
   function priceText(day) { return day.usdt !== null && day.btc > 0 ? grouped(Math.round(day.usdt*1e6/day.btc)) : '—'; }
-  function recordsSummary(list, label) {
+  function recordsSummary(list, label, exact = null) {
+    const summary = exactSummary(exact);
+    if (summary) return summary.days ? [label,summary.days+' 天',summary.buys+' 笔','累计买入 '+exactText(summary.btc,8)+' BTC',summary.usdt !== null ? '约 '+exactText(summary.usdt,2,true)+' USDT' : '',summary.average_buy_price !== null ? '历史买入均价 '+exactText(summary.average_buy_price,0) : ''].filter(Boolean).join(' · ') : label+' · 暂无定投记录';
     if (!list.length) return label+' · 暂无定投记录';
     let btc = 0, usdt = 0, priced = true, buys = 0, counted = true;
     for (const day of list) { btc += day.btc;if (day.usdt === null) priced = false;else usdt += day.usdt;if (day.buys === null) counted = false;else buys += day.buys; }
-    return [label,list.length+' 天',counted ? buys+' 笔' : '',btcText(btc)+' BTC',priced ? '约 '+usdtText(usdt)+' USDT' : '',priced && btc ? '均价 '+grouped(Math.round(usdt*1e6/btc)) : ''].filter(Boolean).join(' · ');
+    return [label,list.length+' 天',counted ? buys+' 笔' : '','累计买入 '+btcText(btc)+' BTC',priced ? '约 '+usdtText(usdt)+' USDT' : '',priced && btc ? '历史买入均价 '+grouped(Math.round(usdt*1e6/btc)) : ''].filter(Boolean).join(' · ');
   }
   function recordRows(list, measure, selected) {
     return list.map(day => '<tr data-date="'+formatDate(day.time)+'"'+(day.time === selected ? ' class="is-selected"' : '')+'><td><i class="dca-swatch" data-level="'+level(day,measure)+'"></i>'+formatDate(day.time)+'<small>'+WEEKDAYS[weekday(day.time)]+'</small></td><td>'+btcText(day.btc)+'</td><td>'+usdtText(day.usdt)+'</td><td>'+priceText(day)+'</td><td>'+(day.buys === null ? '—' : day.buys)+'</td></tr>').join('');
@@ -203,7 +232,7 @@
     '<div id="dcaRecords" class="dca-records" hidden><div id="dcaRecordsPanel" class="dca-records-panel" role="dialog" aria-modal="true" aria-labelledby="dcaRecordsTitle" tabindex="-1">'+
     '<div class="dca-records-head"><h3 id="dcaRecordsTitle">定投记录</h3><div id="dcaRecordsYears" class="dca-diary-range dca-records-years" role="group" aria-label="定投记录范围"></div><button type="button" id="dcaRecordsClose" class="dca-records-close" aria-label="关闭定投记录">×</button></div>'+
     '<p id="dcaRecordsSummary" class="dca-records-summary"></p>'+
-    '<div id="dcaRecordsBody" class="dca-records-body"><table class="dca-records-table"><thead><tr><th scope="col">日期</th><th scope="col">BTC</th><th scope="col">USDT</th><th scope="col">均价</th><th scope="col">笔数</th></tr></thead><tbody id="dcaRecordsRows"></tbody></table></div>'+
+    '<div id="dcaRecordsBody" class="dca-records-body"><table class="dca-records-table"><thead><tr><th scope="col">日期</th><th scope="col">BTC</th><th scope="col">USDT</th><th scope="col">当日买入均价</th><th scope="col">笔数</th></tr></thead><tbody id="dcaRecordsRows"></tbody></table></div>'+
     '<div class="dca-records-pager"><button type="button" id="dcaRecordsNewer">‹ 较新</button><span id="dcaRecordsPage"></span><button type="button" id="dcaRecordsOlder">较早 ›</button></div></div></div>';
 
   function mount(options = {}) {
@@ -246,15 +275,17 @@
       }
       const all = stats(data,data.start,data.today), part = stats(data,view.from,view.to);
       const venueLabel = data.venues.includes('binance') ? ['okx','binance'].filter(venue => data.venues.includes(venue)).map(venue => venue === 'okx' ? '欧易' : '币安').join(' + ')+' · ' : '';
-      node('dcaDiarySince').textContent = venueLabel+'自 '+formatDate(data.start)+' 起'+(data.first === null ? '' : ' · '+all.days+' 天 · '+btcText(all.btc)+' BTC');
-      node('dcaDiarySince').title = node('dcaDiarySince').textContent+(data.first === null ? '' : '\n首笔买入 '+formatDate(data.first)+'；累计买入 '+all.buys+' 笔'+(all.usdt !== null ? '，约 '+usdtText(all.usdt)+' USDT' : ''));
+      const totals = data.exactTotals, allBTC = totals ? exactText(totals.btc,8) : btcText(all.btc), allUSDT = totals ? totals.usdt === null ? null : exactText(totals.usdt,2,true) : all.usdt === null ? null : usdtText(all.usdt);
+      node('dcaDiarySince').textContent = venueLabel+'自 '+formatDate(data.start)+' 起'+(data.first === null ? '' : ' · '+(totals ? totals.days : all.days)+' 天 · 累计买入 '+allBTC+' BTC');
+      node('dcaDiarySince').title = node('dcaDiarySince').textContent+(data.first === null ? '' : '\n首笔买入 '+formatDate(data.first)+'；累计买入 '+(totals ? totals.buys : all.buys)+' 笔'+(allUSDT !== null ? '，约 '+allUSDT+' USDT' : ''))+'\n累计买入按净到账 BTC 统计，不扣历史卖出，也不包含转入或理财收益。';
       // One short line: days, BTC and streaks; the USDT spent is in its tooltip.
       const known = data.days.size || data.status === 'fresh' || data.status === 'stale';
+      const period = range === 'recent' ? null : data.exactPeriods[range], periodBTC = period ? exactText(period.btc,8) : btcText(part.btc), periodUSDT = period ? period.usdt === null ? null : exactText(period.usdt,2,true) : part.usdt === null ? null : usdtText(part.usdt);
       const summary = known
-        ? view.label+'买入 '+part.days+' 天 · '+btcText(part.btc)+' BTC · 最长连续 '+part.longest+' 天'+(part.current > 1 ? ' · 当前连续 '+part.current+' 天' : '')
+        ? view.label+'买入 '+(period ? period.days : part.days)+' 天 · '+periodBTC+' BTC · 最长连续 '+part.longest+' 天'+(part.current > 1 ? ' · 当前连续 '+part.current+' 天' : '')
         : data.status === 'loading' ? '正在读取定投记录' : '等待成本账本';
       node('dcaDiarySummary').textContent = summary;node('dcaDiarySummary').dataset.state = known ? 'known' : 'pending';
-      node('dcaDiarySummary').title = known ? summary+(part.usdt !== null && part.days ? '\n约 '+usdtText(part.usdt)+' USDT' : '')+'\n按北京时间计日' : summary;
+      node('dcaDiarySummary').title = known ? summary+(periodUSDT !== null && part.days ? '\n约 '+periodUSDT+' USDT' : '')+'\n按北京时间计日' : summary;
       grid.setAttribute('aria-label','定投日记 '+summary+'。用方向键逐日查看，回车打开全部记录。');
       const message = failed ? data.days.size ? '同步暂未完成，保留上次的定投记录。' : '暂时无法读取定投记录，稍后自动重试。'
         : data.status === 'unavailable' ? (data.error || '导入已核对的成本账本后显示每天的定投。')
@@ -276,7 +307,8 @@
       const chips = ['all',...years].map(value => '<button type="button" data-year="'+value+'" aria-pressed="'+(value === year)+'">'+(value === 'all' ? '全部' : value)+'</button>').join('');
       if (node('dcaRecordsYears').innerHTML !== chips) node('dcaRecordsYears').innerHTML = chips;
       const list = records(data,year), measure = scale(data.days);
-      node('dcaRecordsSummary').textContent = recordsSummary(list,year === 'all' ? '全部' : year+' 年');
+      node('dcaRecordsSummary').textContent = recordsSummary(list,year === 'all' ? '全部' : year+' 年',year === 'all' ? data.exactTotals : data.exactPeriods[year]);
+      node('dcaRecordsSummary').title = '历史买入均价 = 所选期间买入实付 USDT ÷ 净到账 BTC；不扣历史卖出，不含转入或理财收益。金额按成交时价格折算，先汇总再舍入。';
       // The first pass guesses the row height; once rows are drawn their real
       // height decides, so the last row never falls below the panel.
       let size = capacity();
@@ -436,5 +468,5 @@
     const controller = {refresh:load,destroy,select:value => { range = String(value);render(); },open:openRecords,close:closeRecords};
     panel.__dcaDiaryController = controller;render();if (active()) load();return controller;
   }
-  return {START,REFRESH_MS,STEPS,parseDate,formatDate,beijingToday,weekday,monday,units,btcText,usdtText,normalize,scale,level,legendText,ranges,bounds,stats,cellState,describe,gridHtml,records,priceText,recordsSummary,recordRows,mount};
+  return {START,REFRESH_MS,STEPS,parseDate,formatDate,beijingToday,weekday,monday,units,btcText,usdtText,exactText,exactSummary,normalize,scale,level,legendText,ranges,bounds,stats,cellState,describe,gridHtml,records,priceText,recordsSummary,recordRows,mount};
 });

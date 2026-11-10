@@ -206,7 +206,9 @@ class DCADiaryTests(unittest.TestCase):
     def test_empty_or_malformed_rows_invent_nothing_and_an_earlier_buy_moves_the_start(self):
         self.assertEqual(dca_diary(None), {'start_date': '2024-12-14', 'first_buy_date': None, 'coverage_start_date': None,
                                            'fields': ['date', 'btc', 'usdt', 'buys'], 'days': [],
-                                           'totals': {'days': 0, 'buys': 0, 'btc': '0', 'usdt': '0'}})
+                                           'totals': {'days': 0, 'buys': 0, 'btc': '0', 'usdt': '0'},
+                                           'exact_totals': {'days': 0, 'buys': 0, 'btc': '0', 'usdt': '0',
+                                                            'average_buy_price': None}, 'exact_periods': {}})
         good = normalize_bills(trade(at=self.at(2024, 12, 10, 9), trade_id=1, size='0.001', fee_btc='0'))
         bad = [None, 'row', {'side': 'buy'}, {'side': 'buy', 'btc_net': 'x', 'at_ms': NOW},
                {'side': 'buy', 'btc_net': '0', 'at_ms': NOW, 'quote_ccy': 'USDT', 'quote_amount': '1'}]
@@ -214,6 +216,38 @@ class DCADiaryTests(unittest.TestCase):
         self.assertEqual(diary['start_date'], '2024-12-10')
         self.assertEqual(len(diary['days']), 1)
         self.assertIsNone(diary['coverage_start_date'])
+
+    def test_exact_summaries_preserve_precision_across_days_and_beijing_years(self):
+        def fill(at):
+            return {'side': 'buy', 'at_ms': at, 'btc_net': '0.000123456789',
+                    'quote_ccy': 'USDT', 'quote_amount': '9.87654312'}
+        diary = dca_diary([fill(self.at(2024, 12, 31, 23, 59)),
+                           fill(self.at(2025, 1, 1, 0, 1)), fill(self.at(2025, 1, 2, 9)),
+                           {'side': 'sell', 'at_ms': self.at(2025, 1, 2, 10), 'btc_net': '-0.0001',
+                            'quote_ccy': 'USDT', 'quote_amount': '20'}])
+        self.assertEqual(diary['days'], [['2024-12-31', '0.00012346', '9.88', 1],
+                                         ['2025-01-01', '0.00012346', '9.88', 1],
+                                         ['2025-01-02', '0.00012346', '9.88', 1]])
+        self.assertEqual(diary['exact_totals'], {'days': 3, 'buys': 3, 'btc': '0.000370370367',
+                                                 'usdt': '29.62962936', 'average_buy_price': '80000'})
+        self.assertEqual(diary['exact_periods'], {
+            '2024': {'days': 1, 'buys': 1, 'btc': '0.000123456789', 'usdt': '9.87654312', 'average_buy_price': '80000'},
+            '2025': {'days': 2, 'buys': 2, 'btc': '0.000246913578', 'usdt': '19.75308624', 'average_buy_price': '80000'}})
+
+    def test_unpriced_costs_leave_exact_average_unknown_only_for_affected_year(self):
+        rows = [{'side': 'buy', 'at_ms': self.at(2024, 12, 20, 9), 'btc_net': '0.001',
+                 'quote_ccy': 'USDT', 'quote_amount': '80'},
+                {'side': 'buy', 'at_ms': self.at(2025, 1, 2, 9), 'btc_net': '0.001',
+                 'quote_ccy': 'FDUSD', 'quote_amount': '80'},
+                {'side': 'buy', 'at_ms': self.at(2025, 1, 2, 10), 'btc_net': '0.001',
+                 'quote_ccy': 'USDT', 'quote_amount': '80'}]
+        diary = dca_diary(rows)
+        self.assertEqual(diary['exact_totals'], {'days': 2, 'buys': 3, 'btc': '0.003',
+                                                'usdt': None, 'average_buy_price': None})
+        self.assertEqual(diary['exact_periods']['2024'], {'days': 1, 'buys': 1, 'btc': '0.001',
+                                                         'usdt': '80', 'average_buy_price': '80000'})
+        self.assertEqual(diary['exact_periods']['2025'], {'days': 1, 'buys': 2, 'btc': '0.002',
+                                                         'usdt': None, 'average_buy_price': None})
 
 
 class TrackerTests(unittest.TestCase):

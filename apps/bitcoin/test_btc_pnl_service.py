@@ -44,6 +44,21 @@ class AccountingTests(unittest.TestCase):
         self.assertEqual(m['unrealized_net'], '75')
         self.assertEqual(Decimal(m['unrealized_net']), Decimal(m['market_value']) - Decimal(m['remaining_cost']))
 
+    def test_history_spot_and_diluted_costs_have_distinct_reconcilable_bases(self):
+        rows = [row('buy', '1', '100', 1), row('sell', '-0.5', '75', 2),
+                row('buy', '0.5', '150', 3)]
+        m = compute_position(rows, '1.1', '250', {})['metrics']
+        self.assertEqual(m['bought_net_btc'], '1.5')
+        self.assertEqual(m['sold_btc'], '0.5')
+        self.assertEqual(m['known_net_bought_btc'], '1')
+        self.assertEqual(m['nonspot_btc_adjustment'], '0.1')
+        self.assertEqual(m['historical_buy_spent_usdt'], '250')
+        self.assertEqual(m['remaining_cost'], '200')
+        self.assertEqual(m['spot_average_cost'], '200')
+        self.assertTrue(m['historical_average_buy_price'].startswith('166.666666'))
+        self.assertTrue(m['average_cost'].startswith('181.818181'))
+        self.assertEqual(m['unrealized_net'], '75')
+
     def test_past_sale_proceeds_do_not_change_current_average_or_float(self):
         rows = [row('buy','2','200',1), row('sell','-1','150',2)]
         m = compute_position(rows,'1','120',{})['metrics']

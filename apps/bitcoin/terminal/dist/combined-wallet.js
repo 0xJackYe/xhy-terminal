@@ -200,14 +200,26 @@
     const known = metrics.known_net_bought_btc || metrics.spot_inventory_btc;
     return '<dl class="combined-lifetime-costs">'+field('持仓成本 · USDT',metrics.remaining_cost)+'</dl>'+ 
       '<dl class="combined-lifetime-buy-prices">'+field('首笔净买入价 · USDT/BTC',metrics.first_net_buy_price)+field('最近净买入价 · USDT/BTC',metrics.last_net_buy_price)+'</dl>'+
-      '<p class="combined-lifetime-formula">持仓浮盈 = BTC 净持有量 ×（当前价格 − 持仓平均买入价）；收益率 = 持仓浮盈 ÷ 持仓成本 × 100%。</p>'+
+      '<p class="combined-lifetime-formula">持仓浮盈 = 实际 BTC 总持有 × 当前价格 − 剩余持仓成本；持仓摊薄成本价 = 剩余持仓成本 ÷ 实际 BTC 总持有；收益率 = 持仓浮盈 ÷ 持仓成本 × 100%。</p>'+
       (decimal(known)?'<p class="combined-lifetime-quantity">成本账本净买入 '+escape(exact(known))+' BTC。</p>':'')+
       '<ul class="combined-lifetime-assumptions">'+assumptions.map(value=>'<li>'+escape(value)+'</li>').join('')+'</ul>'+ 
       '<p class="combined-lifetime-dates">'+date('首笔净买入',data&&(data.first_buy_at||data.first_trade_at))+date('最近净买入',data&&(data.last_buy_at||data.last_trade_at))+date('估值行情',data&&(data.quote_at||data.as_of))+'</p>';
   }
-  const MARKUP = '<div class="combined-heading"><div><h2 id="combinedTitle">比特币总持有</h2><span id="combinedState" class="combined-state" role="status">正在汇总</span></div><button id="combinedRefresh" type="button" class="text-button">刷新</button></div>'+
+  function reconciliationDetails(data) {
+    const m=data&&data.metrics||{};
+    const quantity=(label,value)=>'<div><dt>'+label+'</dt><dd title="'+escape(decimal(value)?value:'')+'">'+escape(btc(value))+'</dd></div>';
+    const price=(label,value,formula)=>'<tr><th scope="row">'+label+'<small>'+formula+'</small></th><td>'+escape(exact(value,2,true))+'</td></tr>';
+    return '<p class="combined-reconcile-status">'+escape(data&&data.status==='fresh'?'已同步':'含缓存或待核对数据')+(timestamp(data&&data.ledger_as_of)!==null?' · 账本截至 '+escape(beijing(data.ledger_as_of))+' 北京时间':'')+'</p>'+
+      '<dl class="combined-reconcile-quantities">'+quantity('累计买入 · BTC',m.bought_net_btc)+quantity('累计卖出 · BTC',m.sold_btc)+quantity('现货净买入 · BTC',m.known_net_bought_btc||m.spot_inventory_btc)+quantity('非买卖净变动 · BTC',m.nonspot_btc_adjustment)+quantity('实际总持有 · BTC',m.holdings_btc)+'</dl>'+
+      '<p class="combined-reconcile-note">累计买入 − 累计卖出 = 现货净买入；现货净买入 + 非买卖净变动 = 实际总持有。</p>'+
+      '<table class="combined-reconcile-prices"><caption>三种均价 · USDT/BTC</caption><tbody>'+price('历史买入均价',m.historical_average_buy_price,'累计买入实付 ÷ 累计买入净到账量')+price('现货剩余持仓均价',m.spot_average_cost,'剩余移动加权成本 ÷ 现货净买入')+price('持仓摊薄成本价',m.average_cost,'剩余移动加权成本 ÷ 实际总持有')+'</tbody></table>'+
+      '<p class="combined-reconcile-note">日记统计所选期间的买入，手续费已计入；历史卖出按卖出时的移动均价扣减剩余成本。非买卖净变动是余额与成交账本的差额，可能包含转入转出、收益或链上费用，不能全部视作买入。</p>'+
+      (data&&data.reconciliation&&data.reconciliation.matched===false?'<p class="combined-reconcile-warning">非买卖净变动较上次核验有变化，来源尚待核对。</p>':'');
+  }
+  const RECONCILE_MARKUP='<dialog id="combinedReconcileDialog" class="combined-reconcile-dialog" aria-labelledby="combinedReconcileTitle"><div class="combined-reconcile-head"><h3 id="combinedReconcileTitle">数量与均价核对</h3><button id="combinedReconcileClose" type="button" aria-label="关闭数量与均价核对">×</button></div><div id="combinedReconcileDetails"></div></dialog>';
+  const MARKUP = '<div class="combined-heading"><div><h2 id="combinedTitle">比特币总持有</h2><button id="combinedReconcileOpen" class="combined-reconcile-open" type="button" aria-haspopup="dialog">核对</button><span id="combinedState" class="combined-state" role="status">正在汇总</span></div><button id="combinedRefresh" type="button" class="text-button">刷新</button></div>'+
     '<p id="combinedMessage" class="combined-message" role="status" hidden></p><div class="combined-overview"><div class="combined-total"><span id="combinedScope">欧易 + 离线钱包</span><strong id="combinedBTC">—</strong><small>BTC</small><p><span id="combinedCNY">—</span><span id="combinedUSD">—</span></p></div><div id="combinedSources" class="combined-sources"></div><div class="combined-pnl"><label for="combinedPnlPeriod">价格变动盈亏</label><select id="combinedPnlPeriod" aria-label="合计盈亏时间范围"><option value="today">今日</option><option value="week">近一周</option><option value="month">近一个月</option><option value="days90">近三个月</option></select><strong id="combinedPnl">—</strong><small id="combinedPnlNote">剔除转账 · 含汇率变动</small><small id="combinedPnlDates"></small></div></div>'+
-    '<section id="combinedLifetime" class="combined-lifetime" aria-labelledby="combinedLifetimeTitle"><div class="combined-lifetime-heading"><h3 id="combinedLifetimeTitle">长期持仓浮盈</h3><span class="combined-lifetime-method">USDT · 移动加权平均估算</span><span id="combinedLifetimeState" class="combined-lifetime-state" role="status">正在核算</span></div><dl class="combined-lifetime-metrics">'+TOTAL_PROFIT+'<div class="combined-lifetime-profit"><dt>持仓浮盈</dt><dd id="combinedUnrealizedNet">—</dd></div><div><dt>收益率</dt><dd id="combinedUnrealizedReturn">—</dd></div><div><dt>持仓平均买入价</dt><dd id="combinedAverageCost">—</dd></div><div><dt>当前价格</dt><dd id="combinedSpotPrice">—</dd></div>'+ANNUAL_METRICS+'</dl>'+ANNUAL_DETAILS+'<details class="combined-lifetime-details"><summary><span>计算说明</span><span id="combinedLifetimeCoverage"></span></summary><div id="combinedLifetimeDetails"></div></details></section>'+
+    '<section id="combinedLifetime" class="combined-lifetime" aria-labelledby="combinedLifetimeTitle"><div class="combined-lifetime-heading"><h3 id="combinedLifetimeTitle">长期持仓浮盈</h3><span class="combined-lifetime-method">USDT · 移动加权平均估算</span><span id="combinedLifetimeState" class="combined-lifetime-state" role="status">正在核算</span></div><dl class="combined-lifetime-metrics">'+TOTAL_PROFIT+'<div class="combined-lifetime-profit"><dt>持仓浮盈</dt><dd id="combinedUnrealizedNet">—</dd></div><div><dt>收益率</dt><dd id="combinedUnrealizedReturn">—</dd></div><div><dt>持仓摊薄成本价</dt><dd id="combinedAverageCost">—</dd></div><div><dt>当前价格</dt><dd id="combinedSpotPrice">—</dd></div>'+ANNUAL_METRICS+'</dl>'+ANNUAL_DETAILS+'<details class="combined-lifetime-details"><summary><span>计算说明</span><span id="combinedLifetimeCoverage"></span></summary><div id="combinedLifetimeDetails"></div></details></section>'+
     '<div id="combinedGoal" class="combined-goal"></div><div class="combined-chart-head"><div><h3>合计余额走势</h3><div class="combined-day-pnl"><span>今日当前盈亏</span><strong id="combinedDayPnl">—</strong><small id="combinedDayPnlAt"></small></div></div><div class="combined-controls"><div role="group" aria-label="合计曲线计价"><button id="combinedModeCny" type="button" aria-pressed="true">人民币 CNY</button><button id="combinedModeUsd" type="button" aria-pressed="false">美元 USD</button><button id="combinedModeBtc" type="button" aria-pressed="false">比特币 BTC</button></div><div role="group" aria-label="合计曲线时间范围"><button id="combinedRangeToday" type="button" aria-pressed="false">今日</button><button id="combinedRange30" type="button" aria-pressed="false">30D</button><button id="combinedRange90" type="button" aria-pressed="false">90D</button><button id="combinedRangeAll" type="button" aria-pressed="true">全部</button></div></div></div>'+
     '<div id="combinedChart" class="combined-chart" tabindex="0" aria-label="合计走势，可用左右方向键查看快照"></div><p id="combinedChartReadout" class="combined-readout" aria-live="polite"></p><div class="combined-footer"><span id="combinedCoverage">等待可核实历史</span><span id="combinedUpdated">北京时间</span></div>';
   function mount(options = {}) {
@@ -216,7 +228,7 @@
     if (panel.__combinedController) return panel.__combinedController;
     const fetcher = options.fetch || root.fetch.bind(root), setTimer = options.setTimeout || root.setTimeout.bind(root), clearTimer = options.clearTimeout || root.clearTimeout.bind(root), now = options.now || Date.now;
     const node = id=>document.getElementById(id);
-    panel.classList.add('combined-wallet','card');panel.setAttribute('aria-labelledby','combinedTitle');panel.innerHTML=MARKUP;
+    panel.classList.add('combined-wallet','card');panel.setAttribute('aria-labelledby','combinedTitle');panel.innerHTML=MARKUP+RECONCILE_MARKUP;
     let state=null,lifetime=null,lifetimeFailed=false,annualized=null,annualizedFailed=false,annualizedLoading=true,timer=null,read=null,disposed=false,pageActive=true,failed=false,mode='cny',range='all',selected=-1,sequence=0;
     function active(){const page=node('walletPage');return !disposed&&pageActive&&!document.hidden&&(!page||!page.hidden);}
     function cancelTimer(){if(timer!==null)clearTimer(timer);timer=null;}
@@ -252,6 +264,8 @@
       const count=lifetime&&lifetime.buy_count,first=lifetime&&(lifetime.first_buy_at||lifetime.first_trade_at),last=lifetime&&(lifetime.last_buy_at||lifetime.last_trade_at);
       node('combinedLifetimeCoverage').textContent=Number.isSafeInteger(count)&&count>=0?count.toLocaleString('zh-CN')+' 笔净买入'+(timestamp(first)!==null?' · '+beijing(first,false)+(timestamp(last)!==null?' 至 '+beijing(last,false):' 起'):''):kind==='loading'?'读取净买入账本中':kind==='unavailable'?'历史核算暂不可用，稍后自动重试':'';
       node('combinedLifetimeDetails').innerHTML=lifetimeDetails(lifetime);
+      node('combinedAverageCost').title='持仓摊薄成本价 = 剩余持仓成本 ÷ 实际 BTC 总持有；可点击标题旁的“核对”查看与历史买入均价的差别。';
+      node('combinedReconcileDetails').innerHTML=reconciliationDetails(lifetime);
       renderAnnualized();
     }
     function renderAnnualized(){
@@ -357,13 +371,16 @@
       selected=closest;drawReadout();
     }
     function pointerLeave(){selected=-1;drawReadout();}
-    const events=[[node('combinedRefresh'),'click',load],[node('combinedPnlPeriod'),'change',renderPnl],[node('combinedChart'),'keydown',keyboard],[node('combinedChart'),'pointermove',pointer],[node('combinedChart'),'pointerleave',pointerLeave],
+    function openReconciliation(){const dialog=node('combinedReconcileDialog');if(!dialog.open){if(typeof dialog.showModal==='function')dialog.showModal();else dialog.setAttribute('open','');}}
+    function closeReconciliation(){const dialog=node('combinedReconcileDialog');if(!dialog.open)return;if(typeof dialog.close==='function')dialog.close();else dialog.removeAttribute('open');node('combinedReconcileOpen').focus?.();}
+    const events=[[node('combinedReconcileOpen'),'click',openReconciliation],[node('combinedReconcileClose'),'click',closeReconciliation],[node('combinedReconcileDialog'),'click',event=>{if(event.target===node('combinedReconcileDialog'))closeReconciliation();}],
+      [node('combinedRefresh'),'click',load],[node('combinedPnlPeriod'),'change',renderPnl],[node('combinedChart'),'keydown',keyboard],[node('combinedChart'),'pointermove',pointer],[node('combinedChart'),'pointerleave',pointerLeave],
       [document,'visibilitychange',visibility],[root,'hashchange',visibility],[root,'pagehide',pageHide],[root,'pageshow',pageShow]];
     for(const [name,value]of[['Cny','cny'],['Usd','usd'],['Btc','btc']])events.push([node('combinedMode'+name),'click',()=>pickMode(value)]);
     for(const [name,value]of[['Today','today'],['30','30'],['90','90'],['All','all']])events.push([node('combinedRange'+name),'click',()=>pickRange(value)]);
     for(const[target,event,handler]of events)target.addEventListener(event,handler);
-    function destroy(){disposed=true;sequence++;cancelTimer();if(read)read.controller.abort();for(const[target,event,handler]of events)target.removeEventListener(event,handler);panel.__combinedController=null;}
+    function destroy(){disposed=true;sequence++;cancelTimer();if(read)read.controller.abort();closeReconciliation();for(const[target,event,handler]of events)target.removeEventListener(event,handler);panel.__combinedController=null;}
     const controller={refresh:load,destroy};panel.__combinedController=controller;render();if(active())load();return controller;
   }
-  return {REFRESH_MS,REQUEST_TIMEOUT_MS,MAX_CHART_POINTS,decimal,exact,chartNumber,money,timestamp,beijing,points,geometry,renderChart,goal,renderGoal,renderSources,sourceScope,totalProfit,health,lifetimeAmount,lifetimePercent,validLifetime,lifetimeDetails,validAnnualized,annualValue,annualYears,annualDetails,mount};
+  return {REFRESH_MS,REQUEST_TIMEOUT_MS,MAX_CHART_POINTS,decimal,exact,chartNumber,money,timestamp,beijing,points,geometry,renderChart,goal,renderGoal,renderSources,sourceScope,totalProfit,health,lifetimeAmount,lifetimePercent,validLifetime,lifetimeDetails,reconciliationDetails,validAnnualized,annualValue,annualYears,annualDetails,mount};
 });
