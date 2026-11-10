@@ -229,6 +229,9 @@
     const fetcher = options.fetch || root.fetch.bind(root), setTimer = options.setTimeout || root.setTimeout.bind(root), clearTimer = options.clearTimeout || root.clearTimeout.bind(root), now = options.now || Date.now;
     const node = id=>document.getElementById(id);
     panel.classList.add('combined-wallet','card');panel.setAttribute('aria-labelledby','combinedTitle');panel.innerHTML=MARKUP+RECONCILE_MARKUP;
+    // Keep the modal outside the portal's card grid and its child sizing rules.
+    const reconciliationDialog=node('combinedReconcileDialog');
+    if(document.body&&typeof document.body.append==='function')document.body.append(reconciliationDialog);
     let state=null,lifetime=null,lifetimeFailed=false,annualized=null,annualizedFailed=false,annualizedLoading=true,timer=null,read=null,disposed=false,pageActive=true,failed=false,mode='cny',range='all',selected=-1,sequence=0;
     function active(){const page=node('walletPage');return !disposed&&pageActive&&!document.hidden&&(!page||!page.hidden);}
     function cancelTimer(){if(timer!==null)clearTimer(timer);timer=null;}
@@ -379,7 +382,7 @@
     for(const [name,value]of[['Cny','cny'],['Usd','usd'],['Btc','btc']])events.push([node('combinedMode'+name),'click',()=>pickMode(value)]);
     for(const [name,value]of[['Today','today'],['30','30'],['90','90'],['All','all']])events.push([node('combinedRange'+name),'click',()=>pickRange(value)]);
     for(const[target,event,handler]of events)target.addEventListener(event,handler);
-    function destroy(){disposed=true;sequence++;cancelTimer();if(read)read.controller.abort();closeReconciliation();for(const[target,event,handler]of events)target.removeEventListener(event,handler);panel.__combinedController=null;}
+    function destroy(){disposed=true;sequence++;cancelTimer();if(read)read.controller.abort();closeReconciliation();for(const[target,event,handler]of events)target.removeEventListener(event,handler);reconciliationDialog.remove?.();panel.__combinedController=null;}
     const controller={refresh:load,destroy};panel.__combinedController=controller;render();if(active())load();return controller;
   }
   return {REFRESH_MS,REQUEST_TIMEOUT_MS,MAX_CHART_POINTS,decimal,exact,chartNumber,money,timestamp,beijing,points,geometry,renderChart,goal,renderGoal,renderSources,sourceScope,totalProfit,health,lifetimeAmount,lifetimePercent,validLifetime,lifetimeDetails,reconciliationDetails,validAnnualized,annualValue,annualYears,annualDetails,mount};
