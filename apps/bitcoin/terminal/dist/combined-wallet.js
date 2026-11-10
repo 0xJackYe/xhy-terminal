@@ -207,7 +207,7 @@
   }
   function reconciliationDetails(data) {
     const m=data&&data.metrics||{};
-    const quantity=(label,value)=>'<div><dt>'+label+'</dt><dd title="'+escape(decimal(value)?value:'')+'">'+escape(btc(value))+'</dd></div>';
+    const quantity=(label,value)=>'<div><dt>'+label+'</dt><dd title="'+escape(decimal(value)?value:'')+'">'+escape(exact(value))+'</dd></div>';
     const price=(label,value,formula)=>'<tr><th scope="row">'+label+'<small>'+formula+'</small></th><td>'+escape(exact(value,2,true))+'</td></tr>';
     return '<p class="combined-reconcile-status">'+escape(data&&data.status==='fresh'?'已同步':'含缓存或待核对数据')+(timestamp(data&&data.ledger_as_of)!==null?' · 账本截至 '+escape(beijing(data.ledger_as_of))+' 北京时间':'')+'</p>'+
       '<dl class="combined-reconcile-quantities">'+quantity('累计买入 · BTC',m.bought_net_btc)+quantity('累计卖出 · BTC',m.sold_btc)+quantity('现货净买入 · BTC',m.known_net_bought_btc||m.spot_inventory_btc)+quantity('非买卖净变动 · BTC',m.nonspot_btc_adjustment)+quantity('实际总持有 · BTC',m.holdings_btc)+'</dl>'+
