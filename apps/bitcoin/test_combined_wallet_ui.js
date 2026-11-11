@@ -116,5 +116,41 @@ async function check(name,fn){await fn();count++;console.log('OK '+name);}
   await check('assumptions are escaped and obsolete realized calculation wording is removed',()=>{const details=api.lifetimeDetails({...LIFETIME,assumptions:['<img src=x onerror=alert(1)>','已实现盈利计入累计净盈亏']});assert.match(details,/&lt;img/);assert.doesNotMatch(details,/<img/);assert.doesNotMatch(details,/已实现|累计净盈亏/);assert.equal(api.validLifetime({...LIFETIME,currency:'USD'}),false);assert.equal(api.validLifetime({...LIFETIME,method:'fifo'}),false);assert.equal(api.validLifetime({...LIFETIME,metrics:[]}),false);});
   await check('aggregate failure flags holding figures as cached',async()=>{const h=harness();await h.settle();h.responses.push(new Error('offline'));await h.tick();assert.equal(h.node('combinedUnrealizedNet').textContent,'+85.75');assert.equal(h.node('combinedLifetimeState').textContent,'缓存结果 · 待更新');});
   await check('legacy dates remain usable and a missing return is never invented by the browser',async()=>{const legacy={...LIFETIME,metrics:{...LIFETIME.metrics}};delete legacy.first_buy_at;delete legacy.last_buy_at;delete legacy.metrics.unrealized_return_pct;const h=harness({responses:[{...SNAPSHOT,lifetime_pnl:legacy}]});await h.settle();assert.equal(h.node('combinedUnrealizedReturn').textContent,'—');assert.match(h.node('combinedLifetimeDetails').innerHTML,/首笔净买入.*2024-12-14 00:07/);assert.match(h.node('combinedLifetimeDetails').innerHTML,/最近净买入.*2030-03-01 20:00/);});
+  await check('lifetime subscription replays loading and exact accepted values without a second API read',async()=>{
+    const pending=deferred(),h=harness({responses:[pending.promise]}),seen=[];const unsubscribe=h.controller.subscribeLifetime(value=>seen.push(value));
+    assert.deepEqual(seen,[null]);pending.resolve({...SNAPSHOT,lifetime_pnl:{...LIFETIME,metrics:{...LIFETIME.metrics,average_cost:'78605.97123456789123456789'}}});await h.settle();
+    assert.equal(seen.at(-1).metrics.average_cost,'78605.97123456789123456789');assert.equal(seen.at(-1).status,'fresh');assert.equal(seen.at(-1).connection_id,LIFETIME.connection_id);assert.equal(h.requests.length,1);
+    seen.at(-1).metrics.average_cost='1';seen.at(-1).assumptions.push('subscriber-only');let replay;const stop=h.controller.subscribeLifetime(value=>{replay=value;});
+    assert.equal(replay.metrics.average_cost,'78605.97123456789123456789');assert.doesNotMatch(replay.assumptions.join(' '),/subscriber-only/);assert.equal(h.node('combinedAverageCost').textContent,'78,605.97');
+    unsubscribe();stop();h.controller.destroy();
+  });
+  await check('lifetime subscribers receive new buy costs and displayed failure recovery status',async()=>{
+    const h=harness();await h.settle();const seen=[];h.controller.subscribeLifetime(value=>seen.push(value));
+    h.responses.push({...SNAPSHOT,lifetime_pnl:{...LIFETIME,buy_count:2724,metrics:{...LIFETIME.metrics,average_cost:'79500.995'}}});await h.tick();
+    assert.equal(seen.at(-1).metrics.average_cost,'79500.995');assert.equal(h.node('combinedAverageCost').textContent,'79,501.00');assert.equal(seen.at(-1).status,'fresh');
+    const count=seen.length;await h.node('combinedModeUsd').fire('click');assert.equal(seen.length,count,'display controls do not republish unchanged financial data');
+    h.responses.push(new Error('offline'));await h.tick();assert.equal(seen.at(-1).status,'stale');assert.equal(seen.at(-1).metrics.average_cost,'79500.995');assert.match(h.node('combinedLifetimeState').className,/stale/);
+    await h.tick();assert.equal(seen.at(-1).status,'fresh');assert.equal(seen.at(-1).metrics.average_cost,LIFETIME.metrics.average_cost);h.controller.destroy();
+  });
+  await check('lifetime subscription reflects fallback API failure and same-account stale retention',async()=>{
+    const h=harness();await h.settle();const seen=[];h.controller.subscribeLifetime(value=>seen.push(value));const legacy={...SNAPSHOT};delete legacy.lifetime_pnl;
+    h.responses.push(legacy,new Error('private-api-detail'));await h.tick();assert.equal(seen.at(-1).status,'stale');assert.equal(seen.at(-1).metrics.average_cost,LIFETIME.metrics.average_cost);assert.equal(h.node('combinedState').textContent,'已同步 · 只读');
+    h.responses.push({...SNAPSHOT,lifetime_pnl:{...LIFETIME,status:'unavailable',metrics:null}});await h.tick();assert.equal(seen.at(-1).status,'stale');assert.equal(seen.at(-1).metrics.average_cost,LIFETIME.metrics.average_cost);h.controller.destroy();
+  });
+  await check('replacement account subscriptions never reuse the previous holding cost',async()=>{
+    const h=harness();await h.settle();const seen=[];h.controller.subscribeLifetime(value=>seen.push(value));
+    h.responses.push({...SNAPSHOT,lifetime_pnl:{...LIFETIME,connection_id:'test-connection-b',status:'loading',metrics:null}});await h.tick();
+    assert.equal(seen.at(-1).connection_id,'test-connection-b');assert.equal(seen.at(-1).status,'loading');assert.equal(seen.at(-1).metrics,null);assert.equal(h.node('combinedAverageCost').textContent,'—');
+    h.responses.push({...SNAPSHOT,lifetime_pnl:{...LIFETIME,connection_id:'test-connection-b',metrics:{...LIFETIME.metrics,average_cost:'81000.123456'}}});await h.tick();
+    assert.equal(seen.at(-1).metrics.average_cost,'81000.123456');assert.equal(seen.at(-1).connection_id,'test-connection-b');
+    h.responses.push({...SNAPSHOT,lifetime_pnl:{...LIFETIME,connection_id:null,status:'unavailable',metrics:null}});await h.tick();assert.equal(seen.at(-1).metrics,null);assert.equal(seen.at(-1).connection_id,null);h.controller.destroy();
+  });
+  await check('subscriber errors are isolated and unsubscribe and destroy release all callbacks',async()=>{
+    const h=harness();await h.settle();const stopped=[],active=[];const stop=h.controller.subscribeLifetime(value=>stopped.push(value));h.controller.subscribeLifetime(()=>{throw new Error('broken chart');});h.controller.subscribeLifetime(value=>active.push(value));
+    stop();stop();h.responses.push({...SNAPSHOT,lifetime_pnl:{...LIFETIME,metrics:{...LIFETIME.metrics,average_cost:'80000'}}});await h.tick();
+    assert.equal(stopped.length,1);assert.equal(active.at(-1).metrics.average_cost,'80000');assert.equal(h.node('combinedAverageCost').textContent,'80,000.00');assert.equal(h.node('combinedState').textContent,'已同步 · 只读');
+    const pending=deferred();h.responses.push(pending.promise);const read=h.controller.refresh();await h.settle();h.controller.destroy();assert.equal(active.at(-1),null);const count=active.length;
+    pending.resolve(SNAPSHOT);await read;await h.settle();assert.equal(active.length,count);assert.equal(stopped.length,1);let afterDestroy=0;h.controller.subscribeLifetime(()=>afterDestroy++);assert.equal(afterDestroy,0);
+  });
   console.log(count+' combined wallet UI checks passed');
 })().catch(error=>{console.error(error);process.exitCode=1;});

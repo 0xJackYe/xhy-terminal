@@ -49,6 +49,13 @@
   function markerRows(buys,candles,color){
     const dates=new Map(candles.map(row=>[row.time,row.low]));return [...buys.keys()].sort().filter(date=>dates.has(date)).map(time=>({time,low:dates.get(time),position:'belowBar',color,text:'B',id:'buy-'+time}));
   }
+  function holdingCost(value){
+    if(!value||!['fresh','stale'].includes(value.status)||value.currency!=='USDT'||value.method!=='moving_weighted_average'||!value.metrics)return null;
+    const raw=value.metrics.average_cost,held=value.metrics.holdings_btc;
+    if(typeof raw!=='string'||raw.length>512||!/^\d+(?:\.\d+)?$/.test(raw)||typeof held!=='string'||!/^\d+(?:\.\d+)?$/.test(held))return null;
+    const price=Number(raw),quantity=Number(held);if(!Number.isFinite(price)||price<=0||price>1e12||!Number.isFinite(quantity)||quantity<=0)return null;
+    return {price,exact:raw,status:value.status,connectionId:typeof value.connection_id==='string'?value.connection_id:null,asOf:typeof value.as_of==='string'?value.as_of:null};
+  }
   // A series primitive follows both chart axes without a separate DOM overlay.
   class BuyBadges{
     constructor(){this.rows=[];this.items=[];this.hovered=null;this.views=[{zOrder:()=>'top',renderer:()=>this}];}
@@ -86,7 +93,7 @@
   const MARKUP='<div id="dcaCandleSheet" class="dca-candle-sheet" hidden><section id="dcaCandleDialog" class="dca-candle-dialog" role="dialog" aria-modal="true" aria-labelledby="dcaCandleTitle" tabindex="-1">'+
     '<header class="dca-candle-head"><div><h3 id="dcaCandleTitle">BTC 定投日 K 线</h3><p>BTC / USDT · 北京时间 UTC+8</p></div><div class="dca-candle-state"><i id="dcaCandleDot"></i><span id="dcaCandleState" role="status">读取行情中</span></div><button id="dcaCandleClose" type="button" aria-label="关闭定投 K 线">×</button></header>'+
     '<div class="dca-candle-toolbar"><div id="dcaCandleRanges" class="dca-candle-controls" role="group" aria-label="K 线显示范围"><button type="button" data-view="year">近一年</button><button type="button" data-view="all">全部</button><button type="button" data-view="first">首笔买入</button><button type="button" data-view="latest">最新</button></div><div class="dca-candle-jump"><label for="dcaCandleDate">跳转</label><input id="dcaCandleDate" type="date" min="2024-07-01" aria-label="跳转到北京时间日期"><button id="dcaCandleJump" type="button">前往</button></div><div class="dca-candle-controls" role="group" aria-label="K 线缩放"><button id="dcaCandleZoomOut" type="button" aria-label="缩小 K 线">−</button><button id="dcaCandleZoomIn" type="button" aria-label="放大 K 线">＋</button></div></div>'+
-    '<div class="dca-candle-readout"><strong id="dcaCandleDay">日 K · 2024-07-01 起</strong><span id="dcaCandleOHLC">开 —　高 —　低 —　收 —</span><span id="dcaCandleBuy">B 表示当天有买入</span></div>'+
+    '<div class="dca-candle-readout"><strong id="dcaCandleDay">日 K · 2024-07-01 起</strong><span id="dcaCandleOHLC">开 —　高 —　低 —　收 —</span><span id="dcaCandleCost" class="dca-candle-cost" role="status">持仓均价待核对</span><span id="dcaCandleBuy">B 表示当天有买入</span></div>'+
     '<div id="dcaCandleStage" class="dca-candle-stage"><div id="dcaCandleChart" class="dca-candle-chart" role="img" aria-label="北京时间 BTC 每日 K 线及买入标记" tabindex="0"></div><div id="dcaCandleEmpty" class="dca-candle-empty">正在同步 2024 年 7 月起的每日行情…</div><div id="dcaCandleTip" class="dca-candle-tip" role="tooltip" hidden><strong id="dcaCandleTipDate"></strong><span id="dcaCandleTipUSDT"></span><small id="dcaCandleTipDetail"></small></div></div>'+
     '<footer class="dca-candle-footer"><span id="dcaCandleCoverage">滚轮缩放 · 拖动平移 · 悬停 B 查看买入金额</span><a href="https://www.tradingview.com/" target="_blank" rel="noopener noreferrer">Charts by TradingView</a></footer></section></div>';
   function mount(options={}){
@@ -98,15 +105,32 @@
     const fetcher=options.fetch||root.fetch.bind(root),setTimer=options.setTimeout||root.setTimeout.bind(root),clearTimer=options.clearTimeout||root.clearTimeout.bind(root);
     const clock=options.now||Date.now;
     let opened=false,disposed=false,chart=null,series=null,markers=null,data=null,model=null,buys=new Map(),timer=null,read=null,sequence=0,initial=true,selection=null,opener=null,resizeObserver=null,themeObserver=null,needsHistory=false,inspectedDate=null;
+    let cost=null,costLine=null,costController=null,unsubscribeCost=null;
     const active=()=>opened&&!disposed&&!document.hidden;
     const stop=()=>{if(timer!==null)clearTimer(timer);timer=null;};
     function schedule(){stop();if(active())timer=setTimer(()=>{timer=null;load();},REFRESH_MS);}
     function hideTip(){tip.hidden=true;markers?.setHovered(null);}
     function css(name,fallback){const value=typeof root.getComputedStyle==='function'?root.getComputedStyle(dialog).getPropertyValue(name).trim():'';return value||fallback;}
-    function colors(){return {bg:css('--card','#faf8f2'),text:css('--text','#292923'),muted:css('--muted','#7b7b6c'),line:css('--line','#dedbd1'),accent:css('--dca-marker','#c43846'),up:css('--green','#38775a'),down:css('--red','#ad5847')};}
+    function colors(){return {bg:css('--card','#faf8f2'),text:css('--text','#292923'),muted:css('--muted','#7b7b6c'),line:css('--line','#dedbd1'),accent:css('--dca-marker','#c43846'),cost:css('--dca-cost','#3e63a8'),up:css('--green','#38775a'),down:css('--red','#ad5847')};}
+    function drawCost(){
+      const caption=node('dcaCandleCost');caption.textContent=cost?'持仓均价 '+amount(cost.exact)+' USDT'+(cost.status==='stale'?' · 缓存':''):'持仓均价待核对';
+      caption.title='当前持仓水平参考线 · 剩余移动加权成本 ÷ 实际 BTC 总持有，与“比特币总持有”的持仓摊薄成本价一致。'+(cost?.asOf?' 核算时间 '+new Date(cost.asOf).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',hour12:false}):'');
+      if(!series)return;
+      if(!cost){if(costLine)series.removePriceLine(costLine);costLine=null;return;}
+      if(!opened)return;
+      const settings={price:cost.price,color:colors().cost,lineWidth:1,lineStyle:2,lineVisible:true,axisLabelVisible:true,title:'持仓均价'+(cost.status==='stale'?' · 缓存':''),axisLabelColor:'#3e63a8',axisLabelTextColor:'#fff'};
+      if(costLine)costLine.applyOptions(settings);else costLine=series.createPriceLine(settings);
+    }
+    function acceptCost(value){if(disposed)return;cost=holdingCost(value);drawCost();}
+    function connectCost(){
+      const source=(options.costSource?options.costSource():document.getElementById('combinedWalletPanel')?.__combinedController)||null;
+      if(source===costController)return;
+      unsubscribeCost?.();unsubscribeCost=null;costController=source||null;acceptCost(null);
+      if(source&&typeof source.subscribeLifetime==='function')unsubscribeCost=source.subscribeLifetime(value=>{if(costController===source)acceptCost(value);});
+    }
     function theme(){
       if(!chart)return;const c=colors();chart.applyOptions({layout:{background:{type:'solid',color:c.bg},textColor:c.muted,fontFamily:'Consolas, SFMono-Regular, monospace',fontSize:11,attributionLogo:true},grid:{vertLines:{color:c.line,visible:false},horzLines:{color:c.line}},rightPriceScale:{borderColor:c.line},timeScale:{borderColor:c.line},crosshair:{vertLine:{color:c.muted,labelBackgroundColor:c.text},horzLine:{color:c.muted,labelBackgroundColor:c.text}}});
-      series.applyOptions({upColor:c.up,downColor:c.down,borderUpColor:c.up,borderDownColor:c.down,wickUpColor:c.up,wickDownColor:c.down});drawMarkers();
+      series.applyOptions({upColor:c.up,downColor:c.down,borderUpColor:c.up,borderDownColor:c.down,wickUpColor:c.up,wickDownColor:c.down});drawMarkers();drawCost();
     }
     function makeChart(){
       if(chart)return true;const lib=options.charts||root.LightweightCharts;
@@ -174,7 +198,7 @@
     }
     function cancelRead(){if(!read)return;const token=read;read=null;sequence++;token.cancelled=true;clearTimer(token.timeout);token.controller.abort();token.cancel();}
     async function load(){
-      if(!active()||read)return;stop();const token={controller:new root.AbortController(),sequence:++sequence,cancelled:false};read=token;let refill=false;
+      if(!active()||read)return;connectCost();stop();const token={controller:new root.AbortController(),sequence:++sequence,cancelled:false};read=token;let refill=false;
       const interrupted=new Promise((_,reject)=>{token.cancel=()=>reject(new Error('cancelled'));});token.timeout=setTimer(()=>{token.controller.abort();token.cancel();},TIMEOUT_MS);
       try{
         const tail=data&&data.complete&&data.candles.length&&!needsHistory;
@@ -199,9 +223,9 @@
     }
     function updateBuys(next){model=next;buys=purchases(model);drawMarkers();hideTip();if(data&&data.candles.length)readout(data.candles.find(row=>row.time===inspectedDate)||data.candles[data.candles.length-1]);}
     function open(next,selectedDate=null){
-      if(disposed)return;if(!opened)opener=document.activeElement||null;updateBuys(next);selection=dateKey(selectedDate);opened=true;sheet.hidden=false;
+      if(disposed)return;if(!opened)opener=document.activeElement||null;connectCost();updateBuys(next);selection=dateKey(selectedDate);opened=true;sheet.hidden=false;
       node('dcaCandleState').textContent='正在更新行情';node('dcaCandleDot').dataset.state='stale';
-      makeChart();if(data){theme();if(selection)rangeView('date',selection);}
+      makeChart();drawCost();if(data){theme();if(selection)rangeView('date',selection);}
       if(typeof dialog.focus==='function')dialog.focus();load();
     }
     function close(){
@@ -225,8 +249,8 @@
     }
     const events=[[sheet,'click',sheetClick],[sheet,'keydown',keydown],[chartNode,'pointerleave',hideTip],[document,'visibilitychange',visibility],[root,'pagehide',close],[root,'blur',()=>{if(root.parent&&root.parent!==root)close();}]];
     for(const [target,event,handler]of events)target.addEventListener(event,handler);
-    function destroy(){if(disposed)return;close();disposed=true;for(const [target,event,handler]of events)target.removeEventListener(event,handler);resizeObserver?.disconnect();themeObserver?.disconnect();if(markers)series.detachPrimitive(markers);chart?.remove();sheet.remove();}
+    function destroy(){if(disposed)return;close();disposed=true;unsubscribeCost?.();unsubscribeCost=null;costController=null;for(const [target,event,handler]of events)target.removeEventListener(event,handler);resizeObserver?.disconnect();themeObserver?.disconnect();if(costLine)series.removePriceLine(costLine);costLine=null;if(markers)series.detachPrimitive(markers);chart?.remove();sheet.remove();}
     const controller={open,close,updateBuys,destroy,refresh:load,isOpen:()=>opened};sheet.__controller=controller;return controller;
   }
-  return {START,REFRESH_MS,TIMEOUT_MS,dateTime,dateKey,amount,normalized,purchases,markerRows,BuyBadges,mount};
+  return {START,REFRESH_MS,TIMEOUT_MS,dateTime,dateKey,amount,normalized,purchases,markerRows,holdingCost,BuyBadges,mount};
 });

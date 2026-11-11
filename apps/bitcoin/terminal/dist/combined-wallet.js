@@ -233,6 +233,17 @@
     const reconciliationDialog=node('combinedReconcileDialog');
     if(document.body&&typeof document.body.append==='function')document.body.append(reconciliationDialog);
     let state=null,lifetime=null,lifetimeFailed=false,annualized=null,annualizedFailed=false,annualizedLoading=true,timer=null,read=null,disposed=false,pageActive=true,failed=false,mode='cny',range='all',selected=-1,sequence=0;
+    const lifetimeListeners=new Set();let publishedLifetime=null,publishedSource=null,publishedKind=null;
+    function notifyLifetime(listener,snapshot){try{listener(snapshot===null?null:structuredClone(snapshot));}catch{/* A chart subscriber cannot interrupt wallet updates. */}}
+    function publishLifetime(kind){
+      if(lifetime===publishedSource&&kind===publishedKind)return;
+      publishedSource=lifetime;publishedKind=kind;publishedLifetime=lifetime?{...lifetime,status:kind}:null;
+      for(const listener of lifetimeListeners)notifyLifetime(listener,publishedLifetime);
+    }
+    function subscribeLifetime(listener){
+      if(disposed||typeof listener!=='function')return()=>{};
+      lifetimeListeners.add(listener);notifyLifetime(listener,publishedLifetime);return()=>lifetimeListeners.delete(listener);
+    }
     function active(){const page=node('walletPage');return !disposed&&pageActive&&!document.hidden&&(!page||!page.hidden);}
     function cancelTimer(){if(timer!==null)clearTimer(timer);timer=null;}
     function schedule(){cancelTimer();if(active())timer=setTimer(()=>{timer=null;load();},REFRESH_MS);}
@@ -270,6 +281,7 @@
       node('combinedAverageCost').title='持仓摊薄成本价 = 剩余持仓成本 ÷ 实际 BTC 总持有；可点击标题旁的“核对”查看与历史买入均价的差别。';
       node('combinedReconcileDetails').innerHTML=reconciliationDetails(lifetime);
       renderAnnualized();
+      publishLifetime(kind);
     }
     function renderAnnualized(){
       const same=annualized&&connectionId(annualized)===connectionId(lifetime),data=same?annualized:null,cached=annualizedFailed||failed;
@@ -382,8 +394,8 @@
     for(const [name,value]of[['Cny','cny'],['Usd','usd'],['Btc','btc']])events.push([node('combinedMode'+name),'click',()=>pickMode(value)]);
     for(const [name,value]of[['Today','today'],['30','30'],['90','90'],['All','all']])events.push([node('combinedRange'+name),'click',()=>pickRange(value)]);
     for(const[target,event,handler]of events)target.addEventListener(event,handler);
-    function destroy(){disposed=true;sequence++;cancelTimer();if(read)read.controller.abort();closeReconciliation();for(const[target,event,handler]of events)target.removeEventListener(event,handler);reconciliationDialog.remove?.();panel.__combinedController=null;}
-    const controller={refresh:load,destroy};panel.__combinedController=controller;render();if(active())load();return controller;
+    function destroy(){disposed=true;sequence++;cancelTimer();if(read)read.controller.abort();closeReconciliation();for(const[target,event,handler]of events)target.removeEventListener(event,handler);for(const listener of lifetimeListeners)notifyLifetime(listener,null);lifetimeListeners.clear();publishedLifetime=null;reconciliationDialog.remove?.();panel.__combinedController=null;}
+    const controller={refresh:load,destroy,subscribeLifetime};panel.__combinedController=controller;render();if(active())load();return controller;
   }
   return {REFRESH_MS,REQUEST_TIMEOUT_MS,MAX_CHART_POINTS,decimal,exact,chartNumber,money,timestamp,beijing,points,geometry,renderChart,goal,renderGoal,renderSources,sourceScope,totalProfit,health,lifetimeAmount,lifetimePercent,validLifetime,lifetimeDetails,reconciliationDetails,validAnnualized,annualValue,annualYears,annualDetails,mount};
 });
