@@ -30,11 +30,12 @@ function harness(options={}){
   root.ResizeObserver=class{constructor(fn){this.fn=fn;observers.push(this);}observe(){}disconnect(){this.disconnected=true;}};
   root.MutationObserver=root.ResizeObserver;
   let range={from:0,to:100};const rangeCalls=[];
-  const scale={fitContent(){range={from:0,to:rows.length};rangeCalls.push({...range});},setVisibleLogicalRange(value){range={...value};rangeCalls.push({...range});},getVisibleLogicalRange:()=>({...range})};
-  const series={sets:[],updates:[],options:[],setData(value){this.sets.push(value);if(options.mutateInput)for(const row of value){const [year,month,day]=row.time.split('-').map(Number);row.time={year,month,day};}},update(value){this.updates.push(value);},applyOptions(value){this.options.push(value);}};
-  const marker={sets:[],setMarkers(value){this.sets.push(value);},detach(){this.detached=true;}};
+  const scale={fitContent(){range={from:0,to:rows.length};rangeCalls.push({...range});},setVisibleLogicalRange(value){range={...value};rangeCalls.push({...range});},getVisibleLogicalRange:()=>({...range}),options:()=>({barSpacing:16}),width:()=>900,timeToCoordinate:date=>(D(date)-D(api.START))/DAY};
+  const marker={sets:[]};
+  const series={sets:[],updates:[],options:[],setData(value){this.sets.push(value);if(options.mutateInput)for(const row of value){const [year,month,day]=row.time.split('-').map(Number);row.time={year,month,day};}},update(value){this.updates.push(value);},applyOptions(value){this.options.push(value);},priceToCoordinate:()=>200,
+    attachPrimitive(primitive){marker.primitive=primitive;const set=primitive.setMarkers.bind(primitive);primitive.setMarkers=value=>{marker.sets.push(value);set(value);};primitive.attached({chart,series,requestUpdate:()=>primitive.updateAllViews()});},detachPrimitive(primitive){marker.detached=true;primitive.detached();}};
   const chart={options:[],applyOptions(value){this.options.push(value);},addSeries:()=>series,timeScale:()=>scale,subscribeCrosshairMove(fn){this.crosshair=fn;},subscribeClick(fn){this.click=fn;},remove(){this.removed=true;}};
-  const library={CandlestickSeries:{type:'candlestick'},createChart(node,config){chartCount++;chart.config=config;return chart;},createSeriesMarkers:()=>marker};
+  const library={CandlestickSeries:{type:'candlestick'},createChart(node,config){chartCount++;chart.config=config;return chart;}};
   const setTimeout=(fn,delay)=>{const id=++nextTimer;timers.set(id,{fn,delay});return id;},clearTimeout=id=>timers.delete(id);
   async function fetch(url,init){requests.push({url,init});let value=responses.length?responses.shift():SNAPSHOT;value=await value;if(value instanceof Error)throw value;return {ok:!value.http_status||value.http_status<400,headers:{get:name=>name==='Date'?options.serverDate||null:null},json:async()=>value};}
   const args={root,document,fetch,setTimeout,clearTimeout,now:()=>NOW,charts:options.noLibrary?{}:library},controller=api.mount(args);
@@ -58,6 +59,19 @@ let count=0;async function check(name,fn){await fn();count++;console.log('OK '+n
     assert.equal(markers.length,3);assert.ok(markers.every(marker=>marker.text==='B'&&marker.position==='belowBar'));assert.equal(map.get('2024-12-14').usdt,'20.005501');assert.equal(map.get('2026-11-11').usdt,null);
     assert.equal(api.markerRows(map,[rows[0]],'#fff').length,0,'a missing candle never moves a purchase onto a different day');
     assert.equal(api.amount('20.005501'),'20.01');assert.equal(api.amount('9007199254740993.995'),'9,007,199,254,740,994.00');assert.equal(api.amount(null),'—');
+  });
+  await check('red badges follow both axes and retain each buy during dense zoom and hover',()=>{
+    const primitive=new api.BuyBadges();let spacing=18,shift=0,low=100,redraws=0;
+    const scale={options:()=>({barSpacing:spacing}),width:()=>500,timeToCoordinate:date=>date==='2024-12-14'?100+shift:100+shift+spacing};
+    primitive.attached({chart:{timeScale:()=>scale},series:{priceToCoordinate:()=>low},requestUpdate:()=>{redraws++;primitive.updateAllViews();}});
+    primitive.setMarkers([{time:'2024-12-14',low:90000,color:'#c43846',id:'buy-2024-12-14'},{time:'2024-12-15',low:91000,color:'#c43846',id:'buy-2024-12-15'}]);
+    const labels=[],fills=[],ctx={beginPath(){},roundRect(){fills.push(this.fillStyle);},fill(){},moveTo(){},lineTo(){},closePath(){},fillText(text){labels.push({text,color:this.fillStyle});}};
+    const target={useMediaCoordinateSpace:fn=>fn({context:ctx})};primitive.paneViews()[0].renderer().draw(target);
+    assert.deepEqual(labels,[{text:'B',color:'#fff'},{text:'B',color:'#fff'}]);assert.ok(fills.every(color=>color==='#c43846'));assert.equal(primitive.hitTest(100,116).externalId,'buy-2024-12-14');
+    shift=40;low=220;primitive.updateAllViews();assert.equal(primitive.hitTest(100,116),null);assert.equal(primitive.hitTest(140,236).externalId,'buy-2024-12-14');
+    spacing=3;primitive.updateAllViews();labels.length=0;primitive.draw(target);assert.equal(primitive.items.length,2,'compact zoom never drops buying dates');assert.equal(labels.length,0);
+    assert.equal(primitive.hitTest(143,231).externalId,'buy-2024-12-15');primitive.setHovered('2024-12-15');primitive.draw(target);assert.deepEqual(labels,[{text:'B',color:'#fff'}]);
+    primitive.setMarkers([]);assert.equal(primitive.items.length,0);assert.equal(primitive.hitTest(143,231),null);primitive.detached();assert.equal(primitive.requestUpdate,null);assert.ok(redraws>=3);
   });
   await check('initial mount is dormant and the chart loads only when its popup opens',async()=>{
     const h=harness();assert.equal(h.node('dcaCandleSheet').hidden,true);assert.equal(h.requests.length,0);assert.equal(h.chartCount(),0);assert.equal(h.timers.size,0);

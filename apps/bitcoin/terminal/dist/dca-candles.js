@@ -47,7 +47,41 @@
     return result;
   }
   function markerRows(buys,candles,color){
-    const dates=new Set(candles.map(row=>row.time));return [...buys.keys()].sort().filter(date=>dates.has(date)).map(time=>({time,position:'belowBar',color,shape:'circle',text:'B',size:0,id:'buy-'+time}));
+    const dates=new Map(candles.map(row=>[row.time,row.low]));return [...buys.keys()].sort().filter(date=>dates.has(date)).map(time=>({time,low:dates.get(time),position:'belowBar',color,text:'B',id:'buy-'+time}));
+  }
+  // A series primitive follows both chart axes without a separate DOM overlay.
+  class BuyBadges{
+    constructor(){this.rows=[];this.items=[];this.hovered=null;this.views=[{zOrder:()=>'top',renderer:()=>this}];}
+    attached({chart,series,requestUpdate}){this.chart=chart;this.series=series;this.requestUpdate=requestUpdate;}
+    detached(){this.chart=null;this.series=null;this.requestUpdate=null;this.rows=[];this.items=[];}
+    setMarkers(rows){this.rows=rows;this.requestUpdate?.();}
+    setHovered(date){if(this.hovered===date)return;this.hovered=date;this.requestUpdate?.();}
+    paneViews(){return this.views;}
+    updateAllViews(){
+      if(!this.chart||!this.series)return;const scale=this.chart.timeScale(),width=Math.min(14,Math.max(2,Math.floor(scale.options().barSpacing)-2));
+      this.items=[];for(const row of this.rows){const x=scale.timeToCoordinate(row.time),low=this.series.priceToCoordinate(row.low);
+        if(x===null||low===null||!Number.isFinite(x)||!Number.isFinite(low)||x< -8||x>scale.width()+8)continue;
+        this.items.push({...row,x,y:Math.round(low)+9,width});
+      }
+    }
+    draw(target){
+      target.useMediaCoordinateSpace(({context:ctx})=>{
+        const paint=item=>{const width=item.time===this.hovered?14:item.width,full=width>=10,height=full?15:5,left=Math.round(item.x-width/2),top=item.y;
+          ctx.fillStyle=item.color;ctx.beginPath();ctx.roundRect(left,top,width,height,Math.min(3,width/2));ctx.fill();
+          if(full){ctx.beginPath();ctx.moveTo(item.x-3,top+1);ctx.lineTo(item.x,top-3);ctx.lineTo(item.x+3,top+1);ctx.closePath();ctx.fill();
+            ctx.fillStyle='#fff';ctx.font='600 11px Arial, sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('B',left+width/2,top+height/2+.5);}
+        };
+        for(const item of this.items)if(item.time!==this.hovered)paint(item);
+        const selected=this.items.find(item=>item.time===this.hovered);if(selected)paint(selected);
+      });
+    }
+    hitTest(x,y){
+      let nearest=null,distance=Infinity;for(const item of this.items){const width=item.time===this.hovered?14:item.width,full=width>=10;
+        if(Math.abs(x-item.x)>width/2+2||y<item.y-(full?3:1)||y>item.y+(full?15:5)+1)continue;
+        const delta=Math.abs(x-item.x);if(delta<distance){nearest=item;distance=delta;}
+      }
+      return nearest?{externalId:nearest.id,cursorStyle:'pointer',zOrder:'top'}:null;
+    }
   }
   const MARKUP='<div id="dcaCandleSheet" class="dca-candle-sheet" hidden><section id="dcaCandleDialog" class="dca-candle-dialog" role="dialog" aria-modal="true" aria-labelledby="dcaCandleTitle" tabindex="-1">'+
     '<header class="dca-candle-head"><div><h3 id="dcaCandleTitle">BTC 定投日 K 线</h3><p>BTC / USDT · 北京时间 UTC+8</p></div><div class="dca-candle-state"><i id="dcaCandleDot"></i><span id="dcaCandleState" role="status">读取行情中</span></div><button id="dcaCandleClose" type="button" aria-label="关闭定投 K 线">×</button></header>'+
@@ -67,18 +101,18 @@
     const active=()=>opened&&!disposed&&!document.hidden;
     const stop=()=>{if(timer!==null)clearTimer(timer);timer=null;};
     function schedule(){stop();if(active())timer=setTimer(()=>{timer=null;load();},REFRESH_MS);}
-    function hideTip(){tip.hidden=true;}
+    function hideTip(){tip.hidden=true;markers?.setHovered(null);}
     function css(name,fallback){const value=typeof root.getComputedStyle==='function'?root.getComputedStyle(dialog).getPropertyValue(name).trim():'';return value||fallback;}
-    function colors(){return {bg:css('--card','#faf8f2'),text:css('--text','#292923'),muted:css('--muted','#7b7b6c'),line:css('--line','#dedbd1'),accent:css('--dca-marker','#bd694d'),up:css('--green','#38775a'),down:css('--red','#ad5847')};}
+    function colors(){return {bg:css('--card','#faf8f2'),text:css('--text','#292923'),muted:css('--muted','#7b7b6c'),line:css('--line','#dedbd1'),accent:css('--dca-marker','#c43846'),up:css('--green','#38775a'),down:css('--red','#ad5847')};}
     function theme(){
       if(!chart)return;const c=colors();chart.applyOptions({layout:{background:{type:'solid',color:c.bg},textColor:c.muted,fontFamily:'Consolas, SFMono-Regular, monospace',fontSize:11,attributionLogo:true},grid:{vertLines:{color:c.line,visible:false},horzLines:{color:c.line}},rightPriceScale:{borderColor:c.line},timeScale:{borderColor:c.line},crosshair:{vertLine:{color:c.muted,labelBackgroundColor:c.text},horzLine:{color:c.muted,labelBackgroundColor:c.text}}});
       series.applyOptions({upColor:c.up,downColor:c.down,borderUpColor:c.up,borderDownColor:c.down,wickUpColor:c.up,wickDownColor:c.down});drawMarkers();
     }
     function makeChart(){
       if(chart)return true;const lib=options.charts||root.LightweightCharts;
-      if(!lib||typeof lib.createChart!=='function'||!lib.CandlestickSeries||typeof lib.createSeriesMarkers!=='function'){node('dcaCandleEmpty').textContent='图表组件暂不可用，请重新打开页面。';return false;}
+      if(!lib||typeof lib.createChart!=='function'||!lib.CandlestickSeries){node('dcaCandleEmpty').textContent='图表组件暂不可用，请重新打开页面。';return false;}
       chart=lib.createChart(chartNode,{autoSize:true,handleScale:{mouseWheel:true,pinch:true,axisPressedMouseMove:true,axisDoubleClickReset:true},handleScroll:{mouseWheel:true,pressedMouseMove:true,horzTouchDrag:true,vertTouchDrag:true},kineticScroll:{mouse:true,touch:true},rightPriceScale:{scaleMargins:{top:.12,bottom:.2}},timeScale:{timeVisible:false,secondsVisible:false,rightOffset:6,minBarSpacing:.5,tickMarkFormatter:(time,type)=>{const date=dateKey(time);return date?(type===0?date.slice(0,4):date.slice(5)):'';}},localization:{locale:'zh-CN',dateFormat:'yyyy-MM-dd',timeFormatter:time=>dateKey(time)||'',priceFormatter:price=>Number(price).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}});
-      series=chart.addSeries(lib.CandlestickSeries,{priceFormat:{type:'price',precision:2,minMove:.01}});markers=lib.createSeriesMarkers(series,[]);
+      series=chart.addSeries(lib.CandlestickSeries,{priceFormat:{type:'price',precision:2,minMove:.01}});markers=new BuyBadges();series.attachPrimitive(markers);
       chart.subscribeCrosshairMove(crosshair);chart.subscribeClick(crosshair);theme();
       if(typeof root.ResizeObserver==='function'){resizeObserver=new root.ResizeObserver(()=>{if(opened&&chart){chart.applyOptions({autoSize:true});hideTip();}});resizeObserver.observe(chartNode);}
       if(typeof root.MutationObserver==='function'){themeObserver=new root.MutationObserver(theme);themeObserver.observe(document.documentElement,{attributes:true,attributeFilter:['class','data-xhy-theme','data-theme']});themeObserver.observe(document.body,{attributes:true,attributeFilter:['class']});}
@@ -95,6 +129,7 @@
       const id=typeof param.hoveredObjectId==='string'&&param.hoveredObjectId.startsWith('buy-')?param.hoveredObjectId.slice(4):null;
       const date=id||dateKey(param.time),row=data.candles.find(item=>item.time===date);if(row)readout(row);
       const buy=buys.get(date);if(!buy){hideTip();return;}
+      markers?.setHovered(date);
       node('dcaCandleTipDate').textContent=date+' · B 买入';node('dcaCandleTipUSDT').textContent=buy.usdt===null?'USDT 金额待核对':amount(buy.usdt)+' USDT';
       node('dcaCandleTipDetail').textContent=amount(buy.btc,8)+' BTC'+(buy.buys===null?'':' · '+buy.buys+' 笔成交');tip.hidden=false;
       const w=node('dcaCandleStage').clientWidth||800,h=node('dcaCandleStage').clientHeight||400;
@@ -104,12 +139,12 @@
       if(!chart||!data||!data.candles.length)return;hideTip();const list=data.candles,scale=chart.timeScale(),last=list.length-1;
       if(kind==='all')scale.fitContent();
       else if(kind==='year')scale.setVisibleLogicalRange({from:Math.max(-2,last-365),to:last+5});
-      else if(kind==='latest')scale.setVisibleLogicalRange({from:Math.max(-2,last-120),to:last+5});
+      else if(kind==='latest')scale.setVisibleLogicalRange({from:Math.max(-2,last-60),to:last+5});
       else {
         const target=kind==='first'?[...buys.keys()].sort()[0]:date;
         if(!target){node('dcaCandleState').textContent='尚无已核对买入记录';return;}
         let index=list.findIndex(row=>row.time>=target);if(index<0)index=last;
-        scale.setVisibleLogicalRange({from:Math.max(-2,index-40),to:Math.min(last+5,index+80)});readout(list[index]);node('dcaCandleDate').value=target;
+        scale.setVisibleLogicalRange({from:Math.max(-2,index-25),to:Math.min(last+5,index+35)});readout(list[index]);node('dcaCandleDate').value=target;
       }
       if(['all','year','latest'].includes(kind))readout(list[last]);
       for(const button of node('dcaCandleRanges').querySelectorAll('button[data-view]'))button.setAttribute('aria-pressed',String(button.dataset.view===kind));
@@ -190,8 +225,8 @@
     }
     const events=[[sheet,'click',sheetClick],[sheet,'keydown',keydown],[chartNode,'pointerleave',hideTip],[document,'visibilitychange',visibility],[root,'pagehide',close],[root,'blur',()=>{if(root.parent&&root.parent!==root)close();}]];
     for(const [target,event,handler]of events)target.addEventListener(event,handler);
-    function destroy(){if(disposed)return;close();disposed=true;for(const [target,event,handler]of events)target.removeEventListener(event,handler);resizeObserver?.disconnect();themeObserver?.disconnect();markers?.detach();chart?.remove();sheet.remove();}
+    function destroy(){if(disposed)return;close();disposed=true;for(const [target,event,handler]of events)target.removeEventListener(event,handler);resizeObserver?.disconnect();themeObserver?.disconnect();if(markers)series.detachPrimitive(markers);chart?.remove();sheet.remove();}
     const controller={open,close,updateBuys,destroy,refresh:load,isOpen:()=>opened};sheet.__controller=controller;return controller;
   }
-  return {START,REFRESH_MS,TIMEOUT_MS,dateTime,dateKey,amount,normalized,purchases,markerRows,mount};
+  return {START,REFRESH_MS,TIMEOUT_MS,dateTime,dateKey,amount,normalized,purchases,markerRows,BuyBadges,mount};
 });
