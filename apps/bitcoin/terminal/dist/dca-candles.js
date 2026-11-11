@@ -129,7 +129,9 @@
       drawMarkers();node('dcaCandleEmpty').hidden=!!list.length;
       if(list.length){node('dcaCandleDate').max=list[list.length-1].time;if(initial){initial=false;rangeView(selection?'date':'latest',selection);if(!selection)readout(list[list.length-1]);}}
       if(inspectedDate)readout(list.find(row=>row.time===inspectedDate));
-      const quotedAt=Date.parse(next.asOf),age=clock()-quotedAt;
+      // Compare cloud timestamps with its response clock, not a potentially
+      // unsynchronised desktop clock. Old cached quotes must still read stale.
+      const quotedAt=Date.parse(next.asOf),age=clock()+(next.serverClockOffset||0)-quotedAt;
       const stale=next.status!=='fresh'||!next.complete||!Number.isFinite(quotedAt)||age>15000||age< -2000;node('dcaCandleDot').dataset.state=stale?'stale':'live';
       node('dcaCandleState').textContent=!stale?'实时同步 · 5 秒':!next.complete&&list.length?'部分历史待补齐':list.length?'行情暂未更新 · 保留历史':'行情暂不可用，自动重试';
       node('dcaCandleCoverage').textContent=(list.length?list[0].time+' — '+list[list.length-1].time:'2024-07-01 起')+' · 北京时间 · 滚轮缩放 / 拖动平移 / B 查看买入';
@@ -141,7 +143,7 @@
       const interrupted=new Promise((_,reject)=>{token.cancel=()=>reject(new Error('cancelled'));});token.timeout=setTimer(()=>{token.controller.abort();token.cancel();},TIMEOUT_MS);
       try{
         const tail=data&&data.complete&&data.candles.length&&!needsHistory;
-        const request=(async()=>{const r=await fetcher('/api/wallet/btc-dca-candles'+(tail?'?tail=1':''),{method:'GET',credentials:'same-origin',cache:'no-store',headers:{Accept:'application/json'},signal:token.controller.signal});if(!r.ok)throw new Error('unavailable');const next=normalized(await r.json());if(!next)throw new Error('invalid');return next;})();
+        const request=(async()=>{const r=await fetcher('/api/wallet/btc-dca-candles'+(tail?'?tail=1':''),{method:'GET',credentials:'same-origin',cache:'no-store',headers:{Accept:'application/json'},signal:token.controller.signal});if(!r.ok)throw new Error('unavailable');const receivedAt=clock(),serverTime=Date.parse(r.headers?.get('Date')||'');const next=normalized(await r.json());if(!next)throw new Error('invalid');next.serverClockOffset=Number.isFinite(serverTime)?serverTime-receivedAt:0;return next;})();
         const next=await Promise.race([request,interrupted]);if(!active()||token.cancelled||token.sequence!==sequence)return;
         if(next.mode==='tail'&&data&&data.candles.length&&next.candles.length){
           const last=data.candles[data.candles.length-1].time;

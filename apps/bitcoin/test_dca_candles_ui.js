@@ -36,7 +36,7 @@ function harness(options={}){
   const chart={options:[],applyOptions(value){this.options.push(value);},addSeries:()=>series,timeScale:()=>scale,subscribeCrosshairMove(fn){this.crosshair=fn;},subscribeClick(fn){this.click=fn;},remove(){this.removed=true;}};
   const library={CandlestickSeries:{type:'candlestick'},createChart(node,config){chartCount++;chart.config=config;return chart;},createSeriesMarkers:()=>marker};
   const setTimeout=(fn,delay)=>{const id=++nextTimer;timers.set(id,{fn,delay});return id;},clearTimeout=id=>timers.delete(id);
-  async function fetch(url,init){requests.push({url,init});let value=responses.length?responses.shift():SNAPSHOT;value=await value;if(value instanceof Error)throw value;return {ok:!value.http_status||value.http_status<400,json:async()=>value};}
+  async function fetch(url,init){requests.push({url,init});let value=responses.length?responses.shift():SNAPSHOT;value=await value;if(value instanceof Error)throw value;return {ok:!value.http_status||value.http_status<400,headers:{get:name=>name==='Date'?options.serverDate||null:null},json:async()=>value};}
   const args={root,document,fetch,setTimeout,clearTimeout,now:()=>NOW,charts:options.noLibrary?{}:library},controller=api.mount(args);
   async function tick(delay=api.REFRESH_MS){const next=[...timers].find(([,value])=>value.delay===delay);assert.ok(next,'Expected timer '+delay);timers.delete(next[0]);next[1].fn();await settle();}
   async function click(id,view){const button=nodes.get(id)||{id,dataset:{}};if(view)button.dataset.view=view;await nodes.get('dcaCandleSheet').fire('click',{target:{closest:()=>button}});}
@@ -110,6 +110,17 @@ let count=0;async function check(name,fn){await fn();count++;console.log('OK '+n
   await check('an old quote cannot be labeled live even if its response status says fresh',async()=>{
     const h=harness({responses:[{...SNAPSHOT,as_of:new Date(NOW-60000).toISOString()}]});h.controller.open(buys());await h.settle();
     assert.equal(h.node('dcaCandleDot').dataset.state,'stale');assert.match(h.node('dcaCandleState').textContent,/保留历史/);assert.equal(h.series.sets[0].length,rows.length);h.controller.destroy();
+  });
+  await check('cloud response time corrects desktop clock drift without hiding genuinely old quotes',async()=>{
+    for(const drift of [31000,-31000]){
+      const serverNow=NOW+drift,h=harness({serverDate:new Date(serverNow).toUTCString(),responses:[{...SNAPSHOT,as_of:new Date(serverNow).toISOString()},{...SNAPSHOT,as_of:new Date(serverNow-60000).toISOString()}]});
+      h.controller.open(buys());await h.settle();assert.equal(h.node('dcaCandleDot').dataset.state,'live');assert.match(h.node('dcaCandleState').textContent,/实时同步/);
+      await h.tick();assert.equal(h.node('dcaCandleDot').dataset.state,'stale');assert.match(h.node('dcaCandleState').textContent,/保留历史/);h.controller.destroy();
+      const old=harness({serverDate:new Date(serverNow).toUTCString(),responses:[{...SNAPSHOT,as_of:new Date(serverNow-60000).toISOString()}]});old.controller.open(buys());await old.settle();assert.equal(old.node('dcaCandleDot').dataset.state,'stale');old.controller.destroy();
+    }
+    for(const serverDate of [null,'invalid']){
+      const h=harness({serverDate});h.controller.open(buys());await h.settle();assert.equal(h.node('dcaCandleDot').dataset.state,'live');h.controller.destroy();
+    }
   });
   await check('new diary buys update markers while an account replacement removes all previous B records',async()=>{
     const h=harness();h.controller.open(buys());await h.settle();const changed=buys();changed.days.set(D('2026-11-11'),{btc:400000,usdt:3000,buys:3});h.controller.updateBuys(changed);assert.equal(h.marker.sets.at(-1).length,3);
