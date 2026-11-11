@@ -69,8 +69,8 @@ let count=0;async function check(name,fn){await fn();count++;console.log('OK '+n
     const target={useMediaCoordinateSpace:fn=>fn({context:ctx})};primitive.paneViews()[0].renderer().draw(target);
     assert.deepEqual(labels,[{text:'B',color:'#fff'},{text:'B',color:'#fff'}]);assert.ok(fills.every(color=>color==='#c43846'));assert.equal(primitive.hitTest(100,116).externalId,'buy-2024-12-14');
     shift=40;low=220;primitive.updateAllViews();assert.equal(primitive.hitTest(100,116),null);assert.equal(primitive.hitTest(140,236).externalId,'buy-2024-12-14');
-    spacing=3;primitive.updateAllViews();labels.length=0;primitive.draw(target);assert.equal(primitive.items.length,2,'compact zoom never drops buying dates');assert.equal(labels.length,0);
-    assert.equal(primitive.hitTest(143,231).externalId,'buy-2024-12-15');primitive.setHovered('2024-12-15');primitive.draw(target);assert.deepEqual(labels,[{text:'B',color:'#fff'}]);
+    for(const zoom of [8,3,.5]){spacing=zoom;primitive.updateAllViews();labels.length=0;primitive.draw(target);assert.equal(primitive.items.length,2,'zoom never drops buying dates');assert.deepEqual(labels,[{text:'B',color:'#fff'},{text:'B',color:'#fff'}],'even the widest history view keeps every red-background white B');}
+    spacing=3;primitive.updateAllViews();assert.equal(primitive.hitTest(143,238).externalId,'buy-2024-12-15');labels.length=0;primitive.setHovered('2024-12-15');primitive.draw(target);assert.deepEqual(labels,[{text:'B',color:'#fff'},{text:'B',color:'#fff'}]);
     primitive.setMarkers([]);assert.equal(primitive.items.length,0);assert.equal(primitive.hitTest(143,231),null);primitive.detached();assert.equal(primitive.requestUpdate,null);assert.ok(redraws>=3);
   });
   await check('initial mount is dormant and the chart loads only when its popup opens',async()=>{
