@@ -1,4 +1,4 @@
-:root .dca-candle-sheet{--dca-marker:#bd694d}body.dark .dca-candle-sheet{--dca-marker:#edb37b}
+:root .dca-candle-sheet{--dca-marker:#c43846}
 .dca-candle-sheet{position:fixed;inset:0;z-index:90;display:flex;align-items:center;justify-content:center;padding:14px;background:rgb(14 14 13 / .38);overscroll-behavior:contain;animation:dca-candle-fade .16s ease}
 .dca-candle-sheet[hidden]{display:none!important}
 .dca-candle-dialog{display:flex;flex-direction:column;box-sizing:border-box;width:min(1440px,100%);height:100%;max-height:920px;min-width:0;overflow:hidden;padding:18px 20px 12px;border:1px solid var(--line);border-radius:16px;background:var(--card,#faf8f2);color:var(--text,#292923);box-shadow:0 28px 64px -24px rgb(0 0 0 / .5);outline:none;animation:dca-candle-rise .22s cubic-bezier(.22,1,.36,1)}
