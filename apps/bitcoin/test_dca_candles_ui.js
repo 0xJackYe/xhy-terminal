@@ -5,6 +5,7 @@ const api=require('./terminal/dist/dca-candles.js');
 const DAY=86400000,D=date=>Date.parse(date+'T00:00:00Z'),NOW=D('2026-11-11')+3600000;
 const rows=Array.from({length:Math.round((D('2026-11-11')-D(api.START))/DAY)+1},(_,i)=>({time:new Date(D(api.START)+i*DAY).toISOString().slice(0,10),open:String(100+i),high:String(105+i),low:String(98+i),close:String(101+i),volume:'12.4'}));
 const SNAPSHOT={status:'fresh',timezone:'Asia/Shanghai',symbol:'BTCUSDT',interval:'1d',start_date:api.START,as_of:new Date(NOW).toISOString(),source:'Binance Spot',coverage_complete:true,candles:rows};
+const HOLDING={status:'fresh',currency:'USDT',method:'moving_weighted_average',connection_id:'account-a',as_of:new Date(NOW).toISOString(),metrics:{average_cost:'78605.97123456789',holdings_btc:'0.08353034',historical_average_buy_price:'79700.5',spot_average_cost:'78930.7'}};
 function buys(){return {connectionId:'account-a',days:new Map([[D('2024-12-14'),{btc:100000,usdt:2000,buys:2,exactBTC:'0.0010000049',exactUSDT:'20.005501'}],[D('2026-11-10'),{btc:200000,usdt:10000,buys:1}]])};}
 const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return {promise,resolve,reject};};
 const settle=async()=>{for(let i=0;i<8;i++)await new Promise(setImmediate);};
@@ -32,13 +33,13 @@ function harness(options={}){
   let range={from:0,to:100};const rangeCalls=[];
   const scale={fitContent(){range={from:0,to:rows.length};rangeCalls.push({...range});},setVisibleLogicalRange(value){range={...value};rangeCalls.push({...range});},getVisibleLogicalRange:()=>({...range}),options:()=>({barSpacing:16}),width:()=>900,timeToCoordinate:date=>(D(date)-D(api.START))/DAY};
   const marker={sets:[]};
-  const series={sets:[],updates:[],options:[],setData(value){this.sets.push(value);if(options.mutateInput)for(const row of value){const [year,month,day]=row.time.split('-').map(Number);row.time={year,month,day};}},update(value){this.updates.push(value);},applyOptions(value){this.options.push(value);},priceToCoordinate:()=>200,
+  const series={sets:[],updates:[],options:[],priceLines:[],removedLines:[],createPriceLine(value){const line={options:{...value},applyOptions(next){this.options={...this.options,...next};}};this.priceLines.push(line);return line;},removePriceLine(line){this.removedLines.push(line);},setData(value){this.sets.push(value);if(options.mutateInput)for(const row of value){const [year,month,day]=row.time.split('-').map(Number);row.time={year,month,day};}},update(value){this.updates.push(value);},applyOptions(value){this.options.push(value);},priceToCoordinate:()=>200,
     attachPrimitive(primitive){marker.primitive=primitive;const set=primitive.setMarkers.bind(primitive);primitive.setMarkers=value=>{marker.sets.push(value);set(value);};primitive.attached({chart,series,requestUpdate:()=>primitive.updateAllViews()});},detachPrimitive(primitive){marker.detached=true;primitive.detached();}};
   const chart={options:[],applyOptions(value){this.options.push(value);},addSeries:()=>series,timeScale:()=>scale,subscribeCrosshairMove(fn){this.crosshair=fn;},subscribeClick(fn){this.click=fn;},remove(){this.removed=true;}};
   const library={CandlestickSeries:{type:'candlestick'},createChart(node,config){chartCount++;chart.config=config;return chart;}};
   const setTimeout=(fn,delay)=>{const id=++nextTimer;timers.set(id,{fn,delay});return id;},clearTimeout=id=>timers.delete(id);
   async function fetch(url,init){requests.push({url,init});let value=responses.length?responses.shift():SNAPSHOT;value=await value;if(value instanceof Error)throw value;return {ok:!value.http_status||value.http_status<400,headers:{get:name=>name==='Date'?options.serverDate||null:null},json:async()=>value};}
-  const args={root,document,fetch,setTimeout,clearTimeout,now:()=>NOW,charts:options.noLibrary?{}:library},controller=api.mount(args);
+  const args={root,document,fetch,setTimeout,clearTimeout,now:()=>NOW,charts:options.noLibrary?{}:library,costSource:options.costSource},controller=api.mount(args);
   async function tick(delay=api.REFRESH_MS){const next=[...timers].find(([,value])=>value.delay===delay);assert.ok(next,'Expected timer '+delay);timers.delete(next[0]);next[1].fn();await settle();}
   async function click(id,view){const button=nodes.get(id)||{id,dataset:{}};if(view)button.dataset.view=view;await nodes.get('dcaCandleSheet').fire('click',{target:{closest:()=>button}});}
   return {root,document,node:id=>nodes.get(id),nodes,timers,requests,responses,chart,series,marker,rangeCalls,range:()=>range,colors,observers,opener,controller,args,tick,click,settle,chartCount:()=>chartCount};
@@ -78,6 +79,25 @@ let count=0;async function check(name,fn){await fn();count++;console.log('OK '+n
     h.controller.open(buys());await h.settle();assert.equal(h.chartCount(),1);assert.equal(h.requests.length,1);assert.equal(h.requests[0].url,'/api/wallet/btc-dca-candles');assert.equal(h.requests[0].init.method,'GET');assert.equal(h.requests[0].init.credentials,'same-origin');assert.equal(h.series.sets[0].length,rows.length);
     assert.equal(h.node('dcaCandleSheet').parentElement,h.document.body);assert.equal(h.node('dcaCandleEmpty').hidden,true);assert.match(h.node('dcaCandleState').textContent,/实时同步/);
     assert.equal(api.mount(h.args),h.controller);h.controller.destroy();
+  });
+  await check('holding cost reuses the wallet average, not historical buys or remaining spot average',()=>{
+    assert.equal(api.holdingCost(HOLDING).exact,HOLDING.metrics.average_cost);
+    for(const value of [null,{...HOLDING,status:'unavailable'},{...HOLDING,currency:'CNY'},{...HOLDING,method:'buy_average'},{...HOLDING,metrics:{...HOLDING.metrics,holdings_btc:'0'}},{...HOLDING,metrics:{...HOLDING.metrics,average_cost:null}},{...HOLDING,metrics:{...HOLDING.metrics,average_cost:'Infinity'}},{...HOLDING,metrics:{...HOLDING.metrics,average_cost:'-1'}}])assert.equal(api.holdingCost(value),null);
+  });
+  await check('the holding cost line shares wallet refreshes, preserves zoom and clears invalid accounts',async()=>{
+    const subscribers=new Set(),provider={subscribeLifetime(fn){subscribers.add(fn);fn(HOLDING);return()=>subscribers.delete(fn);}},h=harness({costSource:()=>provider});
+    assert.equal(subscribers.size,0);h.controller.open(buys());await h.settle();assert.equal(subscribers.size,1);assert.equal(h.series.priceLines.length,1);
+    const line=h.series.priceLines[0];assert.equal(line.options.price,Number(HOLDING.metrics.average_cost));assert.equal(line.options.title,'持仓均价');assert.equal(line.options.lineStyle,2);assert.equal(h.node('dcaCandleCost').textContent,'持仓均价 78,605.97 USDT');assert.equal(h.requests.length,1,'cost is shared without another API request');
+    h.chart.timeScale().setVisibleLogicalRange({from:10,to:50});const next={...HOLDING,status:'stale',metrics:{...HOLDING.metrics,average_cost:'78000.125'}};for(const fn of subscribers)fn(next);
+    assert.equal(h.series.priceLines.length,1);assert.equal(line.options.price,78000.125);assert.match(line.options.title,/缓存/);assert.equal(h.node('dcaCandleCost').textContent,'持仓均价 78,000.13 USDT · 缓存');assert.deepEqual(h.range(),{from:10,to:50});
+    for(const fn of subscribers)fn({...HOLDING,connection_id:'account-b',metrics:{average_cost:null,holdings_btc:'0'}});assert.equal(h.series.removedLines[0],line);assert.equal(h.node('dcaCandleCost').textContent,'持仓均价待核对');
+    for(const fn of subscribers)fn({...HOLDING,connection_id:'account-b',metrics:{...HOLDING.metrics,average_cost:'65000'}});assert.equal(h.series.priceLines.at(-1).options.price,65000);
+    h.colors['--dca-cost']='#94b4ff';h.observers[1].fn();assert.equal(h.series.priceLines.at(-1).options.color,'#94b4ff');assert.equal(h.series.priceLines.at(-1).options.axisLabelColor,'#3e63a8');assert.equal(h.series.priceLines.at(-1).options.axisLabelTextColor,'#fff');
+    h.controller.close();for(const fn of subscribers)fn(null);assert.equal(h.node('dcaCandleCost').textContent,'持仓均价待核对');h.controller.destroy();assert.equal(subscribers.size,0);
+  });
+  await check('a replaced wallet controller releases its old cost subscription and replays the new cost',async()=>{
+    let source,oldCallback,oldReleased=0;const first={subscribeLifetime(fn){oldCallback=fn;fn(HOLDING);return()=>oldReleased++;}},second={subscribeLifetime(fn){fn({...HOLDING,connection_id:'account-b',metrics:{...HOLDING.metrics,average_cost:'72000'}});return()=>{};}};
+    source=first;const h=harness({costSource:()=>source});h.controller.open(buys());await h.settle();h.controller.close();source=second;h.controller.open(buys());await h.settle();assert.equal(oldReleased,1);assert.equal(h.series.priceLines.at(-1).options.price,72000);oldCallback(HOLDING);assert.equal(h.series.priceLines.at(-1).options.price,72000);const lastCaption=h.node('dcaCandleCost').textContent;h.controller.destroy();oldCallback(HOLDING);assert.equal(h.node('dcaCandleCost').textContent,lastCaption);
   });
   await check('hovering B shows that Beijing day USDT BTC and fill count; unknown USDT is explicit',async()=>{
     const h=harness(),model=buys();model.days.set(D('2026-11-11'),{btc:123,usdt:null,buys:1});h.controller.open(model);await h.settle();

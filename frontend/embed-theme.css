@@ -85,7 +85,9 @@ html[data-xhy-theme] iframe[data-xhy-auto-height="true"] {
 }
 /* Reset hard-coded text colors across every old view, including dynamic cards.
    Specific semantic/selected states below restore their intentional contrast. */
-html[data-xhy-theme] body * {
+/* Chart libraries resolve colors through hidden direct-body probe divs.
+   Preserve their inline color while applying the palette to visible content. */
+html[data-xhy-theme] body *:not(:where(body > div[style*="display: none"][style*="color:"])) {
   color: var(--xhy-text) !important;
   border-color: var(--xhy-line) !important;
   text-decoration-color: currentColor;
