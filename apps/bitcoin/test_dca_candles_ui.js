@@ -99,11 +99,18 @@ let count=0;async function check(name,fn){await fn();count++;console.log('OK '+n
     let source,oldCallback,oldReleased=0;const first={subscribeLifetime(fn){oldCallback=fn;fn(HOLDING);return()=>oldReleased++;}},second={subscribeLifetime(fn){fn({...HOLDING,connection_id:'account-b',metrics:{...HOLDING.metrics,average_cost:'72000'}});return()=>{};}};
     source=first;const h=harness({costSource:()=>source});h.controller.open(buys());await h.settle();h.controller.close();source=second;h.controller.open(buys());await h.settle();assert.equal(oldReleased,1);assert.equal(h.series.priceLines.at(-1).options.price,72000);oldCallback(HOLDING);assert.equal(h.series.priceLines.at(-1).options.price,72000);const lastCaption=h.node('dcaCandleCost').textContent;h.controller.destroy();oldCallback(HOLDING);assert.equal(h.node('dcaCandleCost').textContent,lastCaption);
   });
-  await check('hovering B shows that Beijing day USDT BTC and fill count; unknown USDT is explicit',async()=>{
+  await check('daily average divides unrounded USDT by net BTC and rounds the weighted price once',()=>{
+    assert.equal(api.dailyBuyPrice('110','0.0021'),'52,380.95');
+    assert.equal(api.dailyBuyPrice('20.005501','0.0010000049'),'20,005.40');
+    assert.equal(api.dailyBuyPrice('1.005','1'),'1.01');assert.equal(api.dailyBuyPrice('9007199254740993.995','1'),'9,007,199,254,740,994.00');
+    for(const [cash,btc]of [[null,'1'],['10','0'],['-10','1'],['10','NaN'],['1'.repeat(513),'1']])assert.equal(api.dailyBuyPrice(cash,btc),'—');
+  });
+  await check('hovering B shows that Beijing day weighted average instead of fill count; unknown cost is explicit',async()=>{
     const h=harness(),model=buys();model.days.set(D('2026-11-11'),{btc:123,usdt:null,buys:1});h.controller.open(model);await h.settle();
     h.chart.crosshair({time:{year:2024,month:12,day:14},hoveredObjectId:'buy-2024-12-14',point:{x:240,y:320}});
-    assert.equal(h.node('dcaCandleTip').hidden,false);assert.equal(h.node('dcaCandleTipDate').textContent,'2024-12-14 · B 买入');assert.equal(h.node('dcaCandleTipUSDT').textContent,'20.01 USDT');assert.match(h.node('dcaCandleTipDetail').textContent,/0.00100000 BTC · 2 笔成交/);
-    h.chart.crosshair({time:'2026-11-11',hoveredObjectId:'buy-2026-11-11',point:{x:800,y:420}});assert.equal(h.node('dcaCandleTipUSDT').textContent,'USDT 金额待核对');
+    assert.equal(h.node('dcaCandleTip').hidden,false);assert.equal(h.node('dcaCandleTipDate').textContent,'2024-12-14 · B 买入');assert.equal(h.node('dcaCandleTipUSDT').textContent,'20.01 USDT');assert.equal(h.node('dcaCandleTipDetail').textContent,'0.00100000 BTC · 当日买入均价 20,005.40 USDT/BTC');assert.doesNotMatch(h.node('dcaCandleTipDetail').textContent,/笔成交/);
+    h.chart.crosshair({time:'2026-11-10',point:{x:420,y:200}});assert.equal(h.node('dcaCandleTipDetail').textContent,'0.00200000 BTC · 当日买入均价 50,000.00 USDT/BTC');
+    h.chart.crosshair({time:'2026-11-11',hoveredObjectId:'buy-2026-11-11',point:{x:800,y:420}});assert.equal(h.node('dcaCandleTipUSDT').textContent,'USDT 金额待核对');assert.match(h.node('dcaCandleTipDetail').textContent,/当日买入均价待核对/);
     h.chart.crosshair({time:'2024-07-01',point:{x:5,y:6}});assert.equal(h.node('dcaCandleTip').hidden,true);h.controller.destroy();
   });
   await check('tail polling updates candles in place and preserves the user pan and zoom',async()=>{
