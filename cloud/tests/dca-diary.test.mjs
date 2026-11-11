@@ -47,7 +47,32 @@ test('amounts are rounded to satoshis and cents; malformed rows are skipped', ()
     { ...fill('transfer', '0.1', '1', '2025-06-01T05:00:00Z') }, null, 'row']);
   assert.deepEqual(diary.days, [['2025-06-01', '0.00012346', '20.01', 1]]);
   assert.deepEqual(dcaDiary(null), { start_date: '2024-12-14', first_buy_date: null, coverage_start_date: null, fields: DCA_FIELDS, days: [], totals: { days: 0, buys: 0, btc: '0', usdt: '0' },
-    exact_totals: { days: 0, buys: 0, btc: '0', usdt: '0', average_buy_price: null }, exact_periods: {}, exact_days: {} });
+    exact_totals: { days: 0, buys: 0, btc: '0', usdt: '0', average_buy_price: null }, exact_periods: {}, exact_days: {},
+    buy_price_distribution: { bucket_usdt: '5000', priced_btc: '0', unpriced_btc: '0', bins: [] } });
+});
+
+test('buy price distribution uses actual fill prices, exact net quantities and lower-inclusive 5000 USDT bins',()=>{
+  const when='2026-11-12T01:00:00Z';
+  const fee={...fill('buy','0.000999','64.999',when),price:'64999',btc_gross:'0.001',fee_btc:'-0.000001'};
+  const boundary={...fill('buy','0.002','130',when),price:'65000'};
+  const tiny={...fill('buy','0.000123456789','7.40740734',when),price:'60000'};
+  const diary=dcaDiary([fee,boundary,tiny,fill('sell','-0.5','40000',when),{...fill('buy','0.1','1',when),side:'transfer'}]);
+  assert.deepEqual(diary.buy_price_distribution,{bucket_usdt:'5000',priced_btc:'0.003122456789',unpriced_btc:'0',bins:[
+    {from:'60000',to:'65000',btc:'0.001122456789'},
+    {from:'65000',to:'70000',btc:'0.002'},
+  ]});
+  assert.equal(diary.exact_totals.btc,diary.buy_price_distribution.priced_btc);
+});
+
+test('price distribution uses confirmed minute quote rates and reports unknown price quantity explicitly',()=>{
+  const when='2026-11-12T01:00:00Z';
+  const converted={...fill('buy','0.0006','38.4',when,{ccy:'USDC'}),price:'64000'};
+  const missingRate={...fill('buy','0.0005','32',when,{ccy:'FDUSD'}),price:'64000'};
+  const missingPrice=fill('buy','0.0004','26',when);delete missingPrice.price;
+  const badPrice={...fill('buy','0.0003','20',when),price:'0'};
+  const diary=dcaDiary([converted,missingRate,missingPrice,badPrice],{rates:{[minuteKey('USDC',when)]:{close:'1.02'}}});
+  assert.deepEqual(diary.buy_price_distribution,{bucket_usdt:'5000',priced_btc:'0.0006',unpriced_btc:'0.0012',bins:[{from:'65000',to:'70000',btc:'0.0006'}]});
+  assert.equal(diary.exact_totals.btc,'0.0018');
 });
 
 test('a recorded buy before the start moves the start back instead of being hidden; coverage is reported as a Beijing date', () => {

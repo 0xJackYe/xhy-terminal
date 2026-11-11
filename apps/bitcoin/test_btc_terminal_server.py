@@ -133,7 +133,7 @@ class TerminalTests(unittest.TestCase):
         self.assertEqual(json.loads(tail_body)["mode"], "tail")
         self.assertEqual(self.call("/api/wallet/btc-dca-candles?symbol=OTHER")[0], 400)
         self.assertEqual(self.mutation("/api/wallet/btc-dca-candles", {})[0], 405)
-        for path in ("/dca-candles.js", "/dca-candles.css", "/vendor/lightweight-charts-5.3.0.js"):
+        for path in ("/dca-candles.js", "/dca-candles.css", "/dca-indicators.js", "/vendor/lightweight-charts-5.3.0.js"):
             self.assertEqual(self.call(path)[0], 200, path)
 
     def test_rebinding_and_foreign_origin_rejected(self):

@@ -353,6 +353,7 @@ class MergedBTCCostTracker:
                 if currency != 'USDT' and rate:
                     row['quote_ccy'] = 'USDT'
                     row['quote_amount'] = text(number(row['quote_amount']) * number(rate['close']))
+                    row['price'] = text(number(row['price']) * number(rate['close']))
                 output.append(row)
         return output
 

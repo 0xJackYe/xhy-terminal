@@ -41,6 +41,7 @@ ROUTES = {
     "/dca-diary.css": STATIC / "dca-diary.css",
     "/dca-candles.js": STATIC / "dca-candles.js",
     "/dca-candles.css": STATIC / "dca-candles.css",
+    "/dca-indicators.js": STATIC / "dca-indicators.js",
     "/vendor/lightweight-charts-5.3.0.js": STATIC / "vendor" / "lightweight-charts-5.3.0.js",
     "/vendor/lightweight-charts.LICENSE.txt": STATIC / "vendor" / "lightweight-charts.LICENSE.txt",
     "/vendor/lightweight-charts.NOTICE.txt": STATIC / "vendor" / "lightweight-charts.NOTICE.txt",

@@ -33,16 +33,17 @@ function harness(options={}){
   let range={from:0,to:100};const rangeCalls=[];
   const scale={fitContent(){range={from:0,to:rows.length};rangeCalls.push({...range});},setVisibleLogicalRange(value){range={...value};rangeCalls.push({...range});},getVisibleLogicalRange:()=>({...range}),options:()=>({barSpacing:16}),width:()=>900,timeToCoordinate:date=>(D(date)-D(api.START))/DAY};
   const marker={sets:[]};
+  const indicator={updates:[],themes:[],created:0,update(value){this.updates.push(value);},theme(value){this.themes.push(value);},setProfileVisible(value){return this.profile=!!value;},setDailyVisible(value){return this.daily=!!value;},getProfileBin(id){return this.profile?this.updates.at(-1)?.distribution?.bins.find(row=>'buy-profile-'+row.from===id)||null:null;},destroy(){this.destroyed=true;}};
   const series={sets:[],updates:[],options:[],priceLines:[],removedLines:[],createPriceLine(value){const line={options:{...value},applyOptions(next){this.options={...this.options,...next};}};this.priceLines.push(line);return line;},removePriceLine(line){this.removedLines.push(line);},setData(value){this.sets.push(value);if(options.mutateInput)for(const row of value){const [year,month,day]=row.time.split('-').map(Number);row.time={year,month,day};}},update(value){this.updates.push(value);},applyOptions(value){this.options.push(value);},priceToCoordinate:()=>200,
     attachPrimitive(primitive){marker.primitive=primitive;const set=primitive.setMarkers.bind(primitive);primitive.setMarkers=value=>{marker.sets.push(value);set(value);};primitive.attached({chart,series,requestUpdate:()=>primitive.updateAllViews()});},detachPrimitive(primitive){marker.detached=true;primitive.detached();}};
-  const chart={options:[],applyOptions(value){this.options.push(value);},addSeries:()=>series,timeScale:()=>scale,subscribeCrosshairMove(fn){this.crosshair=fn;},subscribeClick(fn){this.click=fn;},remove(){this.removed=true;}};
+  const chart={options:[],applyOptions(value){this.options.push(value);},addSeries:()=>series,timeScale:()=>scale,panes:()=>[{getHeight:()=>300},{getHeight:()=>90}],subscribeCrosshairMove(fn){this.crosshair=fn;},subscribeClick(fn){this.click=fn;},remove(){this.removed=true;}};
   const library={CandlestickSeries:{type:'candlestick'},createChart(node,config){chartCount++;chart.config=config;return chart;}};
   const setTimeout=(fn,delay)=>{const id=++nextTimer;timers.set(id,{fn,delay});return id;},clearTimeout=id=>timers.delete(id);
   async function fetch(url,init){requests.push({url,init});let value=responses.length?responses.shift():SNAPSHOT;value=await value;if(value instanceof Error)throw value;return {ok:!value.http_status||value.http_status<400,headers:{get:name=>name==='Date'?options.serverDate||null:null},json:async()=>value};}
-  const args={root,document,fetch,setTimeout,clearTimeout,now:()=>NOW,charts:options.noLibrary?{}:library,costSource:options.costSource},controller=api.mount(args);
+  const args={root,document,fetch,setTimeout,clearTimeout,now:()=>NOW,charts:options.noLibrary?{}:library,costSource:options.costSource,indicators:options.indicators?{create(){indicator.created++;return indicator;}}:null},controller=api.mount(args);
   async function tick(delay=api.REFRESH_MS){const next=[...timers].find(([,value])=>value.delay===delay);assert.ok(next,'Expected timer '+delay);timers.delete(next[0]);next[1].fn();await settle();}
   async function click(id,view){const button=nodes.get(id)||{id,dataset:{}};if(view)button.dataset.view=view;await nodes.get('dcaCandleSheet').fire('click',{target:{closest:()=>button}});}
-  return {root,document,node:id=>nodes.get(id),nodes,timers,requests,responses,chart,series,marker,rangeCalls,range:()=>range,colors,observers,opener,controller,args,tick,click,settle,chartCount:()=>chartCount};
+  return {root,document,node:id=>nodes.get(id),nodes,timers,requests,responses,chart,series,marker,indicator,rangeCalls,range:()=>range,colors,observers,opener,controller,args,tick,click,settle,chartCount:()=>chartCount};
 }
 let count=0;async function check(name,fn){await fn();count++;console.log('OK '+name);}
 (async()=>{
@@ -105,13 +106,25 @@ let count=0;async function check(name,fn){await fn();count++;console.log('OK '+n
     assert.equal(api.dailyBuyPrice('1.005','1'),'1.01');assert.equal(api.dailyBuyPrice('9007199254740993.995','1'),'9,007,199,254,740,994.00');
     for(const [cash,btc]of [[null,'1'],['10','0'],['-10','1'],['10','NaN'],['1'.repeat(513),'1']])assert.equal(api.dailyBuyPrice(cash,btc),'—');
   });
-  await check('hovering B shows that Beijing day weighted average instead of fill count; unknown cost is explicit',async()=>{
+  await check('ordinary candles and B hover show only BTC quantity and daily average numbers',async()=>{
     const h=harness(),model=buys();model.days.set(D('2026-11-11'),{btc:123,usdt:null,buys:1});h.controller.open(model);await h.settle();
     h.chart.crosshair({time:{year:2024,month:12,day:14},hoveredObjectId:'buy-2024-12-14',point:{x:240,y:320}});
-    assert.equal(h.node('dcaCandleTip').hidden,false);assert.equal(h.node('dcaCandleTipDate').textContent,'2024-12-14 · B 买入');assert.equal(h.node('dcaCandleTipUSDT').textContent,'20.01 USDT');assert.equal(h.node('dcaCandleTipDetail').textContent,'0.00100000 BTC · 当日买入均价 20,005.40 USDT/BTC');assert.doesNotMatch(h.node('dcaCandleTipDetail').textContent,/笔成交/);
-    h.chart.crosshair({time:'2026-11-10',point:{x:420,y:200}});assert.equal(h.node('dcaCandleTipDetail').textContent,'0.00200000 BTC · 当日买入均价 50,000.00 USDT/BTC');
-    h.chart.crosshair({time:'2026-11-11',hoveredObjectId:'buy-2026-11-11',point:{x:800,y:420}});assert.equal(h.node('dcaCandleTipUSDT').textContent,'USDT 金额待核对');assert.match(h.node('dcaCandleTipDetail').textContent,/当日买入均价待核对/);
+    assert.equal(h.node('dcaCandleTip').hidden,false);assert.equal(h.node('dcaCandleTipBTC').textContent,'0.00100000');assert.equal(h.node('dcaCandleTipPrice').textContent,'20,005.40');
+    for(const id of ['dcaCandleTipBTC','dcaCandleTipPrice'])assert.match(h.node(id).textContent,/^[\d,.]+$/);
+    h.chart.crosshair({time:'2026-11-10',point:{x:420,y:200}});assert.equal(h.node('dcaCandleTipBTC').textContent,'0.00200000');assert.equal(h.node('dcaCandleTipPrice').textContent,'50,000.00');
+    h.chart.crosshair({time:'2026-11-11',hoveredObjectId:'buy-2026-11-11',point:{x:800,y:420}});assert.equal(h.node('dcaCandleTipPrice').textContent,'—');
     h.chart.crosshair({time:'2024-07-01',point:{x:5,y:6}});assert.equal(h.node('dcaCandleTip').hidden,true);h.controller.destroy();
+  });
+  await check('indicator switches share exact buy data, are independent and clear on account change',async()=>{
+    const h=harness({indicators:true}),model=buys(),distribution={bucket_usdt:'5000',priced_btc:'0.003',unpriced_btc:'0',bins:[{from:'60000',to:'65000',btc:'0.003'}]};model.buyPriceDistribution=distribution;
+    h.controller.open(model);await h.settle();assert.equal(h.indicator.created,1);assert.equal(h.indicator.profile,undefined);assert.equal(h.indicator.daily,undefined);assert.equal(h.indicator.updates.at(-1).distribution,distribution);assert.equal(h.indicator.updates.at(-1).buys.get('2024-12-14').btc,'0.0010000049');
+    await h.click('dcaCandleProfile');assert.equal(h.node('dcaCandleProfile').attrs['aria-pressed'],'true');assert.equal(h.indicator.daily,undefined);
+    await h.click('dcaCandleVolume');assert.equal(h.node('dcaCandleVolume').attrs['aria-pressed'],'true');assert.equal(h.indicator.profile,true);
+    h.chart.crosshair({hoveredObjectId:'buy-profile-60000',point:{x:10,y:100}});assert.equal(h.node('dcaCandleTipBTC').textContent,'0.00300000');assert.equal(h.node('dcaCandleTipPrice').textContent,'60,000–65,000');
+    h.chart.crosshair({time:'2026-11-10',paneIndex:1,point:{x:420,y:20}});assert.ok(Number.parseInt(h.node('dcaCandleTip').style.top)>=300,'volume pane tooltip stays beside its own pane');
+    h.controller.updateBuys({connectionId:'new-account',days:new Map()});assert.equal(h.indicator.updates.at(-1).buys.size,0);assert.equal(h.indicator.updates.at(-1).distribution,null);assert.match(h.node('dcaCandleIndicatorNote').textContent,/待同步/);
+    await h.click('dcaCandleProfile');assert.equal(h.indicator.profile,false);assert.equal(h.indicator.daily,true);h.controller.destroy();assert.equal(h.indicator.destroyed,true);
+    const source=fs.readFileSync('./terminal/dist/dca-candles.js','utf8');assert.ok(source.indexOf('id="dcaCandleProfile"')<source.indexOf('id="dcaCandleZoomOut"'));assert.ok(source.indexOf('id="dcaCandleVolume"')<source.indexOf('id="dcaCandleZoomOut"'));
   });
   await check('tail polling updates candles in place and preserves the user pan and zoom',async()=>{
     const h=harness();h.controller.open(buys());await h.settle();h.chart.timeScale().setVisibleLogicalRange({from:20,to:80});

@@ -253,6 +253,7 @@ def daily_progress(records, now_ms):
 DCA_DIARY_START = '2024-12-14'
 DCA_FIELDS = ['date', 'btc', 'usdt', 'buys']
 SATOSHI, CENT = Decimal('0.00000001'), Decimal('0.01')
+BUY_PRICE_BUCKET_USDT = Decimal(5000)
 
 
 def dca_diary(records, coverage_start_ms=None, start=DCA_DIARY_START):
@@ -262,9 +263,10 @@ def dca_diary(records, coverage_start_ms=None, start=DCA_DIARY_START):
     local ledger has no minute rates, so a day with a fill priced in another
     currency leaves its USDT value unknown instead of counting it as zero.
     Sales are not purchases and are left out."""
-    days = {}
+    days, price_bins = {}, {}
     with localcontext() as context:
         context.prec = 256
+        priced_btc = unpriced_btc = Decimal(0)
         for row in records or []:
             if not isinstance(row, dict) or row.get('side') != 'buy':
                 continue
@@ -274,6 +276,19 @@ def dca_diary(records, coverage_start_ms=None, start=DCA_DIARY_START):
                 continue
             if btc <= 0:
                 continue
+            # The merged adapter has already converted available historical
+            # quote rates. Otherwise a non-USDT price remains unpriced here.
+            try:
+                if row.get('quote_ccy') != 'USDT':
+                    raise CostValidationError('unpriced')
+                price = number(row['price'])
+                if price <= 0:
+                    raise CostValidationError('unpriced')
+                bucket = price // BUY_PRICE_BUCKET_USDT * BUY_PRICE_BUCKET_USDT
+                price_bins[bucket] = price_bins.get(bucket, Decimal(0)) + btc
+                priced_btc += btc
+            except (KeyError, CostValidationError):
+                unpriced_btc += btc
             day = days.setdefault(iso(at)[:10], {'btc': Decimal(0), 'usdt': Decimal(0), 'priced': True, 'buys': 0})
             day['btc'] += btc
             day['buys'] += 1
@@ -326,7 +341,11 @@ def dca_diary(records, coverage_start_ms=None, start=DCA_DIARY_START):
                 'exact_periods': {year: exact(period) for year, period in periods.items()},
                 'exact_days': {date: {'btc': text(day['btc']),
                                       'usdt': text(day['usdt']) if day['priced'] else None,
-                                      'buys': day['buys']} for date, day in days.items()}}
+                                      'buys': day['buys']} for date, day in days.items()},
+                'buy_price_distribution': {'bucket_usdt': text(BUY_PRICE_BUCKET_USDT),
+                                           'priced_btc': text(priced_btc), 'unpriced_btc': text(unpriced_btc),
+                                           'bins': [{'from': text(bucket), 'to': text(bucket + BUY_PRICE_BUCKET_USDT),
+                                                     'btc': text(price_bins[bucket])} for bucket in sorted(price_bins)]}}
 
 
 class BTCCostTracker:

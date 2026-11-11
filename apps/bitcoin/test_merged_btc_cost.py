@@ -7,7 +7,7 @@ import tempfile
 import threading
 import unittest
 
-from btc_cost_tracker import iso, summarize
+from btc_cost_tracker import dca_diary, iso, summarize
 from merged_btc_cost import BinanceBTCTracker, MergedBTCCostTracker
 from okx_wallet_service import OKXVault
 
@@ -242,6 +242,20 @@ class MergedCostTests(unittest.TestCase):
         self.assertEqual(self.merged.read_dca_diary()['days'][0][2], '201.1')
         ledger = self.merged.accounting_snapshot()['ledger']
         self.assertEqual(ledger['records'][-1]['quote_ccy'], 'USDC', 'Accounting retains original quote')
+
+    def test_display_price_converts_with_its_quote_for_profile_bins_without_mutating_ledger(self):
+        at = NOW - 10000
+        original = event(currency='USDC', cash='64.064', at=at)
+        original.update(price='64000', original_price='64000', quote_gross='64', fee_quote='-0.064')
+        display = self.merged._display_records([original], minute_rate('USDC', at, close='1.02'))
+        self.assertEqual(display[0]['quote_ccy'], 'USDT')
+        self.assertEqual(display[0]['price'], '65280')
+        self.assertEqual(display[0]['original_price'], '64000')
+        self.assertEqual(original['price'], '64000')
+        self.assertEqual(original['quote_ccy'], 'USDC')
+        self.assertEqual(dca_diary(display)['buy_price_distribution'], {'bucket_usdt': '5000',
+                         'priced_btc': '0.000999', 'unpriced_btc': '0',
+                         'bins': [{'from': '65000', 'to': '70000', 'btc': '0.000999'}]})
 
     def test_missing_quote_conversion_is_unknown_not_zero(self):
         self.factory.rows = [event(currency='USDC')]
