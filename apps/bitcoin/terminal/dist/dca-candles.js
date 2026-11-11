@@ -21,6 +21,16 @@
     const written=units.toString().padStart(digits+1,'0'),integer=(digits?written.slice(0,-digits):written).replace(/\B(?=(\d{3})+(?!\d))/g,',');
     return integer+(digits?'.'+written.slice(-digits):'');
   }
+  function dailyBuyPrice(usdt,btc){
+    const valid=value=>typeof value==='string'&&value.length<=512&&/^\d+(?:\.\d+)?$/.test(value);
+    if(!valid(usdt)||!valid(btc))return '—';
+    const [cashWhole,cashFraction='']=usdt.split('.'),[btcWhole,btcFraction='']=btc.split('.');
+    const quantity=BigInt(btcWhole+btcFraction);if(quantity===0n)return '—';
+    // Divide original ledger decimals and round only the final price to cents.
+    const numerator=BigInt(cashWhole+cashFraction)*10n**BigInt(btcFraction.length+2),denominator=quantity*10n**BigInt(cashFraction.length);
+    const written=((numerator+denominator/2n)/denominator).toString().padStart(3,'0');
+    return amount(written.slice(0,-2)+'.'+written.slice(-2));
+  }
   function normalized(data){
     if(!data||!['fresh','stale','loading','unavailable'].includes(data.status)||data.timezone!=='Asia/Shanghai'||data.interval!=='1d'||data.symbol!=='BTCUSDT'||!Array.isArray(data.candles)||data.candles.length>20000)return null;
     const list=[],seen=new Set();
@@ -155,7 +165,8 @@
       const buy=buys.get(date);if(!buy){hideTip();return;}
       markers?.setHovered(date);
       node('dcaCandleTipDate').textContent=date+' · B 买入';node('dcaCandleTipUSDT').textContent=buy.usdt===null?'USDT 金额待核对':amount(buy.usdt)+' USDT';
-      node('dcaCandleTipDetail').textContent=amount(buy.btc,8)+' BTC'+(buy.buys===null?'':' · '+buy.buys+' 笔成交');tip.hidden=false;
+      const average=dailyBuyPrice(buy.usdt,buy.btc);
+      node('dcaCandleTipDetail').textContent=amount(buy.btc,8)+' BTC · '+(average==='—'?'当日买入均价待核对':'当日买入均价 '+average+' USDT/BTC');tip.hidden=false;
       const w=node('dcaCandleStage').clientWidth||800,h=node('dcaCandleStage').clientHeight||400;
       tip.style.left=Math.max(8,Math.min(param.point.x+16,w-(tip.offsetWidth||190)-8))+'px';tip.style.top=Math.max(8,Math.min(param.point.y+16,h-(tip.offsetHeight||90)-8))+'px';
     }
@@ -252,5 +263,5 @@
     function destroy(){if(disposed)return;close();disposed=true;unsubscribeCost?.();unsubscribeCost=null;costController=null;for(const [target,event,handler]of events)target.removeEventListener(event,handler);resizeObserver?.disconnect();themeObserver?.disconnect();if(costLine)series.removePriceLine(costLine);costLine=null;if(markers)series.detachPrimitive(markers);chart?.remove();sheet.remove();}
     const controller={open,close,updateBuys,destroy,refresh:load,isOpen:()=>opened};sheet.__controller=controller;return controller;
   }
-  return {START,REFRESH_MS,TIMEOUT_MS,dateTime,dateKey,amount,normalized,purchases,markerRows,holdingCost,BuyBadges,mount};
+  return {START,REFRESH_MS,TIMEOUT_MS,dateTime,dateKey,amount,dailyBuyPrice,normalized,purchases,markerRows,holdingCost,BuyBadges,mount};
 });
