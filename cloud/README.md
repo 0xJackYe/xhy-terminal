@@ -60,6 +60,10 @@ entrance sees each resulting production release without copying frontend files.
 
 ## Data freshness
 
+`GET /btc/api/wallet/btc-dca-candles` returns the complete BTC/USDT daily OHLCV series from 2024-07-01, with `Asia/Shanghai` day boundaries; `?tail=1` returns only the last two bars. The chart polls the tail every five seconds while open, using the authenticated owner session. Closed candles are stored in one public `market_kv` archive and changed only when history is added or repaired; live bars remain in memory. Conditional writes and a date union prevent a partial refresh or concurrent isolate from shortening known history. Public providers are fixed Binance market-data hosts, with OKX `1D` as the UTC+8 fallback. Unknown candles are never synthesized.
+
+The popup uses the vendored Lightweight Charts 5.3.0 build from the official npm package, together with its Apache 2.0 license, upstream NOTICE and visible TradingView attribution. No CDN or additional runtime credentials are required. Daily B-marker spending comes from `exact_days` in the existing account-bound DCA API, so chart history contains no private account data.
+
 The scheduled task refreshes holdings and moving-average cost every minute.
 Daily buys are appended idempotently to the imported complete cost book. The
 long-term unrealized return uses the remaining moving-average cost; it does

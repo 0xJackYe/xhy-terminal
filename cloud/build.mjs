@@ -10,7 +10,7 @@ export function rewrite(text,prefix,type){text=text.replace(rootPath,(_,quote)=>
 async function copyDirectory(source,target,prefix=''){
  for(const e of await readdir(source,{withFileTypes:true})){
   const from=resolve(source,e.name),to=resolve(target,e.name);if(e.isDirectory()){await mkdir(to,{recursive:true});await copyDirectory(from,to,prefix);}
-  else if(e.isFile()&&/\.(?:html|css|js|mjs|svg|wav|png|woff2|json)$/.test(e.name)){
+  else if(e.isFile()&&/\.(?:html|css|js|mjs|svg|wav|png|woff2|json|txt)$/.test(e.name)){
    if(e.name==='wallet.html'||e.name==='diary.json'||e.name==='diary.example.json')continue;
    await mkdir(dirname(to),{recursive:true});const extension=extname(e.name);
    if(prefix&&['.html','.js','.mjs','.css'].includes(extension))await writeFile(to,rewrite(await readFile(from,'utf8'),prefix,extension));else await copyFile(from,to);

@@ -117,6 +117,25 @@ class TerminalTests(unittest.TestCase):
         for path in ("/../btc_alert.py", "/%2e%2e/btc_alert.py", "/terminal/data/terminal-alert-state.json", "/api/account"):
             self.assertEqual(self.call(path)[0], 404)
 
+    def test_daily_candles_route_is_read_only_and_serves_the_shared_chart_assets(self):
+        snapshot = {"status": "fresh", "timezone": "Asia/Shanghai", "interval": "1d",
+                    "start_date": "2024-07-01", "candles": []}
+        class Service:
+            def snapshot(self):
+                return snapshot
+        self.server.daily_candles_service = Service()
+        status, headers, body = self.call("/api/wallet/btc-dca-candles")
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body), {**snapshot, "mode": "history"})
+        self.assertEqual(headers["Cache-Control"], "no-store")
+        tail_status, _, tail_body = self.call("/api/wallet/btc-dca-candles?tail=1")
+        self.assertEqual(tail_status, 200)
+        self.assertEqual(json.loads(tail_body)["mode"], "tail")
+        self.assertEqual(self.call("/api/wallet/btc-dca-candles?symbol=OTHER")[0], 400)
+        self.assertEqual(self.mutation("/api/wallet/btc-dca-candles", {})[0], 405)
+        for path in ("/dca-candles.js", "/dca-candles.css", "/vendor/lightweight-charts-5.3.0.js"):
+            self.assertEqual(self.call(path)[0], 200, path)
+
     def test_rebinding_and_foreign_origin_rejected(self):
         self.assertEqual(self.call("/api/terminal", headers={"Host": "evil.invalid"})[0], 403)
         self.assertEqual(self.call("/api/terminal", headers={"Origin": "https://evil.invalid"})[0], 403)

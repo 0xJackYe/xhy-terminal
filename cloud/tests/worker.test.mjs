@@ -29,7 +29,7 @@ async function environment(t) {
 
 test('all personal namespaces require the signed session despite forged owner headers', async t => {
   const { env, ctx, assets } = await environment(t);
-  const protectedRoutes = ['/api/overview', '/diet/api/diary', '/diet/data/diary.json', '/btc/api/terminal', '/btc/api/terminal/email', '/btc/api/wallet/combined','/btc/api/wallet/annualized'];
+  const protectedRoutes = ['/api/overview', '/diet/api/diary', '/diet/data/diary.json', '/btc/api/terminal', '/btc/api/terminal/email', '/btc/api/wallet/combined','/btc/api/wallet/annualized','/btc/api/wallet/btc-dca-candles'];
   for (const path of protectedRoutes) {
     const response = await worker.fetch(new Request(ORIGIN + path, { headers: { 'oai-authenticated-user-id': 'terminal-owner' } }), env, ctx);
     assert.equal(response.status, 401, path); assert.equal((await response.json()).code, 'AUTH_REQUIRED');
@@ -48,6 +48,25 @@ test('public health reports the actual built source commit and never configurati
   assert.equal(data.build, buildCommit); assert.match(data.build, /^[a-f0-9]{40}$/);
   assert.equal(data.cloud, true); assert.equal(data.timezone, 'Asia/Shanghai');
   for (const secret of [env.OWNER_ACCESS_KEY, env.AUTH_SECRET, env.DEEPSEEK_API_KEY]) assert(!text.includes(secret));
+});
+
+test('the signed BTC daily chart route serves Beijing candles and a lightweight tail without private credentials', async t => {
+  const {env,ctx,request}=await environment(t),day=86400000,start=1719763200000,now=Date.now();
+  t.mock.method(Date,'now',()=>now);
+  const today=Math.floor((now+28800000)/day)*day-28800000;
+  t.mock.method(globalThis,'fetch',async(address,options)=>{
+    const url=new URL(address);assert.equal(url.origin,'https://data-api.binance.vision');assert.equal(url.pathname,'/api/v3/klines');
+    assert.equal(url.searchParams.get('timeZone'),'8');assert.equal(options.method,'GET');assert.equal(options.headers['X-MBX-APIKEY'],undefined);
+    const result=[],limit=Number(url.searchParams.get('limit'));
+    for(let at=Number(url.searchParams.get('startTime'));at<=today&&result.length<limit;at+=day)result.push([at,'70000','71000','69000','70500','12',at+day-1]);
+    return Response.json(result);
+  });
+  const full=await worker.fetch(request('/btc/api/wallet/btc-dca-candles'),env,ctx),data=await full.json();
+  assert.equal(full.status,200);assert.equal(data.coverage_complete,true);assert.equal(data.candles[0].time,'2024-07-01');
+  assert.equal(data.candles.length,(today-start)/day+1);assert.equal(data.timezone,'Asia/Shanghai');assert.equal(data.mode,'history');
+  const tail=await(await worker.fetch(request('/btc/api/wallet/btc-dca-candles?tail=1'),env,ctx)).json();assert.equal(tail.mode,'tail');assert.equal(tail.candles.length,2);
+  assert.equal((await worker.fetch(request('/btc/api/wallet/btc-dca-candles',{method:'POST',headers:{Origin:ORIGIN}}),env,ctx)).status,405);
+  assert.equal(JSON.stringify(data).includes(env.DEEPSEEK_API_KEY),false);
 });
 
 test('authenticated static assets retain namespace paths and security headers', async t => {

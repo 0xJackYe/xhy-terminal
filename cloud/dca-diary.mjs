@@ -42,5 +42,6 @@ export function dcaDiary(rows,{rates={},start=DCA_DIARY_START,coverageStartMs=nu
     fields:DCA_FIELDS,days:list,
     totals:{days:list.length,buys,btc:txt(btc.toDecimalPlaces(8)),usdt:priced?txt(usdt.toDecimalPlaces(2)):null},
     exact_totals:exact({days:list.length,buys,btc,usdt,priced}),
-    exact_periods:Object.fromEntries([...periods].map(([year,period])=>[year,exact(period)]))};
+    exact_periods:Object.fromEntries([...periods].map(([year,period])=>[year,exact(period)])),
+    exact_days:Object.fromEntries(dates.map(date=>{const day=days.get(date);return [date,{btc:txt(day.btc),usdt:day.priced?txt(day.usdt):null,buys:day.buys}];}))};
 }

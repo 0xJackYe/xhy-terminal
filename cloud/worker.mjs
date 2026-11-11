@@ -7,6 +7,7 @@ import {buildOverview} from './overview.mjs';
 import {diagnoseProviders,diagnoseReadOnlyAccounts} from './diagnostics.mjs';
 import {handleAnnualized,syncCapitalAccounts} from './annualized.mjs';
 import {handleTravel} from './flights.mjs';
+import {handleDCACandles} from './dca-candles.mjs';
 import {walletTemplate,walletCore,catalog,buildCommit} from './generated.mjs';
 const json=(body,status=200)=>new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}});
 function protect(response){const headers=new Headers(response.headers);headers.set('Cache-Control','no-store');headers.set('X-Content-Type-Options','nosniff');headers.set('Referrer-Policy','same-origin');headers.set('X-Frame-Options','SAMEORIGIN');return new Response(response.body,{status:response.status,statusText:response.statusText,headers});}
@@ -26,7 +27,7 @@ async function fetchHandler(request,env,ctx){
  if(path.startsWith('/api/travel/'))return await handleTravel(request,env);
  if(path==='/diet'||path.startsWith('/diet/'))return await handleDiet(request,env,{owner:'terminal-owner',catalog});
  if(path==='/btc'||path==='/btc/options.html')return new Response(null,{status:308,headers:{Location:'/btc/'+(path.endsWith('options.html')?'#alerts':'')}});
- if(path.startsWith('/btc/api/')){const sub=withoutPrefix(request,'/btc');return await handleAnnualized(sub,env,context)||await handleMail(sub,env,context)||await handleMarket(sub,env,context)||await handleFinance(sub,env,context)||json({error:'接口不存在。'},404);}
+ if(path.startsWith('/btc/api/')){const sub=withoutPrefix(request,'/btc');return await handleDCACandles(sub,env,context)||await handleAnnualized(sub,env,context)||await handleMail(sub,env,context)||await handleMarket(sub,env,context)||await handleFinance(sub,env,context)||json({error:'接口不存在。'},404);}
  if(path==='/btc/wallet.html'){
    if(!['GET','HEAD'].includes(request.method))return json({error:'只支持读取。'},405);
    const snapshot=await getFinanceSnapshot(env,'chain_snapshot');if(!snapshot)return json({error:'链上快照正在恢复。'},503);

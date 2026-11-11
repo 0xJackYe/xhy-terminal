@@ -47,7 +47,7 @@ test('amounts are rounded to satoshis and cents; malformed rows are skipped', ()
     { ...fill('transfer', '0.1', '1', '2025-06-01T05:00:00Z') }, null, 'row']);
   assert.deepEqual(diary.days, [['2025-06-01', '0.00012346', '20.01', 1]]);
   assert.deepEqual(dcaDiary(null), { start_date: '2024-12-14', first_buy_date: null, coverage_start_date: null, fields: DCA_FIELDS, days: [], totals: { days: 0, buys: 0, btc: '0', usdt: '0' },
-    exact_totals: { days: 0, buys: 0, btc: '0', usdt: '0', average_buy_price: null }, exact_periods: {} });
+    exact_totals: { days: 0, buys: 0, btc: '0', usdt: '0', average_buy_price: null }, exact_periods: {}, exact_days: {} });
 });
 
 test('a recorded buy before the start moves the start back instead of being hidden; coverage is reported as a Beijing date', () => {
@@ -70,6 +70,8 @@ test('exact summaries retain ledger precision across days and Beijing calendar y
     ['2025-01-02', '0.00012346', '9.88', 1],
   ]);
   assert.deepEqual(diary.exact_totals, { days: 3, buys: 3, btc: '0.000370370367', usdt: '29.62962936', average_buy_price: '80000' });
+  assert.deepEqual(diary.exact_days['2024-12-31'], { btc: '0.000123456789', usdt: '9.87654312', buys: 1 });
+  assert.deepEqual(diary.exact_days['2025-01-01'], { btc: '0.000123456789', usdt: '9.87654312', buys: 1 });
   assert.deepEqual(diary.exact_periods, {
     '2024': { days: 1, buys: 1, btc: '0.000123456789', usdt: '9.87654312', average_buy_price: '80000' },
     '2025': { days: 2, buys: 2, btc: '0.000246913578', usdt: '19.75308624', average_buy_price: '80000' },
@@ -85,4 +87,5 @@ test('missing rates leave exact cost and average unknown only for affected perio
   assert.deepEqual(diary.exact_totals, { days: 2, buys: 3, btc: '0.003', usdt: null, average_buy_price: null });
   assert.deepEqual(diary.exact_periods['2024'], { days: 1, buys: 1, btc: '0.001', usdt: '80', average_buy_price: '80000' });
   assert.deepEqual(diary.exact_periods['2025'], { days: 1, buys: 2, btc: '0.002', usdt: null, average_buy_price: null });
+  assert.equal(diary.exact_days['2025-01-02'].usdt, null, 'an unpriced B marker never invents zero spending');
 });
