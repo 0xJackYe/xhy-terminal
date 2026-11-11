@@ -64,6 +64,17 @@
         !Number.isSafeInteger(value.buys) || value.buys < 0 || !Number.isSafeInteger(value.days) || value.days < 0) return null;
     return {btc:value.btc,usdt:value.usdt,average_buy_price:value.usdt === null ? null : value.average_buy_price,buys:value.buys,days:value.days};
   }
+  function priceDistribution(value) {
+    if(!value||value.bucket_usdt!=='5000'||!decimalAmount(value.priced_btc)||!decimalAmount(value.unpriced_btc)||!Array.isArray(value.bins)||value.bins.length>20000)return null;
+    const bins=[];let previous=-1;
+    for(const row of value.bins){
+      if(!row||typeof row.from!=='string'||typeof row.to!=='string'||!/^\d{1,12}$/.test(row.from)||!/^\d{1,12}$/.test(row.to)||!decimalAmount(row.btc)||!/[1-9]/.test(row.btc))return null;
+      const from=Number(row.from),to=Number(row.to);
+      if(from<=previous||from%5000!==0||to-from!==5000)return null;
+      bins.push({from:row.from,to:row.to,btc:row.btc});previous=from;
+    }
+    return {bucket_usdt:'5000',priced_btc:value.priced_btc,unpriced_btc:value.unpriced_btc,bins};
+  }
 
   // The server's view, checked field by field; anything malformed is dropped
   // rather than drawn.
@@ -98,7 +109,7 @@
       }
     }
     return {status:data.status,connectionId:typeof data.connection_id === 'string' ? data.connection_id : null,days,first,start:first !== null ? Math.min(start,first) : start,coverage:parseDate(data.coverage_start_date),today:parseDate(data.today),
-      exactTotals:exactSummary(data.exact_totals),exactPeriods:periods,
+      exactTotals:exactSummary(data.exact_totals),exactPeriods:periods,buyPriceDistribution:priceDistribution(data.buy_price_distribution),
       venues:Array.isArray(data.venues) ? data.venues.filter(item => item === 'okx' || item === 'binance') : [],
       error:typeof data.error === 'string' && data.error ? data.error.slice(0,200) : null,asOf:typeof data.as_of === 'string' ? data.as_of : null};
   }
@@ -380,5 +391,5 @@
     const controller = {refresh:load,destroy,select:value => { range = String(value);render(); },open:openRecords,close:closeRecords};
     panel.__dcaDiaryController = controller;render();if (active()) load();return controller;
   }
-  return {START,REFRESH_MS,STEPS,parseDate,formatDate,beijingToday,weekday,monday,units,btcText,usdtText,exactText,exactSummary,normalize,scale,level,legendText,ranges,bounds,stats,cellState,describe,gridHtml,records,priceText,recordsSummary,recordRows,mount};
+  return {START,REFRESH_MS,STEPS,parseDate,formatDate,beijingToday,weekday,monday,units,btcText,usdtText,exactText,exactSummary,priceDistribution,normalize,scale,level,legendText,ranges,bounds,stats,cellState,describe,gridHtml,records,priceText,recordsSummary,recordRows,mount};
 });

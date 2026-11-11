@@ -283,8 +283,11 @@ test('the DCA diary lists each Beijing day of buys from the same trades as the c
   assert.equal(body.exact_totals.btc,'2.5');assert.equal(body.exact_totals.usdt,'260');assert.equal(body.exact_totals.average_buy_price,'104');
   assert.equal(body.coverage_start_date,day(NOW-86400000));assert.equal('key' in body||'connection' in body,false);
   // A deployment must rebuild an old rounded-only cache even without a new fill.
-  const legacy=structuredClone(f.DB.get('dca_diary'));legacy.key=legacy.key.replace(/^exact-summary-v3\|/,'');delete legacy.exact_totals;delete legacy.exact_periods;f.DB.set('dca_diary',legacy);
+  const legacy=structuredClone(f.DB.get('dca_diary'));legacy.key=legacy.key.replace(/^exact-summary-v\d+\|/,'');delete legacy.exact_totals;delete legacy.exact_periods;f.DB.set('dca_diary',legacy);
   assert.equal((await read()).exact_totals.average_buy_price,'104');
+  // A v3 cache must acquire execution-price bins even if the ledger has not changed.
+  const noProfile=structuredClone(f.DB.get('dca_diary'));noProfile.key=noProfile.key.replace(/^exact-summary-v4\|/,'exact-summary-v3|');delete noProfile.buy_price_distribution;f.DB.set('dca_diary',noProfile);
+  assert.equal((await read()).buy_price_distribution.priced_btc,'2.5');
   // Cached against the book: a stray row is ignored until the book changes.
   const cached=f.DB.get('dca_diary');assert.ok(cached.key.includes('|3|'));
   const binanceRow={...original[0],id:'binance-spot:BTCUSDT:9',bill_id:'90',counter_bill_id:'91',at_ms:NOW-30000,btc_net:'0.25',btc_gross:'0.25',quote_amount:'30',quote_gross:'30',venue:'binance'};

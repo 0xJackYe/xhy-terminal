@@ -208,7 +208,9 @@ class DCADiaryTests(unittest.TestCase):
                                            'fields': ['date', 'btc', 'usdt', 'buys'], 'days': [],
                                            'totals': {'days': 0, 'buys': 0, 'btc': '0', 'usdt': '0'},
                                            'exact_totals': {'days': 0, 'buys': 0, 'btc': '0', 'usdt': '0',
-                                                            'average_buy_price': None}, 'exact_periods': {}, 'exact_days': {}})
+                                                            'average_buy_price': None}, 'exact_periods': {}, 'exact_days': {},
+                                           'buy_price_distribution': {'bucket_usdt': '5000', 'priced_btc': '0',
+                                                                      'unpriced_btc': '0', 'bins': []}})
         good = normalize_bills(trade(at=self.at(2024, 12, 10, 9), trade_id=1, size='0.001', fee_btc='0'))
         bad = [None, 'row', {'side': 'buy'}, {'side': 'buy', 'btc_net': 'x', 'at_ms': NOW},
                {'side': 'buy', 'btc_net': '0', 'at_ms': NOW, 'quote_ccy': 'USDT', 'quote_amount': '1'}]
@@ -250,6 +252,25 @@ class DCADiaryTests(unittest.TestCase):
                                                          'usdt': '80', 'average_buy_price': '80000'})
         self.assertEqual(diary['exact_periods']['2025'], {'days': 1, 'buys': 2, 'btc': '0.002',
                                                          'usdt': None, 'average_buy_price': None})
+
+    def test_price_bins_use_fill_price_and_exact_net_btc_at_5000_boundaries(self):
+        rows = normalize_bills(trade(price='64999', size='0.001', fee_btc='-0.000001', trade_id=1)
+                               + trade(price='65000', size='0.002', fee_btc='0', trade_id=2)
+                               + trade(price='60000', size='0.000123456789', fee_btc='0', trade_id=3)
+                               + trade(side='sell', size='0.0001', price='70000', fee_btc='0', trade_id=4))
+        rows += [{'side': 'transfer', 'at_ms': NOW, 'btc_net': '0.1', 'quote_ccy': 'USDT', 'price': '60000'}]
+        diary = dca_diary(rows)
+        self.assertEqual(diary['buy_price_distribution'], {'bucket_usdt': '5000',
+                         'priced_btc': '0.003122456789', 'unpriced_btc': '0', 'bins': [
+                             {'from': '60000', 'to': '65000', 'btc': '0.001122456789'},
+                             {'from': '65000', 'to': '70000', 'btc': '0.002'}]})
+
+    def test_price_bins_report_missing_price_and_unconverted_quotes_instead_of_guessing(self):
+        rows = [{'side': 'buy', 'at_ms': NOW, 'btc_net': '0.0004', 'quote_ccy': 'USDT', 'quote_amount': '26'},
+                {'side': 'buy', 'at_ms': NOW, 'btc_net': '0.0005', 'quote_ccy': 'USDC', 'quote_amount': '32', 'price': '64000'},
+                {'side': 'buy', 'at_ms': NOW, 'btc_net': '0.0003', 'quote_ccy': 'USDT', 'quote_amount': '20', 'price': '0'}]
+        self.assertEqual(dca_diary(rows)['buy_price_distribution'], {'bucket_usdt': '5000',
+                         'priced_btc': '0', 'unpriced_btc': '0.0012', 'bins': []})
 
 
 class TrackerTests(unittest.TestCase):

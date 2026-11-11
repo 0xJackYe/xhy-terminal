@@ -102,10 +102,10 @@
   }
   const MARKUP='<div id="dcaCandleSheet" class="dca-candle-sheet" hidden><section id="dcaCandleDialog" class="dca-candle-dialog" role="dialog" aria-modal="true" aria-labelledby="dcaCandleTitle" tabindex="-1">'+
     '<header class="dca-candle-head"><div><h3 id="dcaCandleTitle">BTC 定投日 K 线</h3><p>BTC / USDT · 北京时间 UTC+8</p></div><div class="dca-candle-state"><i id="dcaCandleDot"></i><span id="dcaCandleState" role="status">读取行情中</span></div><button id="dcaCandleClose" type="button" aria-label="关闭定投 K 线">×</button></header>'+
-    '<div class="dca-candle-toolbar"><div id="dcaCandleRanges" class="dca-candle-controls" role="group" aria-label="K 线显示范围"><button type="button" data-view="year">近一年</button><button type="button" data-view="all">全部</button><button type="button" data-view="first">首笔买入</button><button type="button" data-view="latest">最新</button></div><div class="dca-candle-jump"><label for="dcaCandleDate">跳转</label><input id="dcaCandleDate" type="date" min="2024-07-01" aria-label="跳转到北京时间日期"><button id="dcaCandleJump" type="button">前往</button></div><div class="dca-candle-controls" role="group" aria-label="K 线缩放"><button id="dcaCandleZoomOut" type="button" aria-label="缩小 K 线">−</button><button id="dcaCandleZoomIn" type="button" aria-label="放大 K 线">＋</button></div></div>'+
+    '<div class="dca-candle-toolbar"><div id="dcaCandleRanges" class="dca-candle-controls" role="group" aria-label="K 线显示范围"><button type="button" data-view="year">近一年</button><button type="button" data-view="all">全部</button><button type="button" data-view="first">首笔买入</button><button type="button" data-view="latest">最新</button></div><div class="dca-candle-jump"><label for="dcaCandleDate">跳转</label><input id="dcaCandleDate" type="date" min="2024-07-01" aria-label="跳转到北京时间日期"><button id="dcaCandleJump" type="button">前往</button></div><div class="dca-candle-tools"><div class="dca-candle-controls" role="group" aria-label="买入指标"><button id="dcaCandleProfile" type="button" aria-pressed="false">成交量分布</button><button id="dcaCandleVolume" type="button" aria-pressed="false" title="按北京时间汇总每天买入的 BTC 净到账量">成交量</button></div><div class="dca-candle-controls" role="group" aria-label="K 线缩放"><button id="dcaCandleZoomOut" type="button" aria-label="缩小 K 线">−</button><button id="dcaCandleZoomIn" type="button" aria-label="放大 K 线">＋</button></div></div></div>'+
     '<div class="dca-candle-readout"><strong id="dcaCandleDay">日 K · 2024-07-01 起</strong><span id="dcaCandleOHLC">开 —　高 —　低 —　收 —</span><span id="dcaCandleCost" class="dca-candle-cost" role="status">持仓均价待核对</span><span id="dcaCandleBuy">B 表示当天有买入</span></div>'+
-    '<div id="dcaCandleStage" class="dca-candle-stage"><div id="dcaCandleChart" class="dca-candle-chart" role="img" aria-label="北京时间 BTC 每日 K 线及买入标记" tabindex="0"></div><div id="dcaCandleEmpty" class="dca-candle-empty">正在同步 2024 年 7 月起的每日行情…</div><div id="dcaCandleTip" class="dca-candle-tip" role="tooltip" hidden><strong id="dcaCandleTipDate"></strong><span id="dcaCandleTipUSDT"></span><small id="dcaCandleTipDetail"></small></div></div>'+
-    '<footer class="dca-candle-footer"><span id="dcaCandleCoverage">滚轮缩放 · 拖动平移 · 悬停 B 查看买入金额</span><a href="https://www.tradingview.com/" target="_blank" rel="noopener noreferrer">Charts by TradingView</a></footer></section></div>';
+    '<div id="dcaCandleStage" class="dca-candle-stage"><div id="dcaCandleChart" class="dca-candle-chart" role="img" aria-label="北京时间 BTC 每日 K 线及买入标记" tabindex="0"></div><div id="dcaCandleEmpty" class="dca-candle-empty">正在同步 2024 年 7 月起的每日行情…</div><div id="dcaCandleTip" class="dca-candle-tip" role="tooltip" hidden><span id="dcaCandleTipBTC"></span><small id="dcaCandleTipPrice"></small></div></div>'+
+    '<footer class="dca-candle-footer"><span id="dcaCandleCoverage">滚轮缩放 · 拖动平移 · 悬停查看买入量与均价</span><span id="dcaCandleIndicatorNote" hidden></span><a href="https://www.tradingview.com/" target="_blank" rel="noopener noreferrer">Charts by TradingView</a></footer></section></div>';
   function mount(options={}){
     const root=options.root||globalThis,document=options.document||root.document;
     if(!document||!document.body||typeof document.createElement!=='function')return null;
@@ -116,12 +116,25 @@
     const clock=options.now||Date.now;
     let opened=false,disposed=false,chart=null,series=null,markers=null,data=null,model=null,buys=new Map(),timer=null,read=null,sequence=0,initial=true,selection=null,opener=null,resizeObserver=null,themeObserver=null,needsHistory=false,inspectedDate=null;
     let cost=null,costLine=null,costController=null,unsubscribeCost=null;
+    let indicators=null,profileVisible=false,dailyVisible=false;
     const active=()=>opened&&!disposed&&!document.hidden;
     const stop=()=>{if(timer!==null)clearTimer(timer);timer=null;};
     function schedule(){stop();if(active())timer=setTimer(()=>{timer=null;load();},REFRESH_MS);}
     function hideTip(){tip.hidden=true;markers?.setHovered(null);}
     function css(name,fallback){const value=typeof root.getComputedStyle==='function'?root.getComputedStyle(dialog).getPropertyValue(name).trim():'';return value||fallback;}
-    function colors(){return {bg:css('--card','#faf8f2'),text:css('--text','#292923'),muted:css('--muted','#7b7b6c'),line:css('--line','#dedbd1'),accent:css('--dca-marker','#c43846'),cost:css('--dca-cost','#3e63a8'),up:css('--green','#38775a'),down:css('--red','#ad5847')};}
+    function colors(){return {bg:css('--card','#faf8f2'),text:css('--text','#292923'),muted:css('--muted','#7b7b6c'),line:css('--line','#dedbd1'),accent:css('--dca-marker','#c43846'),cost:css('--dca-cost','#3e63a8'),profile:css('--dca-profile','#a56a4e'),volume:css('--dca-volume','#87947f'),up:css('--green','#38775a'),down:css('--red','#ad5847')};}
+    function indicatorNotes(){
+      const distribution=model?.buyPriceDistribution,note=node('dcaCandleIndicatorNote');
+      note.textContent=profileVisible?distribution?/[1-9]/.test(distribution.unpriced_btc)?'部分买入价格待核对':'':'成交量分布待同步':'';note.hidden=!note.textContent;
+      node('dcaCandleProfile').title='全部历史买入 · 按实际成交价每 5,000 USDT 分档 · BTC 净到账量'+(distribution&&/[1-9]/.test(distribution.unpriced_btc)?' · '+amount(distribution.unpriced_btc,8)+' BTC 价格待核对':'');
+    }
+    function updateIndicators(){indicators?.update({buys,candles:data?.candles||[],distribution:model?.buyPriceDistribution||null});indicatorNotes();}
+    function toggleIndicator(kind){
+      if(!indicators)return;hideTip();
+      if(kind==='profile'){profileVisible=indicators.setProfileVisible(!profileVisible)===true;node('dcaCandleProfile').setAttribute('aria-pressed',String(profileVisible));}
+      else{dailyVisible=indicators.setDailyVisible(!dailyVisible)===true;node('dcaCandleVolume').setAttribute('aria-pressed',String(dailyVisible));}
+      indicatorNotes();
+    }
     function drawCost(){
       const caption=node('dcaCandleCost');caption.textContent=cost?'持仓均价 '+amount(cost.exact)+' USDT'+(cost.status==='stale'?' · 缓存':''):'持仓均价待核对';
       caption.title='当前持仓水平参考线 · 剩余移动加权成本 ÷ 实际 BTC 总持有，与“比特币总持有”的持仓摊薄成本价一致。'+(cost?.asOf?' 核算时间 '+new Date(cost.asOf).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',hour12:false}):'');
@@ -140,13 +153,15 @@
     }
     function theme(){
       if(!chart)return;const c=colors();chart.applyOptions({layout:{background:{type:'solid',color:c.bg},textColor:c.muted,fontFamily:'Consolas, SFMono-Regular, monospace',fontSize:11,attributionLogo:true},grid:{vertLines:{color:c.line,visible:false},horzLines:{color:c.line}},rightPriceScale:{borderColor:c.line},timeScale:{borderColor:c.line},crosshair:{vertLine:{color:c.muted,labelBackgroundColor:c.text},horzLine:{color:c.muted,labelBackgroundColor:c.text}}});
-      series.applyOptions({upColor:c.up,downColor:c.down,borderUpColor:c.up,borderDownColor:c.down,wickUpColor:c.up,wickDownColor:c.down});drawMarkers();drawCost();
+      series.applyOptions({upColor:c.up,downColor:c.down,borderUpColor:c.up,borderDownColor:c.down,wickUpColor:c.up,wickDownColor:c.down});indicators?.theme(c);drawMarkers();drawCost();
     }
     function makeChart(){
       if(chart)return true;const lib=options.charts||root.LightweightCharts;
       if(!lib||typeof lib.createChart!=='function'||!lib.CandlestickSeries){node('dcaCandleEmpty').textContent='图表组件暂不可用，请重新打开页面。';return false;}
       chart=lib.createChart(chartNode,{autoSize:true,handleScale:{mouseWheel:true,pinch:true,axisPressedMouseMove:true,axisDoubleClickReset:true},handleScroll:{mouseWheel:true,pressedMouseMove:true,horzTouchDrag:true,vertTouchDrag:true},kineticScroll:{mouse:true,touch:true},rightPriceScale:{scaleMargins:{top:.12,bottom:.2}},timeScale:{timeVisible:false,secondsVisible:false,rightOffset:6,minBarSpacing:.5,tickMarkFormatter:(time,type)=>{const date=dateKey(time);return date?(type===0?date.slice(0,4):date.slice(5)):'';}},localization:{locale:'zh-CN',dateFormat:'yyyy-MM-dd',timeFormatter:time=>dateKey(time)||'',priceFormatter:price=>Number(price).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}});
       series=chart.addSeries(lib.CandlestickSeries,{priceFormat:{type:'price',precision:2,minMove:.01}});markers=new BuyBadges();series.attachPrimitive(markers);
+      const module=options.indicators||root.DCAIndicators;indicators=typeof module?.create==='function'?module.create({chart,series,lib}):null;
+      node('dcaCandleProfile').disabled=!indicators;node('dcaCandleVolume').disabled=!indicators;updateIndicators();
       chart.subscribeCrosshairMove(crosshair);chart.subscribeClick(crosshair);theme();
       if(typeof root.ResizeObserver==='function'){resizeObserver=new root.ResizeObserver(()=>{if(opened&&chart){chart.applyOptions({autoSize:true});hideTip();}});resizeObserver.observe(chartNode);}
       if(typeof root.MutationObserver==='function'){themeObserver=new root.MutationObserver(theme);themeObserver.observe(document.documentElement,{attributes:true,attributeFilter:['class','data-xhy-theme','data-theme']});themeObserver.observe(document.body,{attributes:true,attributeFilter:['class']});}
@@ -160,15 +175,20 @@
     }
     function crosshair(param){
       if(!opened||!data||!param||!param.point){hideTip();return;}
+      const bin=profileVisible&&indicators?.getProfileBin(param.hoveredObjectId);
+      if(bin){markers?.setHovered(null);showTip(amount(bin.btc,8),amount(bin.from,0)+'–'+amount(bin.to,0),param,'BTC 买入量及 USDT 价格区间');return;}
       const id=typeof param.hoveredObjectId==='string'&&param.hoveredObjectId.startsWith('buy-')?param.hoveredObjectId.slice(4):null;
       const date=id||dateKey(param.time),row=data.candles.find(item=>item.time===date);if(row)readout(row);
       const buy=buys.get(date);if(!buy){hideTip();return;}
       markers?.setHovered(date);
-      node('dcaCandleTipDate').textContent=date+' · B 买入';node('dcaCandleTipUSDT').textContent=buy.usdt===null?'USDT 金额待核对':amount(buy.usdt)+' USDT';
       const average=dailyBuyPrice(buy.usdt,buy.btc);
-      node('dcaCandleTipDetail').textContent=amount(buy.btc,8)+' BTC · '+(average==='—'?'当日买入均价待核对':'当日买入均价 '+average+' USDT/BTC');tip.hidden=false;
+      showTip(amount(buy.btc,8),average,param,'BTC 买入量及 USDT/BTC 买入均价');
+    }
+    function showTip(quantity,price,param,label){
+      node('dcaCandleTipBTC').textContent=quantity;node('dcaCandleTipPrice').textContent=price;tip.setAttribute('aria-label',label+'：'+quantity+'，'+price);tip.hidden=false;
       const w=node('dcaCandleStage').clientWidth||800,h=node('dcaCandleStage').clientHeight||400;
-      tip.style.left=Math.max(8,Math.min(param.point.x+16,w-(tip.offsetWidth||190)-8))+'px';tip.style.top=Math.max(8,Math.min(param.point.y+16,h-(tip.offsetHeight||90)-8))+'px';
+      const paneOffset=param.paneIndex>0&&typeof chart.panes==='function'?chart.panes().slice(0,param.paneIndex).reduce((sum,pane)=>sum+pane.getHeight()+1,0):0;
+      tip.style.left=Math.max(8,Math.min(param.point.x+16,w-(tip.offsetWidth||150)-8))+'px';tip.style.top=Math.max(8,Math.min(param.point.y+paneOffset+16,h-(tip.offsetHeight||70)-8))+'px';
     }
     function rangeView(kind,date){
       if(!chart||!data||!data.candles.length)return;hideTip();const list=data.candles,scale=chart.timeScale(),last=list.length-1;
@@ -196,7 +216,7 @@
       const samePrefix=old.length&&list.length>=old.length&&old.slice(0,-1).every((row,index)=>{const b=list[index];return b&&row.time===b.time&&row.open===b.open&&row.high===b.high&&row.low===b.low&&row.close===b.close;});
       if(samePrefix){for(let index=old.length-1;index<list.length;index++)series.update({...list[index]});}
       else{const range=!initial&&chart.timeScale().getVisibleLogicalRange();series.setData(list.map(row=>({...row})));if(range)chart.timeScale().setVisibleLogicalRange(range);}
-      drawMarkers();node('dcaCandleEmpty').hidden=!!list.length;
+      drawMarkers();updateIndicators();node('dcaCandleEmpty').hidden=!!list.length;
       if(list.length){node('dcaCandleDate').max=list[list.length-1].time;if(initial){initial=false;rangeView(selection?'date':'latest',selection);if(!selection)readout(list[list.length-1]);}}
       if(inspectedDate)readout(list.find(row=>row.time===inspectedDate));
       // Compare cloud timestamps with its response clock, not a potentially
@@ -232,7 +252,7 @@
       }catch(_){if(active()&&!token.cancelled&&token.sequence===sequence){node('dcaCandleState').textContent=data&&data.candles.length?'行情暂未更新 · 保留历史':'行情暂不可用，自动重试';node('dcaCandleDot').dataset.state='stale';if(!data)node('dcaCandleEmpty').textContent='暂时无法读取日 K 线，稍后自动重试。';}}
       finally{clearTimer(token.timeout);if(read===token){read=null;if(refill&&active()){stop();timer=setTimer(()=>{timer=null;load();},0);}else schedule();}}
     }
-    function updateBuys(next){model=next;buys=purchases(model);drawMarkers();hideTip();if(data&&data.candles.length)readout(data.candles.find(row=>row.time===inspectedDate)||data.candles[data.candles.length-1]);}
+    function updateBuys(next){model=next;buys=purchases(model);drawMarkers();updateIndicators();hideTip();if(data&&data.candles.length)readout(data.candles.find(row=>row.time===inspectedDate)||data.candles[data.candles.length-1]);}
     function open(next,selectedDate=null){
       if(disposed)return;if(!opened)opener=document.activeElement||null;connectCost();updateBuys(next);selection=dateKey(selectedDate);opened=true;sheet.hidden=false;
       node('dcaCandleState').textContent='正在更新行情';node('dcaCandleDot').dataset.state='stale';
@@ -246,7 +266,8 @@
     function visibility(){if(active())load();else{stop();cancelRead();hideTip();}}
     function sheetClick(event){
       if(event.target===sheet){close();return;}const button=event.target.closest&&event.target.closest('button');if(!button)return;
-      if(button.dataset.view)rangeView(button.dataset.view);
+      if(button.id==='dcaCandleProfile')toggleIndicator('profile');else if(button.id==='dcaCandleVolume')toggleIndicator('daily');
+      else if(button.dataset.view)rangeView(button.dataset.view);
       else if(button.id==='dcaCandleClose')close();else if(button.id==='dcaCandleZoomIn')zoom(.72);else if(button.id==='dcaCandleZoomOut')zoom(1/.72);
       else if(button.id==='dcaCandleJump'){const date=node('dcaCandleDate').value;if(dateTime(date)!==null)rangeView('date',date);}
     }
@@ -260,7 +281,7 @@
     }
     const events=[[sheet,'click',sheetClick],[sheet,'keydown',keydown],[chartNode,'pointerleave',hideTip],[document,'visibilitychange',visibility],[root,'pagehide',close],[root,'blur',()=>{if(root.parent&&root.parent!==root)close();}]];
     for(const [target,event,handler]of events)target.addEventListener(event,handler);
-    function destroy(){if(disposed)return;close();disposed=true;unsubscribeCost?.();unsubscribeCost=null;costController=null;for(const [target,event,handler]of events)target.removeEventListener(event,handler);resizeObserver?.disconnect();themeObserver?.disconnect();if(costLine)series.removePriceLine(costLine);costLine=null;if(markers)series.detachPrimitive(markers);chart?.remove();sheet.remove();}
+    function destroy(){if(disposed)return;close();disposed=true;unsubscribeCost?.();unsubscribeCost=null;costController=null;for(const [target,event,handler]of events)target.removeEventListener(event,handler);resizeObserver?.disconnect();themeObserver?.disconnect();indicators?.destroy();if(costLine)series.removePriceLine(costLine);costLine=null;if(markers)series.detachPrimitive(markers);chart?.remove();sheet.remove();}
     const controller={open,close,updateBuys,destroy,refresh:load,isOpen:()=>opened};sheet.__controller=controller;return controller;
   }
   return {START,REFRESH_MS,TIMEOUT_MS,dateTime,dateKey,amount,dailyBuyPrice,normalized,purchases,markerRows,holdingCost,BuyBadges,mount};

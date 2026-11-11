@@ -67,6 +67,12 @@ async function check(name, fn) { await fn(); checks++; console.log('OK ' + name)
     const reordered = api.normalize({ status: 'fresh', fields: ['buys', 'date', 'btc'], days: [[1, '2025-01-01', '0.001']] });
     assert.deepEqual(reordered.days.get(D('2025-01-01')), { btc: 100000, usdt: null, buys: 1 });
   });
+  await check('exact personal price bins are validated separately from daily averages',()=>{
+    const distribution={bucket_usdt:'5000',priced_btc:'0.000100000001',unpriced_btc:'0.00002',bins:[{from:'60000',to:'65000',btc:'0.000100000001'}]};
+    assert.deepEqual(api.normalize({...DIARY,buy_price_distribution:distribution}).buyPriceDistribution,distribution);
+    assert.equal(api.normalize(DIARY).buyPriceDistribution,null);
+    for(const bad of [{...distribution,bucket_usdt:'1000'},{...distribution,bins:[{from:'60000',to:'66000',btc:'1'}]},{...distribution,bins:[{from:'60000',to:'65000',btc:'-1'}]},{...distribution,bins:[...distribution.bins,...distribution.bins]},{...distribution,unpriced_btc:null}])assert.equal(api.priceDistribution(bad),null);
+  });
 
   await check('six orange levels measure what went in against the usual daily buy, so bigger days keep getting deeper', () => {
     // Cents of USDT and satoshis: a usual 20 USDT day, then 8, 12, 40, 99.50 and 320 USDT days.
