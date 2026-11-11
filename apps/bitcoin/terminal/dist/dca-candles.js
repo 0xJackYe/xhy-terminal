@@ -58,7 +58,7 @@
     setHovered(date){if(this.hovered===date)return;this.hovered=date;this.requestUpdate?.();}
     paneViews(){return this.views;}
     updateAllViews(){
-      if(!this.chart||!this.series)return;const scale=this.chart.timeScale(),width=Math.min(14,Math.max(2,Math.floor(scale.options().barSpacing)-2));
+      if(!this.chart||!this.series)return;const scale=this.chart.timeScale(),width=Math.min(14,Math.max(10,Math.floor(scale.options().barSpacing)-2));
       this.items=[];for(const row of this.rows){const x=scale.timeToCoordinate(row.time),low=this.series.priceToCoordinate(row.low);
         if(x===null||low===null||!Number.isFinite(x)||!Number.isFinite(low)||x< -8||x>scale.width()+8)continue;
         this.items.push({...row,x,y:Math.round(low)+9,width});
@@ -66,18 +66,18 @@
     }
     draw(target){
       target.useMediaCoordinateSpace(({context:ctx})=>{
-        const paint=item=>{const width=item.time===this.hovered?14:item.width,full=width>=10,height=full?15:5,left=Math.round(item.x-width/2),top=item.y;
+        const paint=item=>{const width=item.time===this.hovered?14:item.width,ratio=width/14,height=Math.round(15*ratio),left=Math.round(item.x-width/2),top=item.y,pointer=3*ratio;
           ctx.fillStyle=item.color;ctx.beginPath();ctx.roundRect(left,top,width,height,Math.min(3,width/2));ctx.fill();
-          if(full){ctx.beginPath();ctx.moveTo(item.x-3,top+1);ctx.lineTo(item.x,top-3);ctx.lineTo(item.x+3,top+1);ctx.closePath();ctx.fill();
-            ctx.fillStyle='#fff';ctx.font='600 11px Arial, sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('B',left+width/2,top+height/2+.5);}
+          ctx.beginPath();ctx.moveTo(item.x-pointer,top+1);ctx.lineTo(item.x,top-pointer);ctx.lineTo(item.x+pointer,top+1);ctx.closePath();ctx.fill();
+          ctx.fillStyle='#fff';ctx.font='600 '+Math.max(8,Math.round(11*ratio))+'px Arial, sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('B',left+width/2,top+height/2+.5);
         };
         for(const item of this.items)if(item.time!==this.hovered)paint(item);
         const selected=this.items.find(item=>item.time===this.hovered);if(selected)paint(selected);
       });
     }
     hitTest(x,y){
-      let nearest=null,distance=Infinity;for(const item of this.items){const width=item.time===this.hovered?14:item.width,full=width>=10;
-        if(Math.abs(x-item.x)>width/2+2||y<item.y-(full?3:1)||y>item.y+(full?15:5)+1)continue;
+      let nearest=null,distance=Infinity;for(const item of this.items){const width=item.time===this.hovered?14:item.width,ratio=width/14;
+        if(Math.abs(x-item.x)>width/2+2||y<item.y-3*ratio||y>item.y+Math.round(15*ratio)+1)continue;
         const delta=Math.abs(x-item.x);if(delta<distance){nearest=item;distance=delta;}
       }
       return nearest?{externalId:nearest.id,cursorStyle:'pointer',zOrder:'top'}:null;
