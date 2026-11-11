@@ -283,7 +283,7 @@ test('the DCA diary lists each Beijing day of buys from the same trades as the c
   assert.equal(body.exact_totals.btc,'2.5');assert.equal(body.exact_totals.usdt,'260');assert.equal(body.exact_totals.average_buy_price,'104');
   assert.equal(body.coverage_start_date,day(NOW-86400000));assert.equal('key' in body||'connection' in body,false);
   // A deployment must rebuild an old rounded-only cache even without a new fill.
-  const legacy=structuredClone(f.DB.get('dca_diary'));legacy.key=legacy.key.replace(/^exact-summary-v2\|/,'');delete legacy.exact_totals;delete legacy.exact_periods;f.DB.set('dca_diary',legacy);
+  const legacy=structuredClone(f.DB.get('dca_diary'));legacy.key=legacy.key.replace(/^exact-summary-v3\|/,'');delete legacy.exact_totals;delete legacy.exact_periods;f.DB.set('dca_diary',legacy);
   assert.equal((await read()).exact_totals.average_buy_price,'104');
   // Cached against the book: a stray row is ignored until the book changes.
   const cached=f.DB.get('dca_diary');assert.ok(cached.key.includes('|3|'));

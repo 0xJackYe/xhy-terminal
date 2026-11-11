@@ -39,6 +39,11 @@ ROUTES = {
     "/crypto-portfolio.css": STATIC / "crypto-portfolio.css",
     "/dca-diary.js": STATIC / "dca-diary.js",
     "/dca-diary.css": STATIC / "dca-diary.css",
+    "/dca-candles.js": STATIC / "dca-candles.js",
+    "/dca-candles.css": STATIC / "dca-candles.css",
+    "/vendor/lightweight-charts-5.3.0.js": STATIC / "vendor" / "lightweight-charts-5.3.0.js",
+    "/vendor/lightweight-charts.LICENSE.txt": STATIC / "vendor" / "lightweight-charts.LICENSE.txt",
+    "/vendor/lightweight-charts.NOTICE.txt": STATIC / "vendor" / "lightweight-charts.NOTICE.txt",
     "/wallet.html": WALLET / "wallet.html",
     "/audio/alert.wav": ROOT / "terminal" / "audio" / "alert.wav",
     "/audio/alert-2.wav": ROOT / "terminal" / "audio" / "alert-2.wav",
@@ -251,7 +256,7 @@ class TerminalServer(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = True
 
-    def __init__(self, address, monitor, wallet_proxy, options_cache=None, email_service=None, ai_service=None, okx_service=None, combined_service=None, cost_service=None):
+    def __init__(self, address, monitor, wallet_proxy, options_cache=None, email_service=None, ai_service=None, okx_service=None, combined_service=None, cost_service=None, daily_candles_service=None):
         self.monitor, self.wallet_proxy = monitor, wallet_proxy
         self.cache = options_cache
         self.email_service = email_service
@@ -262,8 +267,16 @@ class TerminalServer(ThreadingHTTPServer):
         self.okx_cost_service = None
         self.pnl_service = None
         self.portfolio_service = None
+        self.daily_candles_service = daily_candles_service
+        self.daily_candles_lock = threading.Lock()
         self.stopping = threading.Event()
         super().__init__(address, TerminalHandler)
+
+    def server_close(self):
+        service = self.daily_candles_service
+        if service is not None and callable(getattr(service, "close", None)):
+            service.close()
+        super().server_close()
 
 
 class TerminalHandler(BaseHTTPRequestHandler):
@@ -363,7 +376,25 @@ class TerminalHandler(BaseHTTPRequestHandler):
         if handle_btc_pnl(self):
             return
         url = urllib.parse.urlsplit(self.path)
-        if url.path == "/api/terminal":
+        if url.path == "/api/wallet/btc-dca-candles":
+            if url.query not in ("", "tail=1"):
+                self.json(400, {"error": "日 K 线接口不接受查询参数。"})
+                return
+            try:
+                with self.server.daily_candles_lock:
+                    if self.server.daily_candles_service is None:
+                        from btc_daily_candles import BTCDailyCandlesService
+                        self.server.daily_candles_service = BTCDailyCandlesService()
+                    service = self.server.daily_candles_service
+                snapshot = service.snapshot()
+                if url.query == "tail=1":
+                    snapshot = {**snapshot, "mode": "tail", "candles": snapshot.get("candles", [])[-2:]}
+                else:
+                    snapshot = {**snapshot, "mode": "history"}
+                self.json(200, snapshot)
+            except Exception:
+                self.json(503, {"error": "日 K 线暂时无法读取，请稍后重试。"})
+        elif url.path == "/api/terminal":
             self.json(200, self.server.monitor.read())
         elif url.path == "/api/terminal/email":
             if self.server.email_service is None:

@@ -323,7 +323,10 @@ def dca_diary(records, coverage_start_ms=None, start=DCA_DIARY_START):
                            'usdt': text(total_usdt.quantize(CENT, ROUND_HALF_UP)) if priced else None},
                 'exact_totals': exact({'days': len(listed), 'buys': buys, 'btc': total_btc,
                                        'usdt': total_usdt, 'priced': priced}),
-                'exact_periods': {year: exact(period) for year, period in periods.items()}}
+                'exact_periods': {year: exact(period) for year, period in periods.items()},
+                'exact_days': {date: {'btc': text(day['btc']),
+                                      'usdt': text(day['usdt']) if day['priced'] else None,
+                                      'buys': day['buys']} for date, day in days.items()}}
 
 
 class BTCCostTracker:

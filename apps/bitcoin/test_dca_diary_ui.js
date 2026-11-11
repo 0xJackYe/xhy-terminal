@@ -143,8 +143,8 @@ async function check(name, fn) { await fn(); checks++; console.log('OK ' + name)
   await check('the stylesheet deepens through bitcoin orange in both themes and pins the weekday labels', () => {
     assert.match(css, /--dca-4:#f7931a;--dca-5:#d17208;--dca-6:#9a4c04/);
     assert.match(css, /body\.dark :is\(\.dca-diary,\.dca-records\)[^{]*\{[^}]*--dca-5:#f7931a;--dca-6:#ffad47/, 'on a dark page the biggest days are the brightest');
-    for (const level of [5, 6]) { assert.match(css, new RegExp('\\.dca-cell\\[data-level="' + level + '"\\]')); assert.match(css, new RegExp('\\.dca-swatch\\[data-level="' + level + '"\\]')); }
-    assert.match(css, /\.dca-records\{position:fixed;inset:0/); assert.match(css, /\.dca-records-body\{[^}]*overflow:hidden/);
+    for (const level of [5, 6]) { assert.match(css, new RegExp('\\.dca-cell\\[data-level="' + level + '"\\]')); }
+    assert.match(css, /\.dca-diary-open\{/);
     assert.match(css, /\.dca-weekday\{[^}]*position:sticky/); assert.match(css, /\.dca-cell\.is-outside\{visibility:hidden\}/);
   });
 
@@ -183,10 +183,12 @@ async function check(name, fn) { await fn(); checks++; console.log('OK ' + name)
     const root = new Node('root'); root.document = document; root.AbortController = class { constructor() { this.signal = { aborted: false }; } abort() { this.signal.aborted = true; } };
     const setTimeout = (fn, delay) => { const id = ++nextTimer; timers.set(id, { fn, delay }); return id; }, clearTimeout = id => timers.delete(id);
     async function fetch(url, init) { requests.push({ url, init }); const value = responses.length ? responses.shift() : structuredClone(DIARY); if (value instanceof Error) throw value; return { ok: value.ok !== false, json: async () => value }; }
-    const controller = api.mount({ root, document, fetch, setTimeout, clearTimeout, now: () => NOW });
+    const candleState = {opened:false,model:null,date:null,updates:0,destroyed:false};
+    const candles = {open(model,date){candleState.opened=true;candleState.model=model;candleState.date=date;},close(){candleState.opened=false;},updateBuys(model){candleState.model=model;candleState.updates++;},destroy(){candleState.opened=false;candleState.destroyed=true;},isOpen:()=>candleState.opened};
+    const controller = api.mount({ root, document, fetch, setTimeout, clearTimeout, now: () => NOW, candles });
     const settle = async () => { for (let i = 0; i < 6; i++) await new Promise(setImmediate); };
     async function tick() { const timer = [...timers].find(([, value]) => value.delay === api.REFRESH_MS); assert.ok(timer, 'a refresh is scheduled'); timers.delete(timer[0]); timer[1].fn(); await settle(); }
-    return { node: id => nodes.get(id), requests, timers, controller, settle, tick, document, root };
+    return { node: id => nodes.get(id), requests, timers, controller, settle, tick, document, root, candleState };
   }
 
   await check('the panel reads the diary once, draws it and refreshes every thirty seconds', async () => {
@@ -225,24 +227,22 @@ async function check(name, fn) { await fn(); checks++; console.log('OK ' + name)
     assert.match(h.node('dcaDiarySince').title, /239\.11 USDT/);
     assert.match(h.node('dcaDiarySince').title, /不扣历史卖出/);
     h.controller.open();
-    assert.equal(h.node('dcaRecordsSummary').textContent, '全部 · 3 天 · 3 笔 · 累计买入 0.00300001 BTC · 约 239.11 USDT · 历史买入均价 79,705');
-    assert.match(h.node('dcaRecordsSummary').title, /所选期间买入实付 USDT ÷ 净到账 BTC；不扣历史卖出/);
-    assert.match(h.node('dcaDiaryPanel').innerHTML, /<th scope="col">当日买入均价<\/th>/);
-    assert.doesNotMatch(h.node('dcaRecordsSummary').textContent, /持仓|净买入/);
-    await h.node('dcaRecords').fire('click', {target:{closest:selector => selector === 'button[data-year]' ? {dataset:{year:'2026'}} : null}});
-    assert.equal(h.node('dcaRecordsSummary').textContent, '2026 年 · 2 天 · 2 笔 · 累计买入 0.00200001 BTC · 约 159.41 USDT · 历史买入均价 79,705');
+    assert.equal(h.candleState.opened,true);
+    assert.equal(h.candleState.model.exactTotals.usdt,'239.1147');
+    const m=h.candleState.model;
+    assert.equal(api.recordsSummary(api.records(m,'all'),'全部',m.exactTotals),'全部 · 3 天 · 3 笔 · 累计买入 0.00300001 BTC · 约 239.11 USDT · 历史买入均价 79,705');
+    assert.equal(api.recordsSummary(api.records(m,'2026'),'2026 年',m.exactPeriods['2026']),'2026 年 · 2 天 · 2 笔 · 累计买入 0.00200001 BTC · 约 159.41 USDT · 历史买入均价 79,705');
+    assert.doesNotMatch(h.node('dcaDiaryPanel').innerHTML,/<table|dcaRecords/,'the popup is now a separate candlestick chart');
     h.controller.select('2026');
     assert.match(h.node('dcaDiarySummary').textContent, /^2026 年买入 2 天 · 0\.00200001 BTC/);
     assert.match(h.node('dcaDiarySummary').title, /159\.41 USDT/);
-    assert.equal(h.node('dcaRecordsPage').textContent, '1 / 1');
     assert.equal(api.priceText({btc:100000,usdt:7970}), '79,700', 'a daily row keeps its own daily purchase price');
   });
 
   await check('unpriced or invalid precise summaries never invent an average and legacy payloads still work', async () => {
     const unpriced = {...structuredClone(DIARY),exact_totals:{btc:'0.00609257',usdt:null,average_buy_price:null,buys:6,days:5}};
     const h = harness({responses:[unpriced]}); await h.settle();h.controller.open();
-    assert.equal(h.node('dcaRecordsSummary').textContent, '全部 · 5 天 · 6 笔 · 累计买入 0.00609257 BTC');
-    assert.doesNotMatch(h.node('dcaRecordsSummary').textContent, /均价|USDT/);
+    const m=h.candleState.model;assert.equal(api.recordsSummary(api.records(m,'all'),'全部',m.exactTotals),'全部 · 5 天 · 6 笔 · 累计买入 0.00609257 BTC');
     const invalid = {...structuredClone(DIARY),exact_totals:{btc:'-1',usdt:'0',average_buy_price:'0',buys:6,days:5},exact_periods:{'2026':{btc:'1',usdt:'0',average_buy_price:'NaN',buys:1,days:1},'<img>':{btc:'1',usdt:'0',average_buy_price:'0',buys:1,days:1}}};
     const model = api.normalize(invalid);
     assert.equal(model.exactTotals, null);assert.deepEqual(model.exactPeriods, {});
@@ -272,51 +272,25 @@ async function check(name, fn) { await fn(); checks++; console.log('OK ' + name)
     assert.match(bad.node('dcaDiaryMessage').textContent, /暂时无法读取/);
   });
 
-  await check('clicking the diary opens every record at the day clicked; a year filters them and Esc closes', async () => {
-    const h = harness(); await h.settle();
-    const panel = h.node('dcaDiaryPanel'), sheet = h.node('dcaRecords');
-    assert.equal(sheet.hidden, true);
-    await panel.fire('click', { target: { closest: selector => selector.startsWith('button') ? {} : null } });
-    assert.equal(sheet.hidden, true, 'the range buttons keep their own job');
-    await panel.fire('click', { target: { closest: selector => selector.includes('dca-cell') ? { dataset: { date: '2024-12-14' } } : null } });
-    assert.equal(sheet.hidden, false);
-    assert.equal(h.node('dcaRecordsSummary').textContent, '全部 · 5 天 · 6 笔 · 累计买入 0.00609257 BTC · 约 400.00 USDT · 历史买入均价 65,654');
-    assert.match(h.node('dcaRecordsRows').innerHTML, /<tr data-date="2024-12-14" class="is-selected"><td><i class="dca-swatch" data-level="6"><\/i>/);
-    assert.match(h.node('dcaRecordsYears').innerHTML, /^<button type="button" data-year="all" aria-pressed="true">全部<\/button><button type="button" data-year="2026" aria-pressed="false">2026/);
-    assert.equal(h.node('dcaRecordsPage').textContent, '1 / 1');
-    assert.equal(h.node('dcaRecordsNewer').disabled, true); assert.equal(h.node('dcaRecordsOlder').disabled, true);
-    await sheet.fire('click', { target: { closest: selector => selector === 'button[data-year]' ? { dataset: { year: '2026' } } : null } });
-    assert.match(h.node('dcaRecordsSummary').textContent, /^2026 年 · 3 天 · 3 笔/); assert.doesNotMatch(h.node('dcaRecordsRows').innerHTML, /2024-12-14/);
-    await sheet.fire('keydown', { key: 'Escape', preventDefault() {} });
-    assert.equal(sheet.hidden, true);
-    // Enter on the board opens the records too; leaving the wallet page closes them.
-    await h.node('dcaDiaryGrid').fire('keydown', { key: 'Enter', preventDefault() {} });
-    assert.equal(sheet.hidden, false); assert.match(h.node('dcaRecordsRows').innerHTML, /^<tr data-date="2026-11-08">/);
-    h.node('walletPage').hidden = true; await h.root.fire('hashchange');
-    assert.equal(sheet.hidden, true);
+  await check('the heading opens the K-line chart and a calendar day locates that date without changing the heatmap', async () => {
+    const h=harness();await h.settle();const panel=h.node('dcaDiaryPanel'),before=h.node('dcaDiaryGrid').innerHTML;
+    assert.equal(h.candleState.opened,false);
+    await panel.fire('click',{target:{closest:selector=>selector==='#dcaDiaryOpen'?{}:null}});
+    assert.equal(h.candleState.opened,true);assert.equal(h.candleState.date,null);assert.equal(h.node('dcaDiaryGrid').innerHTML,before);
+    h.controller.close();
+    await panel.fire('click',{target:{closest:selector=>selector.includes('dca-cell')?{dataset:{date:'2024-12-14'}}:null}});
+    assert.equal(h.candleState.opened,true);assert.equal(h.candleState.date,'2024-12-14');
+    h.controller.close();await panel.fire('click',{target:{closest:selector=>selector.startsWith('button')?{}:null}});
+    assert.equal(h.candleState.opened,false,'range controls keep their existing role');
+    await h.node('dcaDiaryGrid').fire('keydown',{key:'Enter',preventDefault(){}});assert.equal(h.candleState.opened,true);
+    h.node('walletPage').hidden=true;await h.root.fire('hashchange');assert.equal(h.candleState.opened,false);
   });
-
-  await check('the records are paged to the window: buttons, keys, the wheel and a swipe turn pages', async () => {
-    const days = Array.from({ length: 30 }, (_, index) => [api.formatDate(D('2026-10-10') + index * DAY), '0.00025', '20', 1]);
-    const h = harness({ responses: [{ ...structuredClone(DIARY), days }, { ...structuredClone(DIARY), days }] }); await h.settle();
-    const sheet = h.node('dcaRecords'), page = () => h.node('dcaRecordsPage').textContent, key = name => sheet.fire('keydown', { key: name, preventDefault() {} });
-    await h.node('dcaDiaryPanel').fire('click', { target: { closest: () => null } });
-    assert.equal(page(), '1 / 3'); assert.equal((h.node('dcaRecordsRows').innerHTML.match(/<tr /g) || []).length, 12);
-    assert.match(h.node('dcaRecordsRows').innerHTML, /^<tr data-date="2026-11-08">/);
-    await sheet.fire('click', { target: { closest: selector => selector === '#dcaRecordsOlder' ? {} : null } }); assert.equal(page(), '2 / 3');
-    await key('End'); assert.equal(page(), '3 / 3'); assert.equal(h.node('dcaRecordsOlder').disabled, true);
-    assert.match(h.node('dcaRecordsRows').innerHTML, /<tr data-date="2026-10-10">[^]*$/);
-    await key('ArrowLeft'); assert.equal(page(), '2 / 3');
-    await key('Home'); assert.equal(page(), '1 / 3'); assert.equal(h.node('dcaRecordsNewer').disabled, true);
-    await sheet.fire('wheel', { deltaY: 120, timeStamp: 1000, preventDefault() {} }); assert.equal(page(), '2 / 3');
-    await sheet.fire('wheel', { deltaY: 120, timeStamp: 1100, preventDefault() {} }); assert.equal(page(), '2 / 3', 'a burst of wheel turns one page at a time');
-    await sheet.fire('wheel', { deltaY: -30, timeStamp: 1500, preventDefault() {} }); assert.equal(page(), '2 / 3', 'a small nudge does nothing');
-    await sheet.fire('pointerdown', { pointerType: 'touch', clientX: 100, clientY: 300 }); await sheet.fire('pointerup', { pointerType: 'touch', clientX: 104, clientY: 200 });
-    assert.equal(page(), '3 / 3', 'a swipe up shows older records');
-    await sheet.fire('pointerdown', { pointerType: 'mouse', clientX: 100, clientY: 300 }); await sheet.fire('pointerup', { pointerType: 'mouse', clientX: 100, clientY: 100 });
-    assert.equal(page(), '3 / 3', 'a mouse drag is not a swipe');
-    await h.tick(); assert.equal(page(), '3 / 3', 'a refresh keeps the page in view');
-    await sheet.fire('click'); assert.equal(sheet.hidden, true, 'a click on the dimmed backdrop closes them');
+  await check('B-marker inputs use unrounded daily fills and account replacement clears old purchases',async()=>{
+    const first={...structuredClone(DIARY),connection_id:'account-a',exact_days:{'2024-12-14':{btc:'0.005200891234',usdt:'320.004456',buys:2}}};
+    const second={status:'unavailable',connection_id:'account-b',start_date:'2024-12-14',today:'2026-11-09',days:[]};
+    const h=harness({responses:[first,second]});await h.settle();h.controller.open();
+    const day=h.candleState.model.days.get(D('2024-12-14'));assert.equal(day.exactBTC,'0.005200891234');assert.equal(day.exactUSDT,'320.004456');
+    await h.tick();assert.equal(h.candleState.model.connectionId,'account-b');assert.equal(h.candleState.model.days.size,0);
   });
 
   await check('a hidden wallet page reads nothing until it is shown; destroy removes every listener', async () => {
@@ -324,8 +298,8 @@ async function check(name, fn) { await fn(); checks++; console.log('OK ' + name)
     assert.equal(h.requests.length, 0); assert.equal(h.timers.size, 0);
     h.node('walletPage').hidden = false; await h.root.fire('hashchange'); assert.equal(h.requests.length, 1);
     h.controller.destroy();
-    for (const node of [h.document, h.root, h.node('dcaDiaryGrid'), h.node('dcaDiaryRange'), h.node('dcaDiaryPanel'), h.node('dcaRecords')]) for (const list of Object.values(node.listeners)) assert.equal(list.length, 0);
-    assert.equal(api.mount({ root: {}, document: { getElementById: () => null } }), null);
+    for (const node of [h.document, h.root, h.node('dcaDiaryGrid'), h.node('dcaDiaryRange'), h.node('dcaDiaryPanel')]) for (const list of Object.values(node.listeners)) assert.equal(list.length, 0);
+    assert.equal(h.candleState.destroyed,true);assert.equal(api.mount({ root: {}, document: { getElementById: () => null } }), null);
   });
 
   console.log(checks + ' DCA diary checks passed');

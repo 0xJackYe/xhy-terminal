@@ -208,7 +208,7 @@ class DCADiaryTests(unittest.TestCase):
                                            'fields': ['date', 'btc', 'usdt', 'buys'], 'days': [],
                                            'totals': {'days': 0, 'buys': 0, 'btc': '0', 'usdt': '0'},
                                            'exact_totals': {'days': 0, 'buys': 0, 'btc': '0', 'usdt': '0',
-                                                            'average_buy_price': None}, 'exact_periods': {}})
+                                                            'average_buy_price': None}, 'exact_periods': {}, 'exact_days': {}})
         good = normalize_bills(trade(at=self.at(2024, 12, 10, 9), trade_id=1, size='0.001', fee_btc='0'))
         bad = [None, 'row', {'side': 'buy'}, {'side': 'buy', 'btc_net': 'x', 'at_ms': NOW},
                {'side': 'buy', 'btc_net': '0', 'at_ms': NOW, 'quote_ccy': 'USDT', 'quote_amount': '1'}]
@@ -228,6 +228,8 @@ class DCADiaryTests(unittest.TestCase):
         self.assertEqual(diary['days'], [['2024-12-31', '0.00012346', '9.88', 1],
                                          ['2025-01-01', '0.00012346', '9.88', 1],
                                          ['2025-01-02', '0.00012346', '9.88', 1]])
+        self.assertEqual(diary['exact_days']['2024-12-31'], {'btc': '0.000123456789', 'usdt': '9.87654312', 'buys': 1})
+        self.assertEqual(diary['exact_days']['2025-01-01'], {'btc': '0.000123456789', 'usdt': '9.87654312', 'buys': 1})
         self.assertEqual(diary['exact_totals'], {'days': 3, 'buys': 3, 'btc': '0.000370370367',
                                                  'usdt': '29.62962936', 'average_buy_price': '80000'})
         self.assertEqual(diary['exact_periods'], {
