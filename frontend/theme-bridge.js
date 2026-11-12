@@ -257,6 +257,12 @@
     };
     const measure = () => {
       frame = 0;
+      // Native chart input uses unscaled CSS coordinates. Keep its fullscreen
+      // dialog at 1:1; resume fitting the underlying page after it closes.
+      if (doc.querySelector("#dcaCandleSheet:not([hidden])")) {
+        if (zoom !== 1) set(1);
+        return;
+      }
       // The page, and any card whose height is set by the window (the travel
       // form), must show all of its content.
       let ratio = win.innerHeight / root.scrollHeight;
