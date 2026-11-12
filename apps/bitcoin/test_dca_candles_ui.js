@@ -106,22 +106,34 @@ let count=0;async function check(name,fn){await fn();count++;console.log('OK '+n
     assert.equal(api.dailyBuyPrice('1.005','1'),'1.01');assert.equal(api.dailyBuyPrice('9007199254740993.995','1'),'9,007,199,254,740,994.00');
     for(const [cash,btc]of [[null,'1'],['10','0'],['-10','1'],['10','NaN'],['1'.repeat(513),'1']])assert.equal(api.dailyBuyPrice(cash,btc),'—');
   });
-  await check('ordinary candles and B hover show only BTC quantity and daily average numbers',async()=>{
+  await check('ordinary candles and B hover show exact BTC, USDT spending and weighted daily average',async()=>{
     const h=harness(),model=buys();model.days.set(D('2026-11-11'),{btc:123,usdt:null,buys:1});h.controller.open(model);await h.settle();
     h.chart.crosshair({time:{year:2024,month:12,day:14},hoveredObjectId:'buy-2024-12-14',point:{x:240,y:320}});
     assert.equal(h.node('dcaCandleTip').hidden,false);assert.equal(h.node('dcaCandleTipBTC').textContent,'0.00100000');assert.equal(h.node('dcaCandleTipPrice').textContent,'20,005.40');
+    assert.equal(h.node('dcaCandleTipUSDT').textContent,'20.01 USDT');assert.equal(h.node('dcaCandleTipUSDT').hidden,false);
     for(const id of ['dcaCandleTipBTC','dcaCandleTipPrice'])assert.match(h.node(id).textContent,/^[\d,.]+$/);
-    h.chart.crosshair({time:'2026-11-10',point:{x:420,y:200}});assert.equal(h.node('dcaCandleTipBTC').textContent,'0.00200000');assert.equal(h.node('dcaCandleTipPrice').textContent,'50,000.00');
-    h.chart.crosshair({time:'2026-11-11',hoveredObjectId:'buy-2026-11-11',point:{x:800,y:420}});assert.equal(h.node('dcaCandleTipPrice').textContent,'—');
+    h.chart.crosshair({time:'2026-11-10',point:{x:420,y:200}});assert.equal(h.node('dcaCandleTipBTC').textContent,'0.00200000');assert.equal(h.node('dcaCandleTipPrice').textContent,'50,000.00');assert.equal(h.node('dcaCandleTipUSDT').textContent,'100.00 USDT');
+    h.chart.crosshair({time:'2026-11-11',hoveredObjectId:'buy-2026-11-11',point:{x:800,y:420}});assert.equal(h.node('dcaCandleTipPrice').textContent,'—');assert.equal(h.node('dcaCandleTipUSDT').textContent,'— USDT');
     h.chart.crosshair({time:'2024-07-01',point:{x:5,y:6}});assert.equal(h.node('dcaCandleTip').hidden,true);h.controller.destroy();
+  });
+  await check('overlapping adjacent B badges cannot replace the crosshair day in either pane',async()=>{
+    const h=harness(),model=buys();model.days.set(D('2026-11-11'),{btc:300000,usdt:21000,buys:2});h.controller.open(model);await h.settle();
+    for(const paneIndex of [0,1]){
+      h.chart.crosshair({time:{year:2026,month:11,day:11},hoveredObjectId:'buy-2026-11-10',paneIndex,point:{x:800,y:30}});
+      assert.equal(h.node('dcaCandleDay').textContent,'2026-11-11 · 北京时间');assert.equal(h.node('dcaCandleBuy').textContent,'B 当日买入 210.00 USDT');
+      assert.equal(h.node('dcaCandleTipBTC').textContent,'0.00300000');assert.equal(h.node('dcaCandleTipUSDT').textContent,'210.00 USDT');assert.equal(h.node('dcaCandleTipPrice').textContent,'70,000.00');assert.equal(h.marker.primitive.hovered,'2026-11-11');
+    }
+    h.chart.crosshair({time:'2024-07-01',hoveredObjectId:'buy-2026-11-10',point:{x:5,y:20}});assert.equal(h.node('dcaCandleDay').textContent,'2024-07-01 · 北京时间');assert.equal(h.node('dcaCandleTip').hidden,true);
+    h.chart.crosshair({hoveredObjectId:'buy-2026-11-10',point:{x:800,y:20}});assert.equal(h.node('dcaCandleTipUSDT').textContent,'100.00 USDT');
+    h.chart.crosshair({time:'2026-11-12',point:{x:850,y:20}});assert.equal(h.node('dcaCandleTip').hidden,true,'missing candles never reuse the last day');h.controller.destroy();
   });
   await check('indicator switches share exact buy data, are independent and clear on account change',async()=>{
     const h=harness({indicators:true}),model=buys(),distribution={bucket_usdt:'5000',priced_btc:'0.003',unpriced_btc:'0',bins:[{from:'60000',to:'65000',btc:'0.003'}]};model.buyPriceDistribution=distribution;
     h.controller.open(model);await h.settle();assert.equal(h.indicator.created,1);assert.equal(h.indicator.profile,undefined);assert.equal(h.indicator.daily,undefined);assert.equal(h.indicator.updates.at(-1).distribution,distribution);assert.equal(h.indicator.updates.at(-1).buys.get('2024-12-14').btc,'0.0010000049');
     await h.click('dcaCandleProfile');assert.equal(h.node('dcaCandleProfile').attrs['aria-pressed'],'true');assert.equal(h.indicator.daily,undefined);
     await h.click('dcaCandleVolume');assert.equal(h.node('dcaCandleVolume').attrs['aria-pressed'],'true');assert.equal(h.indicator.profile,true);
-    h.chart.crosshair({hoveredObjectId:'buy-profile-60000',point:{x:10,y:100}});assert.equal(h.node('dcaCandleTipBTC').textContent,'0.00300000');assert.equal(h.node('dcaCandleTipPrice').textContent,'60,000–65,000');
-    h.chart.crosshair({time:'2026-11-10',paneIndex:1,point:{x:420,y:20}});assert.ok(Number.parseInt(h.node('dcaCandleTip').style.top)>=300,'volume pane tooltip stays beside its own pane');
+    h.chart.crosshair({time:'2026-11-10',paneIndex:1,point:{x:420,y:20}});assert.ok(Number.parseInt(h.node('dcaCandleTip').style.top)>=300,'volume pane tooltip stays beside its own pane');assert.equal(h.node('dcaCandleTipUSDT').textContent,'100.00 USDT');
+    h.chart.crosshair({hoveredObjectId:'buy-profile-60000',point:{x:10,y:100}});assert.equal(h.node('dcaCandleTipBTC').textContent,'0.00300000');assert.equal(h.node('dcaCandleTipPrice').textContent,'60,000–65,000');assert.equal(h.node('dcaCandleTipUSDT').hidden,true);assert.equal(h.node('dcaCandleTipUSDT').textContent,'');
     h.controller.updateBuys({connectionId:'new-account',days:new Map()});assert.equal(h.indicator.updates.at(-1).buys.size,0);assert.equal(h.indicator.updates.at(-1).distribution,null);assert.match(h.node('dcaCandleIndicatorNote').textContent,/待同步/);
     await h.click('dcaCandleProfile');assert.equal(h.indicator.profile,false);assert.equal(h.indicator.daily,true);h.controller.destroy();assert.equal(h.indicator.destroyed,true);
     const source=fs.readFileSync('./terminal/dist/dca-candles.js','utf8');assert.ok(source.indexOf('id="dcaCandleProfile"')<source.indexOf('id="dcaCandleZoomOut"'));assert.ok(source.indexOf('id="dcaCandleVolume"')<source.indexOf('id="dcaCandleZoomOut"'));
