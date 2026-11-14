@@ -309,7 +309,8 @@
       node('combinedBTC').textContent=btc(total.btc);node('combinedBTC').title=decimal(total.btc)?exact(total.btc)+' BTC':'';node('combinedCNY').textContent=money(total.cny,'cny');node('combinedUSD').textContent=money(total.usd,'usd');
       node('combinedSources').innerHTML=renderSources(state&&state.sources);node('combinedScope').textContent=sourceScope(state&&state.sources);
       const transfer=state&&state.transfer_status,inTransit=transfer&&decimal(transfer.in_transit_btc)&&Number(transfer.in_transit_btc)>0;
-      const message=failed?(state?'刷新失败，保留上次合计快照。':'暂时无法连接本机后端，稍后自动重试。'):state&&decimal(total.btc)===null?'来源尚未完整读取，暂不展示合计。':status.kind==='stale'&&transfer&&transfer.status==='pending'?'内部转账正在核对，保留最近一次完整合计。':status.kind==='stale'?'含缓存或未更新的来源，请留意各来源时间。':inTransit?'含 '+btc(transfer.in_transit_btc)+' BTC 自有转账在途，到账后自动合并，手续费按实际扣除。':'';
+      const backup=state&&state.backup;
+      const message=failed?(state?'刷新失败，保留上次合计快照。':'暂时无法连接本机后端，稍后自动重试。'):backup&&backup.read_only===true&&typeof backup.note==='string'?backup.note:state&&decimal(total.btc)===null?'来源尚未完整读取，暂不展示合计。':status.kind==='stale'&&transfer&&transfer.status==='pending'?'内部转账正在核对，保留最近一次完整合计。':status.kind==='stale'?'含缓存或未更新的来源，请留意各来源时间。':inTransit?'含 '+btc(transfer.in_transit_btc)+' BTC 自有转账在途，到账后自动合并，手续费按实际扣除。':'';
       node('combinedMessage').textContent=message;node('combinedMessage').hidden=!message;
       node('combinedGoal').innerHTML=renderGoal(total.btc);
       for(const [name,value]of[['Cny','cny'],['Usd','usd'],['Btc','btc']])node('combinedMode'+name).setAttribute('aria-pressed',String(mode===value));

@@ -2,6 +2,7 @@ import {createD1DiaryStore} from './diary-store.mjs';
 import {getFinanceSnapshot,syncFinance} from './finance.mjs';
 import {getMarketSnapshot,syncMarket} from './market.mjs';
 import {portfolioProfit} from './annualized.mjs';
+import {readFinanceBackup} from './finance-backup.mjs';
 const nutrients=['kcal','protein','carbs','fat','fiber','saturatedFat'],DAY=86400000;
 const total=(items,k)=>{const values=items.map(x=>x.nutrition?.[k]);return values.length&&values.every(x=>typeof x==='number'&&Number.isFinite(x))?Math.round(values.reduce((a,b)=>a+b,0)*10)/10:null;};
 function summarize(day,date){const meals=(day?.meals||[]).filter(x=>x.status==='eaten'),items=meals.flatMap(x=>x.items||[]);return {date,recorded:meals.length>0,mealCount:meals.length,itemCount:items.length,totals:Object.fromEntries(nutrients.map(k=>[k,total(items,k)])),meals:meals.map(({id,type,title,status,items:eaten})=>({id,type,title,status,kcal:total(eaten||[],'kcal')}))};}
@@ -19,8 +20,10 @@ export async function buildOverview(env,ctx,now=Date.now()){
   const today=new Date(currentDay).toISOString().slice(0,10);
   const [stored,portfolio,combined,terminal,profit]=await Promise.all([
     createD1DiaryStore({db:env.DB}).load('terminal-owner').catch(()=>null),
-    getFinanceSnapshot(env,'portfolio').catch(()=>null),getFinanceSnapshot(env,'combined').catch(()=>null),
-    syncMarket(env).catch(()=>getMarketSnapshot(env).catch(()=>null)),portfolioProfit(env,now).catch(()=>null)]);
+    getFinanceSnapshot(env,'portfolio').catch(()=>readFinanceBackup(env,'portfolio')),getFinanceSnapshot(env,'combined').catch(()=>readFinanceBackup(env,'combined')),
+    syncMarket(env).catch(()=>getMarketSnapshot(env).catch(async()=>{
+      const backup=await readFinanceBackup(env,'market');return backup?{market:{status:'stale',connected:false,price:Number(backup.price_usdt),event_ms:Date.parse(backup.updated_at),error:backup.backup?.note},history:[],settings:{},alerts:[]}:null;
+    })),portfolioProfit(env,now).catch(()=>null)]);
   ctx?.waitUntil?.(syncFinance(env).catch(()=>{}));
   if(terminal?.newAlerts?.length&&ctx?.onMarketAlerts)ctx.waitUntil(Promise.resolve(ctx.onMarketAlerts(terminal.newAlerts)).catch(()=>{}));
   const diary=stored?.diary,byDate=new Map((diary?.days||[]).map(d=>[d.date,d]));

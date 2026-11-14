@@ -6,6 +6,8 @@ import {syncBinanceTrades,BINANCE_TRADES_META} from './binance-trades.mjs';
 import {dcaDiary} from './dca-diary.mjs';
 import {readInternalTransfers} from './transfer-reader.mjs';
 import {reconcileInternalTransfers} from './internal-transfers.mjs';
+import {readTradeCounts} from './trade-counts.mjs';
+import {FINANCE_BACKUP_KEY,FINANCE_BACKUP_REVOKED_KEY,financeBackupScope,readFinanceBackup,saveFinanceBackup} from './finance-backup.mjs';
 
 export const FINANCE_SCHEMA_SQL=`
 CREATE TABLE IF NOT EXISTS finance_kv (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_ms INTEGER NOT NULL);
@@ -104,7 +106,7 @@ async function syncCost(env,client,account,now){
   }
   // Every stored trade is either in the book or deliberately left out of it;
   // a different count means rows were added elsewhere (Binance) or lost.
-  const stored=Number((await env.DB.prepare('SELECT COUNT(*) AS count FROM finance_trades').first())?.count);
+  const stored=(await readTradeCounts(env.DB)).total;
   const binanceStale=book&&(includeBinance?(book.excluded_binance||0)>0&&book.binance_failed_at!==stored:(book.binance_count||0)>0);
   let rebuild=!book||book.invested_usdt==null||stored!==book.trade_count+(book.excluded_binance||0)||binanceStale||old.some(r=>{const row=JSON.parse(r.record_json);if(isBinance(row)&&!book.binance_included)return false;return row.at_ms>book.last_at_ms||row.at_ms===book.last_at_ms&&BigInt(row.bill_id)>BigInt(book.last_bill_id);})||fresh.some(r=>r.at_ms<book.last_at_ms||r.at_ms===book.last_at_ms&&BigInt(r.bill_id)<=BigInt(book.last_bill_id));
   let used=null,binanceIssue=null;
@@ -346,7 +348,16 @@ export async function syncFinance(env,{fetch:fetcher=globalThis.fetch,now:clock=
     const write=[['okx',okx],['portfolio',portfolio],['combined',combined],['btc_cost',costPublic],['btc_pnl',pnl],['market',{price_usdt:price,btc_usd:btcUSD,usd_cny:fx?.rate||null,updated_at:iso(clock())}],['sync_status',{ok:true,last_success_ms:clock(),last_attempt_ms:now,cost_error:costError||null,chain_error:chainError,binance_error:binanceError,binance_trades_error:binanceTradesError}]];
     write.push(['internal_transfers',transfers]);
     if(chain&&!chainError)write.push(['chain_balance',chain]);if(binance&&!binanceError)write.push(['binance',binance]);if(fx)write.push(['fx',fx]);
-    await env.DB.batch(write.map(([k,v])=>leasedStatement(env,k,v,clock(),now)));
+    const published=await env.DB.batch(write.map(([k,v])=>leasedStatement(env,k,v,clock(),now)));
+    if(published[0]?.meta?.changes===0)return {ok:true,skipped:true};
+    if(env.FINANCE_BACKUP){
+      // One private aggregate backup every five minutes, independent of D1's
+      // daily read quota. Failed backup writes never fail the ledger sync.
+      try{
+        const diary=await dcaDiaryPublic(env);
+        await saveFinanceBackup(env,{okx,portfolio,combined,btc_cost:costPublic,btc_pnl:pnl,market:{price_usdt:price,btc_usd:btcUSD,usd_cny:fx?.rate||null,updated_at:iso(clock())},dca_diary:diary},{scope:transferScope,now:clock()});
+      }catch{/* The last verified backup remains available. */}
+    }
     return {ok:true,updated_at:iso(clock()),cost_error:costError?.code||null,chain_error:chainError?.code||null,binance_error:binanceError?.code||null,binance_trades_error:binanceTradesError?.code||null};
   }catch(error){const e=safeError(error);await put(env,'sync_status',{ok:false,...e,last_attempt_ms:now},now);return {ok:false,...e};}
 }
@@ -419,6 +430,14 @@ async function configure(request,env,venue,ctx){
   let existing={};try{existing=await credentials(env,venue);}catch{}
   const candidate=validateCredentials({...existing,...body},venue),client=new ExchangeClient(venue,candidate);await client.syncTime();await client.permissions();
   const value=await encryptConfiguration(candidate,env.CONFIG_ENCRYPTION_KEY),now=Date.now(),connection=venue==='okx'?(await connectionIdentity(candidate)).slice(0,24):null;
+  // Persist revocation, rather than merely deleting a key that an older sync
+  // could recreate. UI-only overrides cannot use the old runtime-key backup.
+  const backupScope=env.FINANCE_BACKUP?.put?await financeBackupScope(env):null;
+  if(backupScope){
+    await getFinanceSnapshot(env,'sync_status'); // Abort before revocation if D1 is unavailable.
+    await env.FINANCE_BACKUP.put(FINANCE_BACKUP_REVOKED_KEY,backupScope);
+    if(env.FINANCE_BACKUP.delete)await env.FINANCE_BACKUP.delete(FINANCE_BACKUP_KEY);
+  }
   const invalidations=[putStatement(env,'credentials:'+venue,value,now),putStatement(env,'portfolio',null,now),putStatement(env,'sync_status',{ok:false,last_attempt_ms:0,code:'connecting',error:'新账户正在同步。'},now)];
   if(venue==='okx')for(const [k,v] of [['okx',emptyOKX(connection,true)],['combined',emptyCombined(emptyPnL(connection))],['btc_cost',emptyCost(connection)],['btc_pnl',emptyPnL(connection)]])invalidations.push(putStatement(env,k,v,now));
   else invalidations.push(putStatement(env,'binance',null,now));
@@ -465,5 +484,14 @@ export async function handleFinance(request,env,ctx){
     if(path==='/api/wallet/btc-dca-diary')return json(await dcaDiaryPublic(env));
     const key={'/api/wallet/okx':'okx','/api/wallet/portfolio':'portfolio','/api/wallet/combined':'combined','/api/wallet/btc-cost':'btc_cost','/api/wallet/btc-pnl':'btc_pnl'}[path];
     return json(await cachedPublic(env,key));
-  }catch(error){const e=safeError(error);return json(e,error instanceof FinanceError?error.status:503);}
+  }catch(error){
+    const key={'/api/wallet/okx':'okx','/api/wallet/portfolio':'portfolio','/api/wallet/combined':'combined','/api/wallet/btc-cost':'btc_cost','/api/wallet/btc-pnl':'btc_pnl','/api/wallet/btc-dca-diary':'dca_diary','/api/wallet/binance':'portfolio'}[path];
+    if(request.method==='GET'&&!url.search&&key&&databaseUnavailable(error)){
+      const backup=await readFinanceBackup(env,key);
+      if(backup)return json(path==='/api/wallet/binance'?backup.binance:backup);
+    }
+    const e=safeError(error);return json(e,error instanceof FinanceError?error.status:503);
+  }
 }
+
+function databaseUnavailable(error){return /(?:D1.{0,150}(?:quota|limit|unavailable|timeout|overload)|exceeded.{0,150}(?:D1|row|limit)|SQLITE_BUSY|SQLITE_LOCKED|7500)/i.test([error?.message,error?.cause?.message].filter(Boolean).join(' '));}
