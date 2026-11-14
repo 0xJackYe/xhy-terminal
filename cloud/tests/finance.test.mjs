@@ -171,31 +171,97 @@ async function fixture(){
   DB.set('historical_rates',{});
   for(const r of original)DB.trades.set(r.id,{id:r.id,bill_id:r.bill_id,at_ms:r.at_ms,record_json:JSON.stringify(r)});
   const calls=[];let unsafe=false,binance={wallets:wallets()},price='120';
+  const facts={now:NOW,okxBTC:'1',chainSats:50000000,withdrawals:{okx:[],binance:[]},transactions:{}};
   async function fetcher(value,options={}){
     const u=new URL(value);calls.push({url:u,options});
     assert.equal(options.method,['/sapi/v3/asset/getUserAsset','/sapi/v1/asset/get-funding-asset'].includes(u.pathname)?'POST':'GET');
     if(u.hostname==='www.okx.com'){
-      if(u.pathname==='/api/v5/public/time')return ok([{ts:String(NOW)}]);
+      if(u.pathname==='/api/v5/public/time')return ok([{ts:String(facts.now)}]);
       if(u.pathname==='/api/v5/account/config')return ok([{perm:unsafe?'read_only,trade':'read_only'}]);
-      if(u.pathname==='/api/v5/account/balance')return ok([{totalEq:'120',details:[{ccy:'BTC',cashBal:'1',eq:'1',liab:'0',availBal:'1'}]}]);
+      if(u.pathname==='/api/v5/account/balance')return ok([{totalEq:'120',details:[{ccy:'BTC',cashBal:facts.okxBTC,eq:facts.okxBTC,liab:'0',availBal:facts.okxBTC}]}]);
       if(u.pathname==='/api/v5/asset/balances')return ok([]);
-      if(u.pathname==='/api/v5/market/tickers')return ok([{instId:'BTC-USDT',last:price,ts:String(NOW)}]);
-      if(u.pathname==='/api/v5/market/index-tickers')return ok([{instId:'BTC-USD',idxPx:price,ts:String(NOW)}]);
+      if(u.pathname==='/api/v5/market/tickers')return ok([{instId:'BTC-USDT',last:price,ts:String(facts.now)}]);
+      if(u.pathname==='/api/v5/market/index-tickers')return ok([{instId:'BTC-USD',idxPx:price,ts:String(facts.now)}]);
       if(u.pathname==='/api/v5/account/bills-archive')return ok(bills());
+      if(u.pathname==='/api/v5/asset/withdrawal-history')return ok(facts.withdrawals.okx);
     }
     if(u.hostname==='api-gcp.binance.com'){
-      if(u.pathname==='/api/v3/time')return new Response(JSON.stringify({serverTime:NOW}));
+      if(u.pathname==='/api/v3/time')return new Response(JSON.stringify({serverTime:facts.now}));
       if(u.pathname==='/sapi/v1/account/apiRestrictions')return new Response(JSON.stringify({enableReading:true,enableWithdrawals:false,enableSpotAndMarginTrading:false}));
       if(u.pathname==='/sapi/v3/asset/getUserAsset')return new Response(JSON.stringify(binance.spot||[]));
       if(u.pathname==='/sapi/v1/asset/get-funding-asset')return new Response(JSON.stringify(binance.funding||[]));
       if(u.pathname==='/sapi/v1/asset/wallet/balance')return new Response(JSON.stringify(binance.wallets));
+      if(u.pathname==='/sapi/v1/capital/withdraw/history')return new Response(JSON.stringify(facts.withdrawals.binance));
     }
-    if(u.hostname==='blockstream.info')return new Response(JSON.stringify({address:ADDRESS,chain_stats:{funded_txo_sum:50000000,spent_txo_sum:0,tx_count:1}}));
+    if(u.hostname==='blockstream.info'){
+      if(u.pathname.startsWith('/api/tx/')){facts.onProof?.();return new Response(JSON.stringify(facts.transactions[u.pathname.split('/').at(-1)]));}
+      return new Response(JSON.stringify({address:ADDRESS,chain_stats:{funded_txo_sum:facts.chainSats,spent_txo_sum:0,tx_count:1}}));
+    }
     if(u.hostname==='api.frankfurter.dev')return new Response(JSON.stringify([{base:'USD',quote:'CNY',date:'2026-10-26',rate:7.2}]));
     throw new Error('unexpected request '+u.hostname+u.pathname);
   }
-  return {env,DB,account,fetcher,calls,setUnsafe:value=>{unsafe=value;},setBinance:value=>{binance=value;},setPrice:value=>{price=value;}};
+  return {env,DB,account,fetcher,calls,facts,setUnsafe:value=>{unsafe=value;},setBinance:value=>{binance=value;},setPrice:value=>{price=value;}};
 }
+function ownWithdrawal(f,venue,{hash='c'.repeat(64),started=NOW+30000,broadcast=true,complete=false}={}){
+  f.facts.withdrawals[venue]=[venue==='okx'?{ccy:'BTC',chain:'BTC-Bitcoin',to:ADDRESS,wdId:'991',ts:String(started),amt:'0.25',fee:'0.0001',feeCcy:'BTC',state:complete?'2':'1',txId:broadcast?hash:''}:
+    {coin:'BTC',network:'BTC',address:ADDRESS,id:'wd-991',applyTime:new Date(started).toISOString().slice(0,19).replace('T',' '),completeTime:complete?new Date(f.facts.now).toISOString().slice(0,19).replace('T',' '):'',amount:'0.25',transactionFee:'0.0001',status:complete?6:4,transferType:0,txId:broadcast?hash:''}];
+  f.facts.transactions[hash]={txid:hash,status:{confirmed:complete,...(complete?{block_time:Math.floor(f.facts.now/1000)}:{})},vin:[{prevout:{scriptpubkey_address:'bc1q'+'b'.repeat(38),value:26000000}}],vout:[{scriptpubkey_address:ADDRESS,value:25000000}]};
+}
+test('a proved OKX internal transfer keeps the curve, position basis and portfolio continuous through confirmation',async()=>{
+  const f=await fixture();await syncFinance(f.env,{fetch:f.fetcher,now:()=>NOW,force:true});
+  const cost=f.DB.get('btc_pnl').metrics.remaining_cost;
+  f.facts.now=NOW+120000;f.facts.okxBTC='0.7499';ownWithdrawal(f,'okx');
+  assert.equal((await syncFinance(f.env,{fetch:f.fetcher,now:()=>f.facts.now,force:true})).ok,true);
+  let c=f.DB.get('combined');assert.equal(c.totals.btc,'1.4999');assert.equal(c.sources.find(r=>r.id==='transit').btc,'0.25');assert.equal(c.history.at(-1).btc,'1.4999');
+  assert.equal(f.DB.get('btc_pnl').metrics.holdings_btc,'1.4999');assert.equal(f.DB.get('btc_pnl').metrics.remaining_cost,cost);
+  assert.equal(f.DB.get('portfolio').assets.find(r=>r.ccy==='BTC').quantity,'1.4999');assert.equal(f.DB.get('portfolio').locations.find(r=>r.id==='transit').usd_value,'30');
+  f.facts.now=NOW+240000;f.facts.chainSats=75000000;ownWithdrawal(f,'okx',{complete:true});
+  assert.equal((await syncFinance(f.env,{fetch:f.fetcher,now:()=>f.facts.now,force:true})).ok,true);
+  c=f.DB.get('combined');assert.equal(c.totals.btc,'1.4999');assert.equal(c.sources.some(r=>r.id==='transit'),false);assert.equal(c.history.at(-1).internal_transfer_adjustment,undefined);
+  assert.equal(f.DB.get('btc_pnl').metrics.holdings_btc,'1.4999');assert.equal(f.DB.get('portfolio').assets.find(r=>r.ccy==='BTC').quantity,'1.4999');
+  const body=await(await handleFinance(new Request('https://x.pages.dev/api/wallet/combined'),f.env,{})).json();
+  assert.ok(body.history.every(p=>!('internal_transfer_adjustment'in p)));assert.equal('transfer_connection'in body,false);assert.equal(JSON.stringify(body).includes('c'.repeat(64)),false);
+});
+test('Binance withdrawals bypass an empty cache on a new debit and never add the received coin twice',async()=>{
+  const f=await fixture();f.setBinance({wallets:[wallet('Spot','.2501',[coin('BTC','.2501','.2501')]),wallet('Funding','0')]});
+  await syncFinance(f.env,{fetch:f.fetcher,now:()=>NOW,force:true});assert.equal(f.DB.get('combined').totals.btc,'1.7501');
+  f.facts.now=NOW+120000;f.setBinance({wallets:[wallet('Spot','0',[]),wallet('Funding','0')]});ownWithdrawal(f,'binance');
+  await syncFinance(f.env,{fetch:f.fetcher,now:()=>f.facts.now,force:true});assert.equal(f.DB.get('combined').totals.btc,'1.75');assert.equal(f.DB.get('combined').history.at(-1).btc,'1.75');
+  f.facts.now=NOW+240000;f.facts.chainSats=75000000;ownWithdrawal(f,'binance',{complete:true});
+  await syncFinance(f.env,{fetch:f.fetcher,now:()=>f.facts.now,force:true});assert.equal(f.DB.get('combined').totals.btc,'1.75');assert.equal(f.DB.get('combined').sources.some(r=>r.id==='transit'),false);
+});
+test('an unbroadcast matched debit retains the complete dated estimate, while pending approval alone does not stop prices',async()=>{
+  const f=await fixture();await syncFinance(f.env,{fetch:f.fetcher,now:()=>NOW,force:true});const before=f.DB.get('combined'),portfolio=f.DB.get('portfolio'),pnl=f.DB.get('btc_pnl');
+  f.facts.now=NOW+120000;f.facts.okxBTC='0.7499';ownWithdrawal(f,'okx',{broadcast:false});
+  await syncFinance(f.env,{fetch:f.fetcher,now:()=>f.facts.now,force:true});const held=f.DB.get('combined');assert.equal(held.stale,true);assert.equal(held.totals.btc,before.totals.btc);assert.equal(held.updated_at,before.updated_at);assert.deepEqual(held.history,before.history);assert.equal(held.transfer_status.status,'pending');
+  assert.deepEqual(f.DB.get('btc_pnl').metrics,pnl.metrics);assert.equal(f.DB.get('portfolio').total_usd,portfolio.total_usd);assert.equal(f.DB.get('portfolio').stale,true);
+  f.facts.now=NOW+240000;f.facts.okxBTC='1';f.setPrice('130');
+  await syncFinance(f.env,{fetch:f.fetcher,now:()=>f.facts.now,force:true});assert.equal(f.DB.get('combined').totals.usd,'195');assert.equal(f.DB.get('combined').updated_at,iso(f.facts.now));
+});
+test('a cold-wallet-first observation removes only the verified duplicate, not a fictional liability',async()=>{
+  const f=await fixture();await syncFinance(f.env,{fetch:f.fetcher,now:()=>NOW,force:true});
+  f.facts.now=NOW+120000;f.facts.chainSats=75000000;ownWithdrawal(f,'okx');
+  await syncFinance(f.env,{fetch:f.fetcher,now:()=>f.facts.now,force:true});
+  assert.equal(f.DB.get('combined').totals.btc,'1.5');assert.equal(f.DB.get('combined').sources.find(r=>r.id==='okx').btc,'0.75');
+  assert.equal(f.DB.get('btc_pnl').metrics.holdings_btc,'1.5');assert.equal(f.DB.get('portfolio').assets.find(r=>r.ccy==='BTC').quantity,'1.5');assert.equal(f.DB.get('portfolio').liabilities_usd,'0');
+});
+test('a changed Binance identity or superseding sync lease cannot publish old transfer evidence',async()=>{
+  for(const kind of ['account','lease']){
+    const f=await fixture();await syncFinance(f.env,{fetch:f.fetcher,now:()=>NOW,force:true});const before=f.DB.get('combined');
+    f.facts.now=NOW+120000;f.facts.okxBTC='0.7499';ownWithdrawal(f,'okx');
+    f.facts.onProof=()=>{if(kind==='account')f.env.BINANCE_API_KEY='C'.repeat(64);else f.DB.kv.set('sync_lock',{value:'true',updated_ms:f.facts.now+1});};
+    const result=await syncFinance(f.env,{fetch:f.fetcher,now:()=>f.facts.now,force:true});
+    assert.equal(kind==='account'?result.ok===false:result.skipped===true,true);assert.deepEqual(f.DB.get('combined'),before);
+    assert.equal(f.DB.get('internal_transfers').transfers.length,0);
+  }
+});
+test('only the two fixed BTC history reads are allowed; withdrawal submission remains impossible',async()=>{
+  const calls=[],fetch=async url=>{calls.push(new URL(url));return url.includes('okx.com')?ok([]):new Response('[]');};
+  const a=new ExchangeClient('okx',OKX,{fetch,now:()=>NOW}),b=new ExchangeClient('binance',{api_key:KEY,secret_key:SECRET},{fetch,now:()=>NOW});
+  await a.get('/api/v5/asset/withdrawal-history',{ccy:'BTC',type:4,limit:100});await b.get('/sapi/v1/capital/withdraw/history',{coin:'BTC',startTime:NOW-60000,endTime:NOW,limit:1000,recvWindow:5000});
+  for(const read of [()=>a.get('/api/v5/asset/withdrawal-history',{ccy:'ETH',type:4,limit:100}),()=>b.get('/sapi/v1/capital/withdraw/history',{coin:'ETH',startTime:NOW-60000,endTime:NOW}),()=>b.get('/sapi/v1/capital/withdraw/history',{coin:'BTC',startTime:NOW-8*86400000,endTime:NOW}),()=>a.post('/api/v5/asset/withdrawal',{}),()=>b.post('/sapi/v1/capital/withdraw/apply',{})])await assert.rejects(read,error=>error.code==='route_rejected');
+  assert.equal(calls.length,2);
+});
 test('scheduled finance sync ingests DCA once, persists cost and serves all existing UI routes',async()=>{
   const f=await fixture(),result=await syncFinance(f.env,{fetch:f.fetcher,now:()=>NOW,force:true});assert.equal(result.ok,true);
   const p=f.DB.get('btc_pnl');assert.equal(p.status,'fresh');assert.equal(p.metrics.remaining_cost,'160');assert.equal(p.metrics.unrealized_net,'20');assert.equal(p.metrics.holdings_btc,'1.5');
