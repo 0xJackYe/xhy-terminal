@@ -2,6 +2,7 @@
  * the client only reaches the approved history, kline and balance routes. */
 import {D,dec,txt,iso,validateTrade} from './cost-book.mjs';
 import {FinanceError} from './exchange.mjs';
+import {readTradeCounts} from './trade-counts.mjs';
 
 // BTC bought or sold against a USD stablecoin on Binance spot. Each symbol is
 // read from trade id 0, so its full account history is covered.
@@ -182,8 +183,7 @@ export async function syncBinanceTrades(env,client,{identity,coverageStartMs,rat
   // Overlapping Convert windows return known orders again; ids are stable.
   const statements=fresh.map(r=>env.DB.prepare('INSERT OR IGNORE INTO finance_trades(id,bill_id,at_ms,record_json) VALUES(?,?,?,?)').bind(r.id,r.bill_id,r.at_ms,JSON.stringify(r)));
   for(let i=0;i<statements.length;i+=90)await env.DB.batch(statements.slice(i,i+90));
-  const count=await env.DB.prepare('SELECT COUNT(*) AS count FROM finance_trades WHERE '+binanceRows).first();
-  meta.record_count=Number(count?.count)||0;meta.updated_ms=now;meta.updated_at=iso(now);
+  meta.record_count=(await readTradeCounts(env.DB)).binance;meta.updated_ms=now;meta.updated_at=iso(now);
   const save=(key,value)=>env.DB.prepare('INSERT INTO finance_kv(key,value,updated_ms) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_ms=excluded.updated_ms').bind(key,JSON.stringify(value),now);
   // Imported rows rely on these minute rates when the book is rebuilt.
   await env.DB.batch([save(BINANCE_TRADES_META,meta),...(Object.keys(rates).length!==rateCount?[save('historical_rates',rates)]:[])]);

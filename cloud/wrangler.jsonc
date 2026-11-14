@@ -8,6 +8,7 @@
   "assets": {"directory":"dist", "binding":"ASSETS", "run_worker_first":true},
   "build": {"command":"npm run build"},
   "d1_databases": [{"binding":"DB","database_name":"xhy-terminal","database_id":"de23bca8-ad76-41bc-a8e0-00d21224e4de"}],
+  "kv_namespaces": [{"binding":"FINANCE_BACKUP","id":"fa423f2227dc41429afce3ae48969304"}],
   "triggers": {"crons":["* * * * *"]},
   "observability": {"enabled":true,"head_sampling_rate":0.05}
 }

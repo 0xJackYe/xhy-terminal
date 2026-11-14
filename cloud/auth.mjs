@@ -4,6 +4,16 @@ const COOKIE='__Host-xhy-session',TTL=7*86400000,WINDOW=900000,LIMIT=10;
 const json=(body,status=200,extra={})=>new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff',...extra}});
 export function assertSameOrigin(request) {const origin=request.headers.get('Origin'),site=request.headers.get('Sec-Fetch-Site');return origin===new URL(request.url).origin&&(!site||['same-origin','none'].includes(site));}
 function configured(env){return typeof env.AUTH_SECRET==='string'&&env.AUTH_SECRET.length>=32&&typeof env.OWNER_ACCESS_KEY==='string'&&env.OWNER_ACCESS_KEY.length>=24;}
+function unavailableAttemptStore(error){
+  // A quota/outage in the attempt ledger must not lock out an owner who has
+  // already proved the full secret. Unexpected SQL/configuration errors still
+  // fail closed, and no database failure can authenticate an incorrect code.
+  for(let depth=0;error&&depth<3;depth++,error=error.cause){
+    const message=typeof error.message==='string'?error.message:'';
+    if(/\bD1(?:_ERROR)?\b/i.test(message)&&/(?:exceeded.*(?:daily|free tier).*limit|temporarily unavailable|database is (?:unavailable|overloaded)|request timed out)/i.test(message))return true;
+  }
+  return false;
+}
 function returnPath(value) {return typeof value==='string'&&value.startsWith('/')&&!value.startsWith('//')&&!/[\\\u0000-\u0020\u007f]/.test(value)&&!value.startsWith('/auth/')?value:'/';}
 export async function isAuthenticated(request,env,{now=Date.now()}={}) {
   if(!configured(env))return false;
@@ -58,13 +68,16 @@ export async function handleAuth(request,env,{now=Date.now()}={}) {
     const raw=await request.text();if(raw.length>4096)return json({error:'请求过大。'},413);
     const input=(request.headers.get('Content-Type')||'').includes('application/json')?JSON.parse(raw):Object.fromEntries(new URLSearchParams(raw));
     if(typeof input.accessKey!=='string'||input.accessKey.length>256)return json({error:'访问码无效。'},400);
-    const hash=await sha256Hex((request.headers.get('CF-Connecting-IP')||'unknown')+':'+env.AUTH_SECRET);
-    const row=await env.DB.prepare('SELECT window_ms,attempts FROM auth_attempts WHERE ip_hash=?').bind(hash).first();
-    if(row&&now-row.window_ms<WINDOW&&row.attempts>=LIMIT)return json({error:'尝试次数过多，请15分钟后再试。'},429,{'Retry-After':'900'});
-    const used=await env.DB.prepare('INSERT INTO auth_attempts(ip_hash,window_ms,attempts) VALUES(?,?,1) ON CONFLICT(ip_hash) DO UPDATE SET window_ms=CASE WHEN ?-window_ms>=? THEN ? ELSE window_ms END,attempts=CASE WHEN ?-window_ms>=? THEN 1 ELSE attempts+1 END RETURNING attempts').bind(hash,now,now,WINDOW,now,now,WINDOW).first();
-    if(!used||used.attempts>LIMIT)return json({error:'尝试次数过多，请稍后再试。'},429);
-    if(!constantTimeEqual(await sha256Hex(input.accessKey),await sha256Hex(env.OWNER_ACCESS_KEY)))return json({error:'访问码不正确。'},401);
-    await env.DB.prepare('DELETE FROM auth_attempts WHERE ip_hash=?').bind(hash).run();
+    const validCode=constantTimeEqual(await sha256Hex(input.accessKey),await sha256Hex(env.OWNER_ACCESS_KEY));
+    try{
+      const hash=await sha256Hex((request.headers.get('CF-Connecting-IP')||'unknown')+':'+env.AUTH_SECRET);
+      const row=await env.DB.prepare('SELECT window_ms,attempts FROM auth_attempts WHERE ip_hash=?').bind(hash).first();
+      if(row&&now-row.window_ms<WINDOW&&row.attempts>=LIMIT)return json({error:'尝试次数过多，请15分钟后再试。'},429,{'Retry-After':'900'});
+      const used=await env.DB.prepare('INSERT INTO auth_attempts(ip_hash,window_ms,attempts) VALUES(?,?,1) ON CONFLICT(ip_hash) DO UPDATE SET window_ms=CASE WHEN ?-window_ms>=? THEN ? ELSE window_ms END,attempts=CASE WHEN ?-window_ms>=? THEN 1 ELSE attempts+1 END RETURNING attempts').bind(hash,now,now,WINDOW,now,now,WINDOW).first();
+      if(!used||used.attempts>LIMIT)return json({error:'尝试次数过多，请稍后再试。'},429);
+      if(!validCode)return json({error:'访问码不正确。'},401);
+      await env.DB.prepare('DELETE FROM auth_attempts WHERE ip_hash=?').bind(hash).run();
+    }catch(error){if(!validCode||!unavailableAttemptStore(error))throw error;}
     const payload=toBase64Url(new TextEncoder().encode(JSON.stringify({owner:'terminal-owner',iat:now,exp:now+TTL,key:await sha256Hex(env.OWNER_ACCESS_KEY)})));
     const token='v1.'+payload+'.'+await hmacSha256('v1.'+payload,env.AUTH_SECRET);
     const headers={'Set-Cookie':`${COOKIE}=${token}; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=${TTL/1000}`};

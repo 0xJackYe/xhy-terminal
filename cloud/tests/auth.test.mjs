@@ -49,6 +49,44 @@ test('return locations cannot escape the origin and login HTML never includes se
   env.sqlite.close();
 });
 
+test('a known D1 quota outage permits only the correct access code and preserves cookie scope and expiry',async()=>{
+  const base=environment();
+  try{
+    for(const stage of ['SELECT','INSERT','DELETE']){
+      const env={...base,DB:{prepare(sql){
+        if(sql.startsWith(stage))throw new Error("D1_ERROR: Your account has exceeded D1's free tier daily row read limit. Upgrade or wait until tomorrow: SQLITE_ERROR");
+        return base.DB.prepare(sql);
+      }}};
+      const response=await handleAuth(post('/auth/login',{accessKey:env.OWNER_ACCESS_KEY,returnTo:'/#wallet'}),env,{now:NOW});
+      assert.equal(response.status,200,stage);assert.deepEqual(await response.json(),{ok:true,redirect:'/#wallet'});
+      const cookie=response.headers.get('Set-Cookie');
+      for(const flag of ['__Host-xhy-session=','Path=/','Secure','HttpOnly','SameSite=Strict','Max-Age=604800'])assert.ok(cookie.includes(flag));
+      assert.equal(await isAuthenticated(authenticatedRequest(cookie),env,{now:NOW+1}),true);
+      assert.equal(await isAuthenticated(authenticatedRequest(cookie),env,{now:NOW+604800000}),false);
+      assert.equal(await isAuthenticated(authenticatedRequest(cookie),{...env,OWNER_ACCESS_KEY:'rotated-'.repeat(8)},{now:NOW}),false);
+      assert.equal(cookie.includes(env.OWNER_ACCESS_KEY),false);assert.equal(cookie.includes(env.AUTH_SECRET),false);
+    }
+    const down={...base,DB:{prepare(){throw new Error('D1_ERROR: database is temporarily unavailable; private-provider-details');}}};
+    assert.equal((await handleAuth(post('/auth/login',{accessKey:base.OWNER_ACCESS_KEY}),down,{now:NOW})).status,200);
+    const denied=await handleAuth(post('/auth/login',{accessKey:'incorrect'}),down,{now:NOW});
+    assert.equal(denied.status,503);assert.equal(denied.headers.has('Set-Cookie'),false);assert.equal((await denied.text()).includes('private-provider-details'),false);
+  }finally{base.sqlite.close();}
+});
+
+test('database failure never bypasses an already observed rate limit or an unexpected storage error',async()=>{
+  const env=environment();
+  try{
+    for(let i=0;i<10;i++)await handleAuth(post('/auth/login',{accessKey:'incorrect'}),env,{now:NOW});
+    const original=env.DB;
+    const failWrite={...env,DB:{prepare(sql){if(sql.startsWith('INSERT'))throw new Error('D1_ERROR: database is temporarily unavailable');return original.prepare(sql);}}};
+    assert.equal((await handleAuth(post('/auth/login',{accessKey:env.OWNER_ACCESS_KEY}),failWrite,{now:NOW+1})).status,429);
+    for(const message of ['private database error','D1_ERROR: no such table: auth_attempts','D1_ERROR: malformed SQL syntax']){
+      const response=await handleAuth(post('/auth/login',{accessKey:env.OWNER_ACCESS_KEY}),{...env,DB:{prepare(){throw new Error(message);}}},{now:NOW});
+      assert.equal(response.status,503);assert.equal(response.headers.has('Set-Cookie'),false);assert.equal((await response.text()).includes(message),false);
+    }
+  }finally{env.sqlite.close();}
+});
+
 test('encrypted configuration is randomized and rejects tampering or the wrong key', async () => {
   const secret = 'test-only-encryption-secret-'.repeat(2), value = { code: 'private-test-fixture', unicode: '日记' };
   const a = await encryptJson(value, secret), b = await encryptJson(value, secret);
