@@ -99,10 +99,10 @@
     if (!data) return '<p class="combined-empty">合计余额完整后显示目标进度。</p>';
     return '<div class="combined-goal-head"><h3>攒到 1 BTC</h3><span>'+data.percent.toFixed(2)+'%</span></div><div class="combined-goal-track" role="progressbar" aria-label="攒到 1 BTC" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+data.percent.toFixed(2)+'"><i style="width:'+data.percent+'%"></i></div><ol class="combined-milestones" aria-label="当前合计 BTC 的里程碑">'+data.stages.map(stage=>'<li data-state="'+stage.state+'"><strong>'+stage.value+' BTC</strong><span>'+(stage.state==='achieved'?'已达成':stage.state==='next'?'下一阶段':'未达成')+'</span></li>').join('')+'</ol><p class="combined-goal-note">'+(data.next?'下一阶段 '+data.next.value+' BTC · 还差 '+btc(data.next.remaining)+' BTC':'1 BTC 目标已达成')+'</p>';
   }
-  const SOURCE_LABELS = {okx:'欧易 BTC 净持有', binance:'币安 BTC', offline:'离线钱包 BTC'};
-  const SOURCE_NAMES = {okx:'欧易', binance:'币安', offline:'离线钱包'};
+  const SOURCE_LABELS = {okx:'欧易 BTC 净持有', binance:'币安 BTC', offline:'离线钱包 BTC',transit:'自有冷钱包转账在途 BTC'};
+  const SOURCE_NAMES = {okx:'欧易', binance:'币安', offline:'离线钱包',transit:'转账在途'};
   function renderSources(sources) {
-    const rows = Array.isArray(sources) ? sources.filter(source=>source && Object.prototype.hasOwnProperty.call(SOURCE_LABELS,source.id)).slice(0,3) : [];
+    const rows = Array.isArray(sources) ? sources.filter(source=>source && Object.prototype.hasOwnProperty.call(SOURCE_LABELS,source.id)).slice(0,4) : [];
     return rows.map(source=>{
       const status=['fresh','stale','unavailable'].includes(source.status)?source.status:'unavailable',state=status==='fresh'?'已更新':status==='stale'?'缓存快照':'暂不可用',time=beijing(source.updated_at)+' · 北京时间',full=exact(source.btc);
       return '<div class="combined-source" data-source="'+source.id+'" title="'+escape(SOURCE_LABELS[source.id]+' '+(full==='—'?'—':full+' BTC')+' · '+state+' '+time)+'"><div><span>'+SOURCE_NAMES[source.id]+'</span><strong>'+btc(source.btc)+' <small>BTC</small></strong></div><div class="combined-source-state '+status+'">'+state+'<time>'+escape(time)+'</time></div></div>';
@@ -111,7 +111,7 @@
   // The BTC total names the places it adds up, in a fixed order.
   function sourceScope(sources) {
     const ids = Array.isArray(sources) ? sources.map(source=>source && source.id) : [];
-    const names = ['okx','binance','offline'].filter(id=>ids.includes(id)).map(id=>SOURCE_NAMES[id]);
+    const names = ['okx','binance','offline','transit'].filter(id=>ids.includes(id)).map(id=>SOURCE_NAMES[id]);
     return names.length ? names.join(' + ') : '欧易 + 离线钱包';
   }
   // Total profit across the portfolio: market value plus everything taken out,
@@ -308,7 +308,8 @@
       const total=state&&state.totals||{};
       node('combinedBTC').textContent=btc(total.btc);node('combinedBTC').title=decimal(total.btc)?exact(total.btc)+' BTC':'';node('combinedCNY').textContent=money(total.cny,'cny');node('combinedUSD').textContent=money(total.usd,'usd');
       node('combinedSources').innerHTML=renderSources(state&&state.sources);node('combinedScope').textContent=sourceScope(state&&state.sources);
-      const message=failed?(state?'刷新失败，保留上次合计快照。':'暂时无法连接本机后端，稍后自动重试。'):state&&decimal(total.btc)===null?'来源尚未完整读取，暂不展示合计。':status.kind==='stale'?'含缓存或未更新的来源，请留意各来源时间。':'';
+      const transfer=state&&state.transfer_status,inTransit=transfer&&decimal(transfer.in_transit_btc)&&Number(transfer.in_transit_btc)>0;
+      const message=failed?(state?'刷新失败，保留上次合计快照。':'暂时无法连接本机后端，稍后自动重试。'):state&&decimal(total.btc)===null?'来源尚未完整读取，暂不展示合计。':status.kind==='stale'&&transfer&&transfer.status==='pending'?'内部转账正在核对，保留最近一次完整合计。':status.kind==='stale'?'含缓存或未更新的来源，请留意各来源时间。':inTransit?'含 '+btc(transfer.in_transit_btc)+' BTC 自有转账在途，到账后自动合并，手续费按实际扣除。':'';
       node('combinedMessage').textContent=message;node('combinedMessage').hidden=!message;
       node('combinedGoal').innerHTML=renderGoal(total.btc);
       for(const [name,value]of[['Cny','cny'],['Usd','usd'],['Btc','btc']])node('combinedMode'+name).setAttribute('aria-pressed',String(mode===value));

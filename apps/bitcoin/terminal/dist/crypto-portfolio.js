@@ -12,7 +12,7 @@
   'use strict';
   const REFRESH_MS=30000, REQUEST_TIMEOUT_MS=12000, MAX_ROWS=500;
   const COLORS=['#b8795d','#69795e','#d2ac6f','#657f91','#99849b','#a39c6a','#8b6c5e','#88a49d','#b88d9c','#7f8798'];
-  const LABELS={okx:'欧易',binance:'币安',offline:'离线钱包'};
+  const LABELS={okx:'欧易',binance:'币安',offline:'离线钱包',transit:'转账在途'};
   const escape=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const finite=value=>typeof value==='number'&&Number.isFinite(value);
   function decimal(value) {
