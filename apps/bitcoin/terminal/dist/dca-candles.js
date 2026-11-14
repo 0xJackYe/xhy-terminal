@@ -126,7 +126,7 @@
     function indicatorNotes(){
       const distribution=model?.buyPriceDistribution,note=node('dcaCandleIndicatorNote');
       note.textContent=profileVisible?distribution?/[1-9]/.test(distribution.unpriced_btc)?'部分买入价格待核对':'':'成交量分布待同步':'';note.hidden=!note.textContent;
-      node('dcaCandleProfile').title='全部历史买入 · 按实际成交价每 5,000 USDT 分档 · BTC 净到账量'+(distribution&&/[1-9]/.test(distribution.unpriced_btc)?' · '+amount(distribution.unpriced_btc,8)+' BTC 价格待核对':'');
+      node('dcaCandleProfile').title='全部历史买入 · 按实际成交价每 2,000 USDT 分档 · BTC 净到账量'+(distribution&&/[1-9]/.test(distribution.unpriced_btc)?' · '+amount(distribution.unpriced_btc,8)+' BTC 价格待核对':'');
     }
     function updateIndicators(){indicators?.update({buys,candles:data?.candles||[],distribution:model?.buyPriceDistribution||null});indicatorNotes();}
     function toggleIndicator(kind){
