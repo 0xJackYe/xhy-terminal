@@ -60,6 +60,9 @@ test('failed source reads preserve same-account proof with stale status and do n
 test('one unavailable exchange does not block verified evidence from the other',async()=>{
  const h=harness({okxRows:[],binanceRows:[binance()],failRead:'okx'}),result=await h.read();assert.equal(result.status,'stale');assert.equal(result.venues.okx.status,'stale');assert.equal(result.transfers[0].venue,'binance');
 });
+test('a configured but unreachable exchange is stale rather than falsely not connected',async()=>{
+ const h=harness({okxRows:[],binanceRows:null}),result=await h.read({binanceExpected:true});assert.equal(result.status,'stale');assert.equal(result.venues.binance.status,'stale');assert.equal(result.venues.okx.status,'fresh');
+});
 test('a cancelled or failed withdrawal revokes previously pending cached proof',async()=>{
  const first=await harness({binanceRows:[binance({status:4,completeTime:''})],proof:tx({status:{confirmed:false}})}).read();
  const result=await harness({binanceRows:[binance({status:5})]}).read({cached:first,now:NOW+60000});assert.equal(result.status,'fresh');assert.equal(result.transfers.length,0);assert.equal(result.awaiting.length,0);

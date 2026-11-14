@@ -211,8 +211,9 @@ export async function syncFinance(env,{fetch:fetcher=globalThis.fetch,now:clock=
     const binanceReady=(async()=>{const c=await credentials(env,'binance'),b=new ExchangeClient('binance',c,{fetch:fetcher,now:clock});await b.syncTime();await b.permissions();return {client:b,identity:await connectionIdentity(c)};})();
     binanceReady.catch(()=>{});
     const transferScope=await transferConnection(env,account);
+    const walletConfigured=!!env.BINANCE_API_KEY&&!!env.BINANCE_SECRET_KEY||!!await getFinanceSnapshot(env,'credentials:binance');
     const cachedTransfers=await getFinanceSnapshot(env,'internal_transfers');
-    const transfersReady=(async()=>{const b=await binanceReady.catch(()=>null);return readInternalTransfers({okxClient:client,binanceClient:b?.client||null,address:env.WALLET_ADDRESS,fetch:fetcher,now:clock(),cached:cachedTransfers,connection:transferScope});})();
+    const transfersReady=(async()=>{const b=await binanceReady.catch(()=>null);return readInternalTransfers({okxClient:client,binanceClient:b?.client||null,binanceExpected:walletConfigured,address:env.WALLET_ADDRESS,fetch:fetcher,now:clock(),cached:cachedTransfers,connection:transferScope});})();
     transfersReady.catch(()=>{});
     const outcomes=await Promise.allSettled([
       (async()=>{
@@ -245,7 +246,6 @@ export async function syncFinance(env,{fetch:fetcher=globalThis.fetch,now:clock=
     }else fx=null;
     if(!fx)fx=await getFinanceSnapshot(env,'fx');
     if(!fx){const imported=await getFinanceSnapshot(env,'combined');if(imported?.quotes?.usd_cny)fx={rate:imported.quotes.usd_cny,date:null,observed_at:imported.updated_at};}
-    const walletConfigured=!!env.BINANCE_API_KEY&&!!env.BINANCE_SECRET_KEY||!!await getFinanceSnapshot(env,'credentials:binance');
     const binanceStatus=statusBinance(walletConfigured,binance,binanceError,clock());
     const sources=[{id:'okx',status:okx.cash_valuation.complete?'connected':'partial',note:'已核对只读账户与统一 USD 行情'},{id:'binance',status:binanceStatus.status,note:binanceError?.error||'只读钱包资产'},{id:'offline',status:chain?chainError?'stale':'connected':'error',note:chainError?.error||'已确认链上余额'}];
     let rows=okx.cash_valuation.assets.map(r=>({...r,location:'okx'}));
@@ -266,7 +266,7 @@ export async function syncFinance(env,{fetch:fetcher=globalThis.fetch,now:clock=
     const unexpected=quantityChanged&&dec(point.btc).sub(previous.btc).sub(netTradesBetween(transferTrades,Date.parse(previous.timestamp),clock())).abs().gte(SATOSHI);
     const readyBinance=await binanceReady.catch(()=>null);
     let transfers=outcomes[4].status==='fulfilled'?outcomes[4].value:{version:1,connection:transferScope,status:'stale',checked_ms:0,transfers:[],awaiting:[]};
-    if(unexpected&&transfers.checked_ms<now)transfers=await readInternalTransfers({okxClient:client,binanceClient:readyBinance?.client||null,address:env.WALLET_ADDRESS,fetch:fetcher,now:clock(),cached:transfers,connection:transferScope,force:true});
+    if(unexpected&&transfers.checked_ms<now)transfers=await readInternalTransfers({okxClient:client,binanceClient:readyBinance?.client||null,binanceExpected:walletConfigured,address:env.WALLET_ADDRESS,fetch:fetcher,now:clock(),cached:transfers,connection:transferScope,force:true});
     const sampled=[...prior];if(point){if(!sampled.length||clock()-Date.parse(sampled.at(-1).timestamp)>=60000)sampled.push(point);else sampled[sampled.length-1]=point;}
     const reconciled=reconcileInternalTransfers(sampled,transfers.transfers||[],transferTrades);
     const corrected=point?reconciled.history.findLast(p=>p.timestamp===point.timestamp):null;

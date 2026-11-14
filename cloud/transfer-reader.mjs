@@ -66,7 +66,7 @@ function normalize(row,venue,address,at){
 }
 function waiting(row,at,reason,status='unknown'){return {id:row.id,venue:row.venue,started_ms:row.started_ms,ended_ms:at+GRACE,amount_btc:row.amount_btc,fee_btc:row.fee_btc,status,reason,verified:false};}
 
-export async function readInternalTransfers({okxClient=null,binanceClient=null,address,fetch:fetcher=globalThis.fetch,now=Date.now,cached=null,connection,force=false}={}){
+export async function readInternalTransfers({okxClient=null,binanceClient=null,binanceExpected=false,address,fetch:fetcher=globalThis.fetch,now=Date.now,cached=null,connection,force=false}={}){
   const at=typeof now==='function'?now():now;
   if(!integer(at)||typeof connection!=='string'||!connection||connection.length>256||!ADDRESS.test(address||''))fail('configuration_invalid');
   const prior=cached?.version===1&&cached.connection===connection?cached:null;
@@ -81,7 +81,7 @@ export async function readInternalTransfers({okxClient=null,binanceClient=null,a
   const issue=(venue,reason)=>{stale=true;venues[venue]={status:'stale',reason};};
   await Promise.all(['okx','binance'].map(async venue=>{
     const client=clients[venue];if(!client){
-      if(previous.some(row=>row.venue===venue)||previousAwaiting.some(row=>row.venue===venue))issue(venue,'client_unavailable');else venues[venue]={status:'not_connected'};return;
+      if(venue==='binance'&&binanceExpected||previous.some(row=>row.venue===venue)||previousAwaiting.some(row=>row.venue===venue))issue(venue,'client_unavailable');else venues[venue]={status:'not_connected'};return;
     }
     try{
       const rows=await timed(()=>client.get(venue==='okx'?'/api/v5/asset/withdrawal-history':'/sapi/v1/capital/withdraw/history',venue==='okx'?{ccy:'BTC',type:4,limit:100}:{coin:'BTC',startTime:at-WINDOW,endTime:at,limit:1000,recvWindow:5000}));
