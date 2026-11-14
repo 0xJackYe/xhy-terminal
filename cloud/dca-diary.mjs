@@ -8,7 +8,7 @@ import {D,dec,txt,beijingDate,rateFor} from './cost-book.mjs';
 // number of fills. Sales are not purchases and are left out.
 export const DCA_DIARY_START='2024-12-14';
 export const DCA_FIELDS=['date','btc','usdt','buys'];
-const BUY_PRICE_BUCKET_USDT=new D(5000);
+const BUY_PRICE_BUCKET_USDT=new D(2000);
 
 export function dcaDiary(rows,{rates={},start=DCA_DIARY_START,coverageStartMs=null}={}){
   const days=new Map(),priceBins=new Map();let pricedBTC=new D(0),unpricedBTC=new D(0);

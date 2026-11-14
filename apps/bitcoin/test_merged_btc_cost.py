@@ -253,9 +253,9 @@ class MergedCostTests(unittest.TestCase):
         self.assertEqual(display[0]['original_price'], '64000')
         self.assertEqual(original['price'], '64000')
         self.assertEqual(original['quote_ccy'], 'USDC')
-        self.assertEqual(dca_diary(display)['buy_price_distribution'], {'bucket_usdt': '5000',
+        self.assertEqual(dca_diary(display)['buy_price_distribution'], {'bucket_usdt': '2000',
                          'priced_btc': '0.000999', 'unpriced_btc': '0',
-                         'bins': [{'from': '65000', 'to': '70000', 'btc': '0.000999'}]})
+                         'bins': [{'from': '64000', 'to': '66000', 'btc': '0.000999'}]})
 
     def test_missing_quote_conversion_is_unknown_not_zero(self):
         self.factory.rows = [event(currency='USDC')]

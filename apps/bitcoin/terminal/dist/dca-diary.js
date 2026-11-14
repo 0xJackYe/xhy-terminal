@@ -65,15 +65,15 @@
     return {btc:value.btc,usdt:value.usdt,average_buy_price:value.usdt === null ? null : value.average_buy_price,buys:value.buys,days:value.days};
   }
   function priceDistribution(value) {
-    if(!value||value.bucket_usdt!=='5000'||!decimalAmount(value.priced_btc)||!decimalAmount(value.unpriced_btc)||!Array.isArray(value.bins)||value.bins.length>20000)return null;
+    if(!value||value.bucket_usdt!=='2000'||!decimalAmount(value.priced_btc)||!decimalAmount(value.unpriced_btc)||!Array.isArray(value.bins)||value.bins.length>20000)return null;
     const bins=[];let previous=-1;
     for(const row of value.bins){
       if(!row||typeof row.from!=='string'||typeof row.to!=='string'||!/^\d{1,12}$/.test(row.from)||!/^\d{1,12}$/.test(row.to)||!decimalAmount(row.btc)||!/[1-9]/.test(row.btc))return null;
       const from=Number(row.from),to=Number(row.to);
-      if(from<=previous||from%5000!==0||to-from!==5000)return null;
+      if(from<=previous||from%2000!==0||to-from!==2000)return null;
       bins.push({from:row.from,to:row.to,btc:row.btc});previous=from;
     }
-    return {bucket_usdt:'5000',priced_btc:value.priced_btc,unpriced_btc:value.unpriced_btc,bins};
+    return {bucket_usdt:'2000',priced_btc:value.priced_btc,unpriced_btc:value.unpriced_btc,bins};
   }
 
   // The server's view, checked field by field; anything malformed is dropped

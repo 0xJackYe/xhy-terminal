@@ -3,7 +3,7 @@ const assert=require('node:assert/strict');
 const api=require('./terminal/dist/dca-indicators.js');
 const candles=[{time:'2026-11-10'},{time:'2026-11-11'},{time:'2026-11-12'}];
 const buys=new Map([['2026-11-10',{btc:'0.00031335633'}],['2026-11-12',{btc:'0.00002681316'}]]);
-const distribution={bucket_usdt:'5000',priced_btc:'0.009',unpriced_btc:'0.001',bins:[{from:'60000',to:'65000',btc:'0.006'},{from:'65000',to:'70000',btc:'0.003'}]};
+const distribution={bucket_usdt:'2000',priced_btc:'0.009',unpriced_btc:'0.001',bins:[{from:'60000',to:'62000',btc:'0.006'},{from:'62000',to:'64000',btc:'0.003'}]};
 function harness({mutateInput=false}={}){
   let logical={from:12,to:40},offset=0;const added=[],removed=[],attached=[],detached=[],paneHeights=[300],rangeCalls=[];
   const panes=[{getHeight:()=>paneHeights[0],setHeight:value=>{paneHeights[0]=value;}}];
@@ -25,8 +25,8 @@ check('daily bars use personal net BTC and preserve zero-buy calendar days',()=>
   invalid.set('2020-01-01',{btc:'10'});assert.equal(api.dailyRows(invalid,[...candles,candles[0],{time:'2026-02-30'}]).length,3,'no extra dates, invalid dates or duplicate candles');
 });
 check('price buckets retain their original precision and reject malformed or overlapping data',()=>{
-  const rows=api.profileRows(distribution);assert.equal(rows[0].btc,'0.006');assert.equal(rows[0].low,60000);assert.equal(rows[1].id,'buy-profile-65000');
-  for(const bins of [[{from:'60000',to:'60000',btc:'1'}],[{from:'60000',to:'65000',btc:'-1'}],[{from:'60000',to:'65000',btc:'NaN'}],[{from:'60000',to:'65000',btc:'1'},{from:'64000',to:'70000',btc:'1'}]])assert.deepEqual(api.profileRows({bins}),[]);
+  const rows=api.profileRows(distribution);assert.equal(rows[0].btc,'0.006');assert.equal(rows[0].low,60000);assert.equal(rows[1].id,'buy-profile-62000');
+  for(const bins of [[{from:'60000',to:'60000',btc:'1'}],[{from:'60000',to:'62000',btc:'-1'}],[{from:'60000',to:'62000',btc:'NaN'}],[{from:'60000',to:'62000',btc:'1'},{from:'61000',to:'64000',btc:'1'}]])assert.deepEqual(api.profileRows({bins}),[]);
   assert.deepEqual(api.profileRows(null),[]);assert.deepEqual(api.profileRows({bins:[]}),[]);
 });
 check('indicators are dormant until toggled and preserve inspected time ranges',()=>{
@@ -39,18 +39,18 @@ check('indicators are dormant until toggled and preserve inspected time ranges',
 });
 check('horizontal bucket lengths represent BTC and stay anchored to the native price scale',()=>{
   const h=harness();h.controller.update({buys,candles,distribution});h.controller.setProfileVisible(true);const profile=h.attached[0];
-  assert.equal(profile.items.length,2);assert.equal(profile.items[0].x,0);assert.equal(profile.items[0].width,110);assert.equal(profile.items[1].width,55);assert.equal(profile.items[0].y,150);assert.equal(profile.items[0].height,49);
-  assert.equal(profile.paneViews()[0].zOrder(),'bottom');assert.equal(profile.hitTest(20,170).externalId,'buy-profile-60000');assert.equal(profile.hitTest(200,170),null);assert.equal(typeof profile.autoscaleInfo,'undefined','profile never forces the candle price range');
-  h.shift(40);profile.updateAllViews();assert.equal(profile.items[0].y,190);assert.equal(profile.items[0].width,110,'panning does not renormalize buy quantities');
-  const info=h.controller.getProfileBin('buy-profile-60000');assert.deepEqual(info,{from:'60000',to:'65000',btc:'0.006'});info.btc='999';assert.equal(h.controller.getProfileBin('buy-profile-60000').btc,'0.006');
+  assert.equal(profile.items.length,2);assert.equal(profile.items[0].x,0);assert.equal(profile.items[0].width,110);assert.equal(profile.items[1].width,55);assert.equal(profile.items[0].y,180);assert.equal(profile.items[0].height,19);assert.equal(profile.items[1].y,160);assert.equal(profile.items[1].height,19);
+  assert.equal(profile.paneViews()[0].zOrder(),'bottom');assert.equal(profile.hitTest(20,190).externalId,'buy-profile-60000');assert.equal(profile.hitTest(20,170).externalId,'buy-profile-62000');assert.equal(profile.hitTest(200,190),null);assert.equal(typeof profile.autoscaleInfo,'undefined','profile never forces the candle price range');
+  h.shift(40);profile.updateAllViews();assert.equal(profile.items[0].y,220);assert.equal(profile.items[0].width,110,'panning does not renormalize buy quantities');
+  const info=h.controller.getProfileBin('buy-profile-60000');assert.deepEqual(info,{from:'60000',to:'62000',btc:'0.006'});info.btc='999';assert.equal(h.controller.getProfileBin('buy-profile-60000').btc,'0.006');
   h.controller.destroy();
 });
 check('profile rendering clips offscreen bins and draws a translucent narrow overlay',()=>{
-  const h=harness();h.controller.update({buys,candles,distribution:{bins:[...distribution.bins,{from:'90000',to:'95000',btc:'.001'}]}});h.controller.setProfileVisible(true);
+  const h=harness();h.controller.update({buys,candles,distribution:{bins:[...distribution.bins,{from:'90000',to:'92000',btc:'.001'}]}});h.controller.setProfileVisible(true);
   // The backend serialises a leading zero; malformed decimals are never drawn.
   assert.equal(h.attached[0].items.length,0);
-  h.controller.update({buys,candles,distribution:{bins:[...distribution.bins,{from:'90000',to:'95000',btc:'0.001'}]}});const profile=h.attached[0];assert.equal(profile.items.length,2);
-  h.shift(-170);profile.updateAllViews();assert.equal(profile.items.length,1);assert.equal(profile.items[0].y,0);assert.equal(profile.items[0].height,29);
+  h.controller.update({buys,candles,distribution:{bins:[...distribution.bins,{from:'90000',to:'92000',btc:'0.001'}]}});const profile=h.attached[0];assert.equal(profile.items.length,2);
+  h.shift(-190);profile.updateAllViews();assert.equal(profile.items.length,1);assert.equal(profile.items[0].y,0);assert.equal(profile.items[0].height,9);
   const paint=[],ctx={globalAlpha:1,save(){this.savedAlpha=this.globalAlpha;},restore(){this.globalAlpha=this.savedAlpha;},fillRect(x,y,width,height){paint.push({x,y,width,height,alpha:this.globalAlpha,color:this.fillStyle});}};
   profile.draw({useMediaCoordinateSpace:fn=>fn({context:ctx})});assert.ok(paint.every(row=>row.width<=110&&row.x>=0&&row.y>=0&&row.alpha<1));assert.equal(ctx.globalAlpha,1);
   h.controller.destroy();

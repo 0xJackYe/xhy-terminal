@@ -68,10 +68,10 @@ async function check(name, fn) { await fn(); checks++; console.log('OK ' + name)
     assert.deepEqual(reordered.days.get(D('2025-01-01')), { btc: 100000, usdt: null, buys: 1 });
   });
   await check('exact personal price bins are validated separately from daily averages',()=>{
-    const distribution={bucket_usdt:'5000',priced_btc:'0.000100000001',unpriced_btc:'0.00002',bins:[{from:'60000',to:'65000',btc:'0.000100000001'}]};
+    const distribution={bucket_usdt:'2000',priced_btc:'0.000100000001',unpriced_btc:'0.00002',bins:[{from:'60000',to:'62000',btc:'0.000100000001'}]};
     assert.deepEqual(api.normalize({...DIARY,buy_price_distribution:distribution}).buyPriceDistribution,distribution);
     assert.equal(api.normalize(DIARY).buyPriceDistribution,null);
-    for(const bad of [{...distribution,bucket_usdt:'1000'},{...distribution,bins:[{from:'60000',to:'66000',btc:'1'}]},{...distribution,bins:[{from:'60000',to:'65000',btc:'-1'}]},{...distribution,bins:[...distribution.bins,...distribution.bins]},{...distribution,unpriced_btc:null}])assert.equal(api.priceDistribution(bad),null);
+    for(const bad of [{...distribution,bucket_usdt:'5000'},{...distribution,bucket_usdt:'1000'},{...distribution,bins:[{from:'60000',to:'63000',btc:'1'}]},{...distribution,bins:[{from:'60000',to:'62000',btc:'-1'}]},{...distribution,bins:[...distribution.bins,...distribution.bins]},{...distribution,unpriced_btc:null}])assert.equal(api.priceDistribution(bad),null);
   });
 
   await check('six orange levels measure what went in against the usual daily buy, so bigger days keep getting deeper', () => {

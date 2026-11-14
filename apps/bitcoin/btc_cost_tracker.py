@@ -253,7 +253,7 @@ def daily_progress(records, now_ms):
 DCA_DIARY_START = '2024-12-14'
 DCA_FIELDS = ['date', 'btc', 'usdt', 'buys']
 SATOSHI, CENT = Decimal('0.00000001'), Decimal('0.01')
-BUY_PRICE_BUCKET_USDT = Decimal(5000)
+BUY_PRICE_BUCKET_USDT = Decimal(2000)
 
 
 def dca_diary(records, coverage_start_ms=None, start=DCA_DIARY_START):
