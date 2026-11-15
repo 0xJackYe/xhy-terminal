@@ -18,6 +18,7 @@
   .goal{margin:0 34px 30px;padding:20px 23px 18px;background:#f1ede3;border:1px solid #e5dfd2;border-radius:7px}.goal-heading{display:flex;align-items:baseline;justify-content:space-between;gap:15px}.goal-heading h2{margin:0;font:400 20px var(--serif);letter-spacing:-.01em}.goal-heading .goal-percent{font:400 20px var(--serif);color:var(--accent)}.goal-track{height:7px;background:#ded7c8;border-radius:20px;margin:17px 0 13px;overflow:hidden}.goal-fill{height:100%;width:0;background:var(--accent);border-radius:20px;transition:width .45s ease}.goal-detail{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:10px;color:var(--muted)}.goal-detail strong{font:11px var(--mono);color:#645b4e;font-weight:400}.goal-detail .goal-remaining strong{color:#a35f45}@media(max-width:600px){.goal{margin:0 21px 24px;padding:18px 17px}.goal-heading h2,.goal-heading .goal-percent{font-size:18px}.goal-detail{font-size:9px;gap:7px}.goal-detail strong{font-size:10px}}@media(prefers-reduced-motion:reduce){.goal-fill{transition:none}}
   .pnl-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}.pnl-select{max-width:132px;padding:5px 22px 5px 8px;border:1px solid #ded5c6;border-radius:5px;color:#77634e;background:#f3eee4;font:11px var(--sans);cursor:pointer}.pnl-select:focus-visible{outline:2px solid var(--accent);outline-offset:3px}.pnl-dates{font-size:9px!important;color:#958b7d!important;margin-top:4px}.pnl-box strong{white-space:nowrap}@media(max-width:900px){.pnl-box{flex-wrap:wrap}.pnl-heading{min-width:210px}.pnl-box .pnl-dates{width:100%;margin:0}}@media(max-width:600px){.pnl-heading{width:100%;min-width:0}.pnl-select{max-width:none}.pnl-box .pnl-dates{margin-top:-4px}}
   .goal-track{position:relative}.goal-tick{position:absolute;top:0;bottom:0;width:2px;background:#fbfaf6b8;transform:translateX(-1px)}.goal-tick:last-child{left:auto!important;right:0;transform:none}.milestones{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;list-style:none;padding:0;margin:19px 0 0}.milestone{min-width:0;padding:12px 13px;border:1px solid #dfd8cb;border-radius:5px;background:#f7f4ec;display:flex;flex-direction:column;gap:7px}.milestone-value{font:400 17px var(--serif);letter-spacing:-.01em;color:#756d60}.milestone-state{display:flex;align-items:center;gap:6px;font-size:10px;color:#979083}.milestone-icon{font:11px var(--sans);width:12px;display:inline-block;text-align:center}.milestone[data-state="next"]{border-color:#c49376;background:#f8eee3}.milestone[data-state="next"] .milestone-value,.milestone[data-state="next"] .milestone-state{color:#a45e42}.milestone[data-state="achieved"]{background:#eef0e5;border-color:#c9d1ba}.milestone[data-state="achieved"] .milestone-value,.milestone[data-state="achieved"] .milestone-state{color:#5c7455}.milestone-next{display:flex;justify-content:space-between;align-items:baseline;gap:8px 16px;flex-wrap:wrap;margin-top:14px;padding-top:13px;border-top:1px solid #e0d8c9;font-size:11px;color:#82745f}.milestone-next strong{font:12px var(--mono);font-weight:400;color:#a45e42}.milestone-next.complete strong{color:#5c7455}@media(max-width:600px){.milestones{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:16px}.milestone{padding:10px 12px;gap:5px}.milestone-value{font-size:17px}.milestone-next{font-size:10px;gap:6px}.milestone-next strong{font-size:11px}}
+  .pnl-values{display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-width:0;margin:10px 0 8px}.pnl-box .pnl-values strong{margin:0;white-space:normal;overflow-wrap:anywhere}.pnl-box .pnl-secondary{display:block;font:500 18px var(--mono);line-height:1.4;overflow-wrap:anywhere}@media(max-width:900px){.pnl-values{margin:0}.pnl-box .pnl-secondary{font-size:16px}}
   /* The local terminal provides the outer page and navigation. */
   html,body{min-height:0;background:transparent}main{width:100%;margin:0}
   .wallet-notes{padding:14px 34px 18px;border-top:1px solid var(--line);font-size:10px;color:var(--muted);line-height:1.8}
@@ -35,7 +36,7 @@
     </header>
     <div class="hero">
       <div><div class="label">地址总市值 <span id="total-currency">/ CNY</span></div><h2 id="total-usd">—</h2><div class="btc-total" id="total-btc">— <span>BTC · 已确认</span></div></div>
-      <div class="pnl-box" id="pnl-box"><div class="pnl-heading"><div class="label" id="pnl-label">今日盈亏</div><select class="pnl-select" id="pnl-period" aria-label="盈亏时间范围"><option value="today">今日</option><option value="7">近一周</option><option value="30">近一个月</option><option value="90">近三个月</option></select></div><strong id="daily-pnl" aria-live="polite">—</strong><small id="pnl-note">剔除转账 · 含汇率变动</small><small class="pnl-dates" id="pnl-dates"></small></div>
+      <div class="pnl-box" id="pnl-box"><div class="pnl-heading"><div class="label" id="pnl-label">今日盈亏</div><select class="pnl-select" id="pnl-period" aria-label="盈亏时间范围"><option value="today">今日</option><option value="7">近一周</option><option value="30">近一个月</option><option value="90">近三个月</option></select></div><div class="pnl-values" aria-live="polite"><strong id="daily-pnl" aria-label="美元盈亏">—</strong><span id="daily-pnl-cny" class="pnl-secondary" aria-label="人民币盈亏">—</span></div><small id="pnl-note">剔除转账 · 人民币含汇率变动</small><small class="pnl-dates" id="pnl-dates"></small></div>
       <div class="quote-box"><div class="label" id="quote-currency">BTC / CNY</div><strong id="quote-price">—</strong><small id="quote-time">等待行情</small><small class="fx-caption" id="fx-caption"></small></div>
     </div>
     <div class="address-row"><span class="address-label">地址</span><a id="address-link" target="_blank" rel="noopener noreferrer">—</a><button class="copy" id="copy" aria-label="复制比特币地址"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="7" y="7" width="9" height="10" rx="1"/><path d="M12 7V3H3v10h4"/></svg></button></div>
@@ -71,7 +72,9 @@
     setItem(key, value) { if (!privateEmbed) localStorage.setItem(key, value); }
   };
   const $ = id => document.getElementById(id);
-  const money = value => value == null || !Number.isFinite(value) ? '—' : new Intl.NumberFormat(fiat==='CNY'?'zh-CN':'en-US',{style:'currency',currency:fiat,minimumFractionDigits:2,maximumFractionDigits:2}).format(value);
+  const money = (value,currency=fiat) => value == null || !Number.isFinite(value) ? '—' : new Intl.NumberFormat(currency==='CNY'?'zh-CN':'en-US',{style:'currency',currency,minimumFractionDigits:2,maximumFractionDigits:2}).format(value);
+  const pnlTone=value=>value==null||Math.abs(value)<.005?'':value<0?'negative':'positive';
+  const pnlMoney=(value,currency)=>value==null?'—':(Math.abs(value)<.005?'':value<0?'−':'+')+money(Math.abs(value),currency);
   const btc = sats => (sats / 1e8).toFixed(8);
   const date = seconds => new Date(seconds * 1000).toISOString().slice(0,10);
   const time = seconds => new Date(seconds * 1000).toISOString().replace('T',' ').slice(0,16);
@@ -88,7 +91,7 @@
     history = buildHistory(data, ADDRESS);
     const latest = history.points.at(-1);
     $('total-currency').textContent = '/ '+fiat;
-    $('quote-currency').textContent = 'BTC / '+fiat;
+    $('quote-currency').textContent = 'BTC / USD';
     $('total-usd').textContent = money(converted(latest.value,history.asOf));
     $('total-btc').innerHTML = btc(history.balanceSats)+' <span>BTC · 已确认</span>';
     const goalSats=100000000,completed=Math.min(100,history.balanceSats/goalSats*100),remaining=Math.max(0,goalSats-history.balanceSats);
@@ -108,15 +111,19 @@
     }).join('');
     $('milestone-next').className='milestone-next'+(nextMilestone?'':' complete');
     $('milestone-next').innerHTML=nextMilestone?'<span>下一阶段 · '+nextMilestone.label+' BTC</span><strong>还差 '+btc(nextMilestone.sats-history.balanceSats)+' BTC</strong>':'<span>四个阶段全部达标</span><strong>1 BTC 目标已达成 ✓</strong>';
-    $('quote-price').textContent = money(converted(latest.price,history.asOf));
+    $('quote-price').textContent = money(latest.price,'USD');
     const fx=fxRateAt(data.fx?.rates,history.asOf);
     $('fx-caption').textContent=fiat==='CNY'?(fx?'1 USD = '+fx.rate.toFixed(4)+' CNY · '+fx.date.slice(5):'汇率暂不可用'):'';
-    const pnl=periodProfit(data,fiat,pnlPeriod);
+    const usdPnl=periodProfit(data,'USD',pnlPeriod),cnyPnl=periodProfit(data,'CNY',pnlPeriod);
     $('pnl-label').textContent=pnlLabels[pnlPeriod]+'盈亏';
     $('pnl-period').value=pnlPeriod;
-    $('daily-pnl').textContent=pnl.value==null?'—':(pnl.value>=0?'+':'−')+money(Math.abs(pnl.value));
-    $('daily-pnl').className=pnl.value==null?'':pnl.value>=0?'positive':'negative';
-    $('pnl-note').textContent=pnl.value==null?pnl.reason:'剔除转账'+(fiat==='CNY'?' · 含汇率变动':'');
+    $('daily-pnl').textContent=pnlMoney(usdPnl.value,'USD');
+    $('daily-pnl').className=pnlTone(usdPnl.value);
+    $('daily-pnl-cny').textContent=pnlMoney(cnyPnl.value,'CNY');
+    $('daily-pnl-cny').className='pnl-secondary'+(pnlTone(cnyPnl.value)?' '+pnlTone(cnyPnl.value):'');
+    const pnlMissing=[usdPnl.value==null?'美元：'+usdPnl.reason:'',cnyPnl.value==null?'人民币：'+cnyPnl.reason:''].filter(Boolean);
+    $('pnl-note').textContent=pnlMissing.length?pnlMissing.join('；'):'剔除转账 · 人民币含汇率变动';
+    const pnl=usdPnl.value!=null?usdPnl:cnyPnl;
     $('pnl-dates').textContent=pnl.value==null?'':beijingTime(pnl.start).slice(5)+' — '+beijingTime(pnl.end).slice(5)+' · 北京时间';
     const oldQuote = !latest.priceTime || Date.now()/1000-latest.priceTime > 1800;
     $('quote-time').textContent = latest.priceTime ? time(latest.priceTime)+' UTC'+(oldQuote?' · 非最新':'') : '行情暂不可用';

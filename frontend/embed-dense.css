@@ -98,6 +98,9 @@
 :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #walletPage :is(.combined-lifetime-metrics > div:has(#combinedSpotPrice), .combined-sources:empty, #combinedGoal:not(:has(.combined-goal-track))) { display: none !important; }
 
 /* Cards, as on the overview. */
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #walletPage .combined-pnl > .combined-fiat-secondary { display: block !important; grid-column: 1 / -1; margin-top: 0; font-size: 12px; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #walletPage .combined-lifetime-metrics dd:has(.combined-fiat-secondary) { white-space: normal !important; }
+:root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #walletPage .combined-fiat-secondary { display: block; font-size: 12px !important; line-height: 1.4; letter-spacing: 0; }
 :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #walletPage #combinedWalletPanel[data-read-only-backup="true"] #combinedMessage:not([hidden]) { display: block !important; color: var(--xhy-text) !important; background: var(--xhy-soft) !important; border-left: 3px solid var(--xhy-muted); padding: 8px 12px; margin: 0 0 12px; font-size: 12px; line-height: 1.65; }
 :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #walletPage :is(#combinedWalletPanel, #cryptoPortfolioPanel, #dcaDiaryPanel, #btcCostPanel) { min-width: 0; margin: 0 !important; padding: 14px 16px !important; border: 1px solid var(--xhy-line) !important; border-radius: 16px !important; background: var(--xhy-panel) !important; box-shadow: 0 1px 2px rgb(25 24 22 / .04), 0 8px 24px -12px rgb(25 24 22 / .10) !important; }
 :root[data-xhy-embedded="true"][data-xhy-surface="btc"] body #walletPage #dcaDiaryPanel { padding-bottom: 12px !important; border-bottom: 0 !important; border-radius: 16px 16px 0 0 !important; box-shadow: none !important; }

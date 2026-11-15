@@ -41,6 +41,17 @@
     const sign = negative ? '−' : signed && /[1-9]/.test(magnitude) ? '+' : '';
     return sign + (mode === 'usd' ? '$' : '¥') + magnitude;
   }
+  // Display conversion only: retain the USDT ledger and its existing
+  // approximate USD parity; apply the snapshot's USD/CNY rate exactly.
+  function profitCny(value, rate) {
+    const amount=decimal(value),fx=decimal(rate);
+    if(!amount||!fx||fx.negative||!/[1-9]/.test(fx.whole+fx.fraction))return null;
+    const scale=amount.fraction.length+fx.fraction.length;
+    const product=(BigInt(amount.whole+amount.fraction)*BigInt(fx.whole+fx.fraction)).toString().padStart(scale+1,'0');
+    const fraction=scale?product.slice(-scale).replace(/0+$/,''):'';
+    const result=(amount.negative&&/[1-9]/.test(product)?'-':'')+(scale?product.slice(0,-scale):product)+(fraction?'.'+fraction:'');
+    return decimal(result)?result:null;
+  }
   function timestamp(value) {
     const time = typeof value === 'string' ? Date.parse(value) : finite(value) ? value : NaN;
     return finite(time) && time > 0 && time <= 8640000000000000 ? time : null;
@@ -185,7 +196,7 @@
       annualYears(portfolioNote?{...portfolio,reason:'逐年数据尚未完成核算。'}:portfolio)+
       (assumptions.length?'<ul class="combined-lifetime-assumptions">'+assumptions.map(value=>'<li>'+escape(value.slice(0,600))+'</li>').join('')+'</ul>':'');
   }
-  const TOTAL_PROFIT='<div id="combinedTotalProfitCell" class="combined-total-profit"><dt>累计盈亏 · USDT</dt><dd id="combinedTotalProfit">—</dd><small id="combinedTotalProfitNote">正在核算</small></div>';
+  const TOTAL_PROFIT='<div id="combinedTotalProfitCell" class="combined-total-profit"><dt>累计盈亏</dt><dd><span id="combinedTotalProfit">—</span><span id="combinedTotalProfitCny" class="combined-fiat-secondary">—</span></dd><small id="combinedTotalProfitNote">正在核算</small></div>';
   const ANNUAL_METRICS='<div class="combined-annual-metric"><dt>BTC 平均年化</dt><dd id="combinedBtcAnnualized">—</dd><small id="combinedBtcAnnualizedNote">正在核算</small></div><div class="combined-annual-metric"><dt>总加密资产平均年化</dt><dd id="combinedPortfolioAnnualized">—</dd><small id="combinedPortfolioAnnualizedNote">正在核算</small></div>';
   const ANNUAL_DETAILS='<details class="combined-lifetime-details combined-annual-details"><summary><span>逐年回测</span><span id="combinedAnnualizedAt">按投入日期加权</span></summary><div id="combinedAnnualizedDetails"></div></details>';
   function lifetimeDetails(data) {
@@ -218,9 +229,9 @@
   }
   const RECONCILE_MARKUP='<dialog id="combinedReconcileDialog" class="combined-reconcile-dialog" aria-labelledby="combinedReconcileTitle"><div class="combined-reconcile-head"><h3 id="combinedReconcileTitle">数量与均价核对</h3><button id="combinedReconcileClose" type="button" aria-label="关闭数量与均价核对">×</button></div><div id="combinedReconcileDetails"></div></dialog>';
   const MARKUP = '<div class="combined-heading"><div><h2 id="combinedTitle">比特币总持有</h2><button id="combinedReconcileOpen" class="combined-reconcile-open" type="button" aria-haspopup="dialog">核对</button><span id="combinedState" class="combined-state" role="status">正在汇总</span></div><button id="combinedRefresh" type="button" class="text-button">刷新</button></div>'+
-    '<p id="combinedMessage" class="combined-message" role="status" hidden></p><div class="combined-overview"><div class="combined-total"><span id="combinedScope">欧易 + 离线钱包</span><strong id="combinedBTC">—</strong><small>BTC</small><p><span id="combinedCNY">—</span><span id="combinedUSD">—</span></p></div><div id="combinedSources" class="combined-sources"></div><div class="combined-pnl"><label for="combinedPnlPeriod">价格变动盈亏</label><select id="combinedPnlPeriod" aria-label="合计盈亏时间范围"><option value="today">今日</option><option value="week">近一周</option><option value="month">近一个月</option><option value="days90">近三个月</option></select><strong id="combinedPnl">—</strong><small id="combinedPnlNote">剔除转账 · 含汇率变动</small><small id="combinedPnlDates"></small></div></div>'+
-    '<section id="combinedLifetime" class="combined-lifetime" aria-labelledby="combinedLifetimeTitle"><div class="combined-lifetime-heading"><h3 id="combinedLifetimeTitle">长期持仓浮盈</h3><span class="combined-lifetime-method">USDT · 移动加权平均估算</span><span id="combinedLifetimeState" class="combined-lifetime-state" role="status">正在核算</span></div><dl class="combined-lifetime-metrics">'+TOTAL_PROFIT+'<div class="combined-lifetime-profit"><dt>持仓浮盈</dt><dd id="combinedUnrealizedNet">—</dd></div><div><dt>收益率</dt><dd id="combinedUnrealizedReturn">—</dd></div><div><dt>持仓摊薄成本价</dt><dd id="combinedAverageCost">—</dd></div><div><dt>当前价格</dt><dd id="combinedSpotPrice">—</dd></div>'+ANNUAL_METRICS+'</dl>'+ANNUAL_DETAILS+'<details class="combined-lifetime-details"><summary><span>计算说明</span><span id="combinedLifetimeCoverage"></span></summary><div id="combinedLifetimeDetails"></div></details></section>'+
-    '<div id="combinedGoal" class="combined-goal"></div><div class="combined-chart-head"><div><h3>合计余额走势</h3><div class="combined-day-pnl"><span>今日当前盈亏</span><strong id="combinedDayPnl">—</strong><small id="combinedDayPnlAt"></small></div></div><div class="combined-controls"><div role="group" aria-label="合计曲线计价"><button id="combinedModeCny" type="button" aria-pressed="true">人民币 CNY</button><button id="combinedModeUsd" type="button" aria-pressed="false">美元 USD</button><button id="combinedModeBtc" type="button" aria-pressed="false">比特币 BTC</button></div><div role="group" aria-label="合计曲线时间范围"><button id="combinedRangeToday" type="button" aria-pressed="false">今日</button><button id="combinedRange30" type="button" aria-pressed="false">30D</button><button id="combinedRange90" type="button" aria-pressed="false">90D</button><button id="combinedRangeAll" type="button" aria-pressed="true">全部</button></div></div></div>'+
+    '<p id="combinedMessage" class="combined-message" role="status" hidden></p><div class="combined-overview"><div class="combined-total"><span id="combinedScope">欧易 + 离线钱包</span><strong id="combinedBTC">—</strong><small>BTC</small><p><span id="combinedCNY">—</span><span id="combinedUSD">—</span></p></div><div id="combinedSources" class="combined-sources"></div><div class="combined-pnl"><label for="combinedPnlPeriod">价格变动盈亏</label><select id="combinedPnlPeriod" aria-label="合计盈亏时间范围"><option value="today">今日</option><option value="week">近一周</option><option value="month">近一个月</option><option value="days90">近三个月</option></select><strong id="combinedPnl">—</strong><span id="combinedPnlCny" class="combined-fiat-secondary">—</span><small id="combinedPnlNote">剔除转账 · 含汇率变动</small><small id="combinedPnlDates"></small></div></div>'+
+    '<section id="combinedLifetime" class="combined-lifetime" aria-labelledby="combinedLifetimeTitle"><div class="combined-lifetime-heading"><h3 id="combinedLifetimeTitle">长期持仓浮盈</h3><span class="combined-lifetime-method">USDT · 移动加权平均估算</span><span id="combinedLifetimeState" class="combined-lifetime-state" role="status">正在核算</span></div><dl class="combined-lifetime-metrics">'+TOTAL_PROFIT+'<div class="combined-lifetime-profit"><dt>持仓浮盈</dt><dd><span id="combinedUnrealizedNet">—</span><span id="combinedUnrealizedCny" class="combined-fiat-secondary">—</span></dd></div><div><dt>收益率</dt><dd id="combinedUnrealizedReturn">—</dd></div><div><dt>持仓摊薄成本价</dt><dd id="combinedAverageCost">—</dd></div><div><dt>当前价格</dt><dd id="combinedSpotPrice">—</dd></div>'+ANNUAL_METRICS+'</dl>'+ANNUAL_DETAILS+'<details class="combined-lifetime-details"><summary><span>计算说明</span><span id="combinedLifetimeCoverage"></span></summary><div id="combinedLifetimeDetails"></div></details></section>'+
+    '<div id="combinedGoal" class="combined-goal"></div><div class="combined-chart-head"><div><h3>合计余额走势</h3><div class="combined-day-pnl"><span>今日当前盈亏</span><strong id="combinedDayPnl">—</strong><span id="combinedDayPnlCny" class="combined-fiat-secondary">—</span><small id="combinedDayPnlAt"></small></div></div><div class="combined-controls"><div role="group" aria-label="合计曲线计价"><button id="combinedModeCny" type="button" aria-pressed="true">人民币 CNY</button><button id="combinedModeUsd" type="button" aria-pressed="false">美元 USD</button><button id="combinedModeBtc" type="button" aria-pressed="false">比特币 BTC</button></div><div role="group" aria-label="合计曲线时间范围"><button id="combinedRangeToday" type="button" aria-pressed="false">今日</button><button id="combinedRange30" type="button" aria-pressed="false">30D</button><button id="combinedRange90" type="button" aria-pressed="false">90D</button><button id="combinedRangeAll" type="button" aria-pressed="true">全部</button></div></div></div>'+
     '<div id="combinedChart" class="combined-chart" tabindex="0" aria-label="合计走势，可用左右方向键查看快照"></div><p id="combinedChartReadout" class="combined-readout" aria-live="polite"></p><div class="combined-footer"><span id="combinedCoverage">等待可核实历史</span><span id="combinedUpdated">北京时间</span></div>';
   function mount(options = {}) {
     const root = options.root || globalThis, document = options.document || root.document, panel = document && document.getElementById('combinedWalletPanel');
@@ -253,16 +264,20 @@
       selected=selected<0?data.length-1:Math.min(selected,data.length-1);
       const point=data[selected];node('combinedChartReadout').textContent=beijing(point.time)+' · '+formatValue(point.exact,mode)+' · 北京时间';
     }
+    function renderProfitPair(primary,secondary,usd,cny){
+      for(const [id,value,unit]of[[primary,usd,'usd'],[secondary,cny,'cny']]){
+        const number=chartNumber(value),element=node(id);
+        element.textContent=money(value,unit,true);
+        element.className=[id===secondary?'combined-fiat-secondary':'',number===null||exact(value,2,true)==='0.00'?'':number<0?'negative':'positive'].filter(Boolean).join(' ');
+      }
+    }
     function renderPnl(){
-      const today=state&&state.pnl&&state.pnl.today,unit=mode==='usd'?'usd':'cny',daily=today&&today[unit],dailyNumber=chartNumber(daily);
-      node('combinedDayPnl').textContent=money(daily,unit,true);
-      node('combinedDayPnl').className=dailyNumber===null?'':dailyNumber<0?'negative':'positive';
+      const today=state&&state.pnl&&state.pnl.today;
+      renderProfitPair('combinedDayPnl','combinedDayPnlCny',today&&today.usd,today&&today.cny);
       node('combinedDayPnlAt').textContent=today&&today.reason?today.reason:today&&timestamp(today.end_at)!==null?'截至 '+beijing(today.end_at)+' · 北京时间':'';
       const period=node('combinedPnlPeriod').value||'today',pnl=state&&state.pnl&&state.pnl[period];
-      const raw=pnl&&pnl[mode],number=chartNumber(raw);
-      node('combinedPnl').textContent=mode==='btc'?'—':money(raw,mode,true);
-      node('combinedPnl').className=mode==='btc'||number===null?'':number<0?'negative':'positive';
-      node('combinedPnlNote').textContent=mode==='btc'?'价差盈亏不以 BTC 计价':pnl&&pnl.reason||'剔除转账 · 含汇率变动';
+      renderProfitPair('combinedPnl','combinedPnlCny',pnl&&pnl.usd,pnl&&pnl.cny);
+      node('combinedPnlNote').textContent=pnl&&pnl.reason||'剔除转账 · 人民币含汇率变动';
       node('combinedPnlDates').textContent=pnl&&timestamp(pnl.start_at)!==null&&timestamp(pnl.end_at)!==null?beijing(pnl.start_at)+' — '+beijing(pnl.end_at)+' · 北京时间':'';
       // The portal hides the note and dates; the value carries them as a tooltip.
       node('combinedPnl').title=[node('combinedPnlNote').textContent,node('combinedPnlDates').textContent].filter(Boolean).join(' · ');
@@ -271,10 +286,12 @@
       const metrics=lifetime&&lifetime.metrics||{},kind=failed||lifetimeFailed?(hasLifetimeMetrics(lifetime)?'stale':'unavailable'):lifetime?lifetime.status:'loading';
       node('combinedLifetimeState').textContent={fresh:'已核对 · 估算',stale:'缓存结果 · 待更新',loading:'正在核算',unavailable:'暂不可用'}[kind];
       node('combinedLifetimeState').className='combined-lifetime-state '+kind;
-      for(const[id,key,format]of[['combinedAverageCost','average_cost','price'],['combinedSpotPrice','price_usdt','price'],['combinedUnrealizedNet','unrealized_net','amount'],['combinedUnrealizedReturn','unrealized_return_pct','percent']]){
+      for(const[id,key,format]of[['combinedAverageCost','average_cost','price'],['combinedSpotPrice','price_usdt','price'],['combinedUnrealizedReturn','unrealized_return_pct','percent']]){
         const value=node(id),number=chartNumber(metrics[key]);value.textContent=format==='price'?exact(metrics[key],2,true):format==='percent'?lifetimePercent(metrics[key]):lifetimeAmount(metrics[key]);
         value.className=format==='price'||number===null||number===0?'':number<0?'negative':'positive';
       }
+      renderProfitPair('combinedUnrealizedNet','combinedUnrealizedCny',metrics.unrealized_net,profitCny(metrics.unrealized_net,state&&state.quotes&&state.quotes.usd_cny));
+      node('combinedUnrealizedNet').title='按 1 USDT ≈ 1 USD 展示；人民币按快照美元兑人民币汇率折算，不改动成本账本。';
       const count=lifetime&&lifetime.buy_count,first=lifetime&&(lifetime.first_buy_at||lifetime.first_trade_at),last=lifetime&&(lifetime.last_buy_at||lifetime.last_trade_at);
       node('combinedLifetimeCoverage').textContent=Number.isSafeInteger(count)&&count>=0?count.toLocaleString('zh-CN')+' 笔净买入'+(timestamp(first)!==null?' · '+beijing(first,false)+(timestamp(last)!==null?' 至 '+beijing(last,false):' 起'):''):kind==='loading'?'读取净买入账本中':kind==='unavailable'?'历史核算暂不可用，稍后自动重试':'';
       node('combinedLifetimeDetails').innerHTML=lifetimeDetails(lifetime);
@@ -292,8 +309,9 @@
         caption.textContent=raw!==null?basis+(cached||entry.status==='stale'?' · 缓存待更新':''):entry&&typeof entry.reason==='string'?entry.reason.slice(0,160):annualizedLoading?'正在核算':key==='portfolio'?'缺少完整历史出入金':'年化暂不可用，稍后重试';
         caption.title=caption.textContent;
       }
-      const total=totalProfit(data&&data.portfolio),profit=node('combinedTotalProfit'),profitNote=node('combinedTotalProfitNote'),profitNumber=total&&chartNumber(total.profit);
-      profit.textContent=total?lifetimeAmount(total.profit):'—';profit.className=!total||profitNumber===0?'':profitNumber<0?'negative':'positive';
+      const total=totalProfit(data&&data.portfolio),profit=node('combinedTotalProfit'),profitNote=node('combinedTotalProfitNote');
+      renderProfitPair('combinedTotalProfit','combinedTotalProfitCny',total&&total.profit,profitCny(total&&total.profit,state&&state.quotes&&state.quotes.usd_cny));
+      profit.title='按 1 USDT ≈ 1 USD 展示；人民币按快照美元兑人民币汇率折算，不改动出入金账本。';
       const pending=cached||(data&&data.portfolio&&data.portfolio.status==='stale')?' · 缓存待更新':'';
       profitNote.textContent=total?(total.percent!==null?'收益率 '+lifetimePercent(total.percent):'已核对投入')+pending:data&&data.portfolio&&typeof data.portfolio.reason==='string'?data.portfolio.reason.slice(0,160):annualizedLoading?'正在核算':'缺少完整历史出入金';
       const parts=total?[total.value?'当前市值 '+exact(total.value,2,true):null,total.withdrawn?'已提出 '+exact(total.withdrawn,2,true):null,total.contributed?'累计投入 '+exact(total.contributed,2,true):null].filter(Boolean):[];
@@ -400,5 +418,5 @@
     function destroy(){disposed=true;sequence++;cancelTimer();if(read)read.controller.abort();closeReconciliation();for(const[target,event,handler]of events)target.removeEventListener(event,handler);for(const listener of lifetimeListeners)notifyLifetime(listener,null);lifetimeListeners.clear();publishedLifetime=null;reconciliationDialog.remove?.();panel.__combinedController=null;}
     const controller={refresh:load,destroy,subscribeLifetime};panel.__combinedController=controller;render();if(active())load();return controller;
   }
-  return {REFRESH_MS,REQUEST_TIMEOUT_MS,MAX_CHART_POINTS,decimal,exact,chartNumber,money,timestamp,beijing,points,geometry,renderChart,goal,renderGoal,renderSources,sourceScope,totalProfit,health,lifetimeAmount,lifetimePercent,validLifetime,lifetimeDetails,reconciliationDetails,validAnnualized,annualValue,annualYears,annualDetails,mount};
+  return {REFRESH_MS,REQUEST_TIMEOUT_MS,MAX_CHART_POINTS,decimal,exact,chartNumber,money,profitCny,timestamp,beijing,points,geometry,renderChart,goal,renderGoal,renderSources,sourceScope,totalProfit,health,lifetimeAmount,lifetimePercent,validLifetime,lifetimeDetails,reconciliationDetails,validAnnualized,annualValue,annualYears,annualDetails,mount};
 });

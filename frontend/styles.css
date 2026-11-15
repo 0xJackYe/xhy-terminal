@@ -189,6 +189,11 @@ html:not([data-view="overview"]) .service-notice { display: none; }
 .stat-grid > div { padding: 8px 11px; border-radius: var(--radius-sm); background: var(--soft); }
 .stat-grid dt { color: var(--muted); font-size: 11.5px; }
 .stat-grid dd { margin: 2px 0 0; font-size: 14px; font-weight: 550; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pnl-money { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 2px; line-height: 1.35; font-variant-numeric: tabular-nums; }
+.stat-grid .pnl-money { display: flex; }
+.pnl-primary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 4px; }
+.pnl-primary small { margin-left: 0; }
+.pnl-secondary { color: var(--muted); font-size: 11.5px; font-weight: 400; white-space: nowrap; }
 .asset-list { display: grid; gap: 9px; }
 .asset-row { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 4px 12px; align-items: baseline; font-size: 12.5px; animation: row-in 420ms var(--ease-out) backwards; animation-delay: calc(var(--d, 0) * 50ms); }
 .asset-name { display: inline-flex; align-items: baseline; gap: 7px; font-weight: 550; }
@@ -231,7 +236,10 @@ html:not([data-view="overview"]) .service-notice { display: none; }
 .wallet-trend { margin-top: 0; color: var(--accent); }
 .wallet-trend .spark-area { fill: url(#trend-fill); }
 .wallet-trend[data-empty="true"]::after { content: attr(data-empty-text); position: absolute; inset: 14px 0 0; display: grid; place-items: center; border: 1px dashed var(--line-strong); border-radius: var(--radius-sm); color: var(--faint); font-size: 12px; }
-.trend-change strong { margin-left: 6px; color: var(--text); font-size: 12px; font-weight: 600; }
+.wallet-trend-label { flex-wrap: wrap; row-gap: 4px; }
+.trend-change { display: inline-flex; flex-shrink: 0; align-items: baseline; gap: 6px; margin-left: auto; white-space: nowrap; }
+.trend-change .pnl-money { align-items: flex-end; }
+.trend-change strong { color: var(--text); font-size: 12px; font-weight: 600; }
 .trend-change strong.positive { color: var(--positive); }
 .trend-change strong.negative { color: var(--danger); }
 .goal-row { display: grid; grid-template-columns: auto minmax(0,1fr) auto; align-items: center; gap: 12px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
@@ -330,6 +338,7 @@ kbd { display: inline-grid; place-items: center; min-width: 19px; height: 19px; 
 /* Responsive */
 @media (max-width: 1360px) { .today-label { display: none; } }
 @media (max-width: 1180px) {
+  .stat-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
   .header-inner { flex-wrap: wrap; row-gap: 0; }
   .utility { order: 3; flex-basis: 100%; margin: 0; padding: 0 0 8px; justify-content: flex-start; }
   .header-actions { margin-left: auto; }
@@ -530,9 +539,9 @@ html[data-ui="mobile"]:not([data-view="overview"]) main { padding: 0 0 env(safe-
   :root[data-ui="mobile"] :is(.card-alerts, .card-wallet) { flex: 1 1 0; }
 }
 
-/* Short phones: the threshold row and the trend label give way first. */
+/* Short phones keep today's two-currency profit; only the chart label gives way. */
 @media (max-height: 640px) {
-  :root[data-ui="mobile"] .card-alerts :is(.section-label:has(+ .threshold-meter), .threshold-meter, .threshold-list), :root[data-ui="mobile"] .card-wallet .section-label:has(+ .wallet-trend) { display: none !important; }
+  :root[data-ui="mobile"] .card-alerts :is(.section-label:has(+ .threshold-meter), .threshold-meter, .threshold-list), :root[data-ui="mobile"] .card-wallet .wallet-trend-label > span:first-child { display: none !important; }
 }
 
 /* Short computer windows: the asset card's balance line may get thinner. */
