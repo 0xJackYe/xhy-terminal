@@ -97,6 +97,10 @@ async function check(name,fn) { await fn();checks++;console.log('OK '+name); }
   await check('stale daily data cannot masquerade as current day actual purchases',async()=>{
     const data={...SNAPSHOT,today:{...SNAPSHOT.today,date_beijing:'2026-10-25'}};const h=harness({responses:[data]});await h.settle();assert.equal(h.node('btcCostTodaySpent').textContent,'—');assert.match(h.node('btcCostDailyDetail').textContent,/等待今日/);assert.equal(h.node('btcCostProgress').attrs['aria-valuenow'],undefined);assert.equal(h.node('btcCostNetUSDT').textContent,'5,426.82');
   });
+  await check('same-day outage backups never report cached purchases as current daily fills',async()=>{
+    const h=harness({responses:[{...SNAPSHOT,status:'stale',backup:{read_only:true}}]});await h.settle();assert.equal(h.node('btcCostTodaySpent').textContent,'—');assert.equal(h.node('btcCostProgress').attrs['aria-valuenow'],undefined);assert.match(h.node('btcCostDailyDetail').textContent,/等待今日/);assert.equal(h.node('btcCostNetUSDT').textContent,'5,426.82');
+    h.responses.push(SNAPSHOT);await h.tick();assert.equal(h.node('btcCostTodaySpent').textContent,'6.00');assert.equal(h.node('btcCostProgress').attrs['aria-valuenow'],'29.99');
+  });
   await check('first-time loading and unavailable states do not invent historic cost',async()=>{
     const h=harness({responses:[{status:'loading',connection_id:'account-A',refreshing:true,last_success_at:null,plan_daily_usdt:'20',coverage_complete:false,summary:null,today:null,recent_trades:[]}]});await h.settle();assert.equal(h.node('btcCostNetUSDT').textContent,'—');assert.equal(h.node('btcCostTodaySpent').textContent,'—');assert.equal(h.node('btcCostState').textContent,'正在补齐记录');assert.match(h.node('btcCostMessage').textContent,/历史记录补齐/);assert.equal(h.node('btcCostUpdated').textContent,'等待首次同步');
   });

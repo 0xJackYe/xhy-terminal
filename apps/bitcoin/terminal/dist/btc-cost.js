@@ -40,7 +40,7 @@
     return data.getUTCFullYear()+'-'+pad(data.getUTCMonth()+1)+'-'+pad(data.getUTCDate())+(dateOnly ? '' : ' '+pad(data.getUTCHours())+':'+pad(data.getUTCMinutes())+':'+pad(data.getUTCSeconds()));
   }
   function todayDate(now) { return beijing(new Date(now).toISOString(),true); }
-  function currentToday(data, now) { return data && data.today && data.today.date_beijing === todayDate(now) ? data.today : null; }
+  function currentToday(data, now) { return data && !(data.backup && data.backup.read_only === true) && data.today && data.today.date_beijing === todayDate(now) ? data.today : null; }
   function progress(spent, plan) {
     const amount = decimal(spent), target = decimal(plan);
     if (!amount || !target || amount.negative || target.negative) return null;

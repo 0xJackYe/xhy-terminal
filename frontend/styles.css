@@ -559,5 +559,6 @@ html[data-ui="mobile"]:not([data-view="overview"]) main { padding: 0 0 env(safe-
    sync dot in the header shows freshness, and a figure not known yet reads —. */
 :is(#global-notice, .project-hint) { position: absolute !important; width: 1px; height: 1px; margin: -1px; padding: 0 !important; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0 !important; }
 :is(.module-status, .card-note, #wallet-location-note, #alerts-chart-caption, .inline-empty) { display: none !important; }
+#wallet-note:not([hidden]) { display: block !important; color: var(--muted); }
 .section-label:has(+ #alerts-recent > .inline-empty:only-child), #alerts-recent:has(> .inline-empty:only-child) { display: none !important; }
 
