@@ -5,7 +5,7 @@ const fs=require('node:fs');
 const api=require('./terminal/dist/combined-wallet.js');
 const NOW=Date.parse('2026-10-28T04:00:00Z');
 const lifetime={status:'fresh',currency:'USDT',method:'moving_weighted_average',connection_id:'account-a',metrics:{average_cost:'70000',price_usdt:'80000',unrealized_net:'100',unrealized_return_pct:'14.285714'}};
-const snapshot={ok:true,updated_at:new Date(NOW).toISOString(),totals:{btc:'0.01',usd:'800',cny:'5600'},sources:[],history:[],pnl:{},lifetime_pnl:lifetime};
+const snapshot={ok:true,updated_at:new Date(NOW).toISOString(),totals:{btc:'0.01',usd:'800',cny:'5600'},sources:[],history:[],pnl:{},quotes:{usd_cny:'7.2'},lifetime_pnl:lifetime};
 const annual={connection_id:'account-a',as_of:new Date(NOW).toISOString(),btc:{status:'estimated',annualized_return_pct:'12.345',first_buy_at:'2024-12-13T16:07:50Z',first_remaining_buy_at:'2024-12-13T16:07:50Z',cashflow_count:20,years:[{year:2024,start_at:'2024-12-13T16:07:50Z',end_at:'2024-12-31T15:59:59Z',partial_year:true,annualized_return_pct:'5.125',period_return_pct:'0.1',status:'estimated'},{year:2025,start_at:'2024-12-31T16:00:00Z',end_at:'2025-12-31T15:59:59Z',partial_year:false,annualized_return_pct:null,period_return_pct:null,status:'unavailable',reason:'该年年末行情尚未核实'}],assumptions:['卖出按移动平均成本比例减少剩余成本，并保留原投入日期。']},portfolio:{status:'needs_cashflows',annualized_return_pct:null,years:[],reason:'缺少完整历史出入金，暂不能核算'}};
 const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return{promise,resolve,reject};};
 async function settle(){for(let i=0;i<32;i++)await Promise.resolve();}
@@ -18,6 +18,7 @@ function harness(){
   setAttribute(key,value){this.attrs[key]=value;}
   addEventListener(key,fn){(this.listeners[key]??=[]).push(fn);}
   removeEventListener(key,fn){this.listeners[key]=(this.listeners[key]||[]).filter(x=>x!==fn);}
+  async fire(key){for(const fn of this.listeners[key]||[])await fn({preventDefault(){},target:this});await settle();}
  }
  nodes.set('combinedWalletPanel',new Node('combinedWalletPanel'));nodes.set('walletPage',new Node('walletPage'));
  const document=new Node('document');document.hidden=false;document.getElementById=id=>nodes.get(id)||null;
@@ -43,7 +44,7 @@ test('annualized values live within the holding strip and use their own authenti
  const markup=h.node('combinedWalletPanel').innerHTML;
  const strip=markup.slice(markup.indexOf('<section id="combinedLifetime"'),markup.indexOf('</section>'));
  assert.match(strip,/combinedBtcAnnualized/);assert.match(strip,/combinedPortfolioAnnualized/);assert.match(strip,/逐年回测/);
- assert.equal((markup.match(/<section/g)||[]).length,1);assert.equal(h.node('combinedUnrealizedNet').textContent,'+100.00');
+ assert.equal((markup.match(/<section/g)||[]).length,1);assert.equal(h.node('combinedUnrealizedNet').textContent,'+$100.00');assert.equal(h.node('combinedUnrealizedCny').textContent,'+¥720.00');
 });
 test('calendar rows show partial years, preserve missing values and keep unverified periods separate from valid zero',async t=>{
  const h=harness();t.after(()=>h.controller.destroy());await h.settle();
@@ -57,7 +58,7 @@ test('annualized refresh failures retain only same-account cached values without
  const h=harness();t.after(()=>h.controller.destroy());await h.settle();
  h.annualQueue.push(new Error('private-upstream-error'));await h.controller.refresh();
  assert.equal(h.node('combinedBtcAnnualized').textContent,'+12.35%');assert.match(h.node('combinedBtcAnnualizedNote').textContent,/缓存/);
- assert.equal(h.node('combinedUnrealizedNet').textContent,'+100.00');assert.equal(h.node('combinedState').textContent,'已同步 · 只读');assert.equal(h.node('combinedLifetimeState').textContent,'已核对 · 估算');
+ assert.equal(h.node('combinedUnrealizedNet').textContent,'+$100.00');assert.equal(h.node('combinedState').textContent,'已同步 · 只读');assert.equal(h.node('combinedLifetimeState').textContent,'已核对 · 估算');
  assert.doesNotMatch(h.node('combinedAnnualizedDetails').innerHTML,/private-upstream/);
  h.annualQueue.push({...annual,btc:{...annual.btc,annualized_return_pct:'-4.005'}});await h.controller.refresh();assert.equal(h.node('combinedBtcAnnualized').textContent,'−4.01%');assert.doesNotMatch(h.node('combinedBtcAnnualizedNote').textContent,/缓存/);
 });
@@ -93,7 +94,7 @@ test('a missing or mismatched annualized identity never paints or preserves the 
 test('legacy annualized 404, unavailable data and null values cannot fabricate zero or interfere with other wallet data',async t=>{
  const h=harness();t.after(()=>h.controller.destroy());await h.settle();
  h.annualQueue.push({http_status:404,body:{error:'not found'}});h.combinedQueue.push({...snapshot,lifetime_pnl:{...lifetime,connection_id:'account-b'}});await h.controller.refresh();
- assert.equal(h.node('combinedBtcAnnualized').textContent,'—');assert.equal(h.node('combinedUnrealizedNet').textContent,'+100.00');assert.equal(h.node('combinedState').textContent,'已同步 · 只读');
+ assert.equal(h.node('combinedBtcAnnualized').textContent,'—');assert.equal(h.node('combinedUnrealizedNet').textContent,'+$100.00');assert.equal(h.node('combinedState').textContent,'已同步 · 只读');
  h.annualQueue.push({...annual,btc:{status:'unavailable',annualized_return_pct:'0',reason:'缺少剩余持仓'}});await h.controller.refresh();assert.equal(h.node('combinedBtcAnnualized').textContent,'—');
 });
 test('annualized reasons, assumptions and year explanations are escaped, with no executable markup or arbitrary year injection',()=>{
@@ -118,7 +119,8 @@ test('total profit shows realized plus unrealized portfolio result with its sign
  const h=harness();t.after(()=>h.controller.destroy());
  h.annualQueue.push({...structuredClone(annual),portfolio:{status:'estimated',method:'cashflow_xirr',annualized_return_pct:'-8.1',profit_usdt:'-123.45',contributed_usdt:'1000',withdrawn_usdt:'200',market_value_usdt:'676.55',years:[]}});
  await h.settle();
- assert.equal(h.node('combinedTotalProfit').textContent,'−123.45');assert.equal(h.node('combinedTotalProfit').className,'negative');
+ assert.equal(h.node('combinedTotalProfit').textContent,'−$123.45');assert.equal(h.node('combinedTotalProfit').className,'negative');
+ assert.equal(h.node('combinedTotalProfitCny').textContent,'−¥888.84');assert.equal(h.node('combinedTotalProfitCny').className,'combined-fiat-secondary negative');
  assert.equal(h.node('combinedTotalProfitNote').textContent,'收益率 −12.35%');
  assert.equal(h.node('combinedTotalProfitNote').title,'累计盈亏 = 当前市值 676.55 + 已提出 200.00 − 累计投入 1,000.00 USDT');assert.equal(h.node('combinedTotalProfitCell').title,h.node('combinedTotalProfitNote').title);
  assert.deepEqual(api.totalProfit({profit_usdt:'50',contributed_usdt:'0'}),{profit:'50',percent:null,contributed:'0',withdrawn:null,value:null});
@@ -126,7 +128,46 @@ test('total profit shows realized plus unrealized portfolio result with its sign
  const missing=harness();t.after(()=>missing.controller.destroy());
  missing.annualQueue.push({...structuredClone(annual),portfolio:{status:'unavailable',reason:'总资产估值来源尚不完整，暂不计算年化。',years:[]}});
  await missing.settle();
- assert.equal(missing.node('combinedTotalProfit').textContent,'—');assert.equal(missing.node('combinedTotalProfitNote').textContent,'总资产估值来源尚不完整，暂不计算年化。');
+ assert.equal(missing.node('combinedTotalProfit').textContent,'—');assert.equal(missing.node('combinedTotalProfitCny').textContent,'—');assert.equal(missing.node('combinedTotalProfitNote').textContent,'总资产估值来源尚不完整，暂不计算年化。');
+});
+
+test('total profit keeps both fiat values through chart switches and uses refreshed FX and unrounded profits',async t=>{
+ const h=harness();t.after(()=>h.controller.destroy());
+ const portfolio={...annual.portfolio,status:'estimated',profit_usdt:'100.005',contributed_usdt:'1000',years:[]};
+ h.annualQueue.push({...annual,portfolio});await h.settle();
+ assert.equal(h.node('combinedTotalProfit').textContent,'+$100.01');assert.equal(h.node('combinedTotalProfitCny').textContent,'+¥720.04');
+ for(const mode of ['combinedModeUsd','combinedModeBtc','combinedModeCny']){await h.node(mode).fire('click');assert.equal(h.node('combinedTotalProfit').textContent,'+$100.01');assert.equal(h.node('combinedTotalProfitCny').textContent,'+¥720.04');}
+ assert.equal(h.requests.length,2);
+ h.combinedQueue.push({...snapshot,quotes:{usd_cny:'7.123456789'}});h.annualQueue.push({...annual,portfolio:{...portfolio,profit_usdt:'9007199254740993.01'}});await h.controller.refresh();
+ assert.equal(h.node('combinedTotalProfit').textContent,'+$9,007,199,254,740,993.01');assert.equal(h.node('combinedTotalProfitCny').textContent,'+¥64,162,394,681,060,467.09');
+ h.combinedQueue.push({...snapshot,quotes:{usd_cny:'7.125'}});h.annualQueue.push({...annual,portfolio:{...portfolio,profit_usdt:'-12.345'}});await h.controller.refresh();
+ assert.equal(h.node('combinedTotalProfit').textContent,'−$12.35');assert.equal(h.node('combinedTotalProfitCny').textContent,'−¥87.96');assert.equal(h.node('combinedTotalProfitCny').className,'combined-fiat-secondary negative');
+ assert.equal(h.node('combinedTotalProfitNote').textContent,'收益率 −1.23%');
+});
+
+test('total profit never substitutes an invalid FX rate and clears converted values when gains disappear',async t=>{
+ const h=harness();t.after(()=>h.controller.destroy());
+ const portfolio={...annual.portfolio,status:'estimated',profit_usdt:'50',contributed_usdt:'1000'};
+ h.annualQueue.push({...annual,portfolio});await h.settle();assert.equal(h.node('combinedTotalProfitCny').textContent,'+¥360.00');
+ for(const rate of [undefined,null,'0','-7.2','7.2e0',7.2]){
+  h.combinedQueue.push({...snapshot,quotes:rate===undefined?undefined:{usd_cny:rate}});h.annualQueue.push({...annual,portfolio});await h.controller.refresh();
+  assert.equal(h.node('combinedTotalProfit').textContent,'+$50.00');assert.equal(h.node('combinedTotalProfitCny').textContent,'—');assert.equal(h.node('combinedTotalProfitCny').className.trim(),'combined-fiat-secondary');
+ }
+ h.combinedQueue.push(snapshot);h.annualQueue.push({...annual,portfolio:{...portfolio,profit_usdt:'0'}});await h.controller.refresh();
+ assert.equal(h.node('combinedTotalProfit').textContent,'$0.00');assert.equal(h.node('combinedTotalProfit').className,'');assert.equal(h.node('combinedTotalProfitCny').textContent,'¥0.00');assert.equal(h.node('combinedTotalProfitCny').className.trim(),'combined-fiat-secondary');
+ h.annualQueue.push({...annual,portfolio:{...portfolio,profit_usdt:null}});await h.controller.refresh();
+ assert.equal(h.node('combinedTotalProfit').textContent,'—');assert.equal(h.node('combinedTotalProfitCny').textContent,'—');assert.equal(h.node('combinedTotalProfitCny').className.trim(),'combined-fiat-secondary');
+});
+
+test('disconnecting or replacing an account clears both cached CNY gains alongside their USD values',async t=>{
+ for(const connection_id of [null,'account-b']){
+  const h=harness();t.after(()=>h.controller.destroy());
+  h.annualQueue.push({...annual,portfolio:{...annual.portfolio,status:'estimated',profit_usdt:'50'}});await h.settle();
+  assert.equal(h.node('combinedTotalProfitCny').textContent,'+¥360.00');assert.equal(h.node('combinedUnrealizedCny').textContent,'+¥720.00');
+  h.combinedQueue.push({...snapshot,lifetime_pnl:{...lifetime,connection_id,status:'unavailable',metrics:null}});h.annualQueue.push(new Error('offline'));await h.controller.refresh();
+  for(const id of ['combinedTotalProfit','combinedTotalProfitCny','combinedUnrealizedNet','combinedUnrealizedCny'])assert.equal(h.node(id).textContent,'—');
+  assert.equal(h.node('combinedTotalProfitCny').className.trim(),'combined-fiat-secondary');assert.equal(h.node('combinedUnrealizedCny').className.trim(),'combined-fiat-secondary');
+ }
 });
 test('the BTC total names every place it adds up, Binance included',()=>{
  assert.equal(api.sourceScope([{id:'offline'},{id:'binance'},{id:'okx'}]),'欧易 + 币安 + 离线钱包');

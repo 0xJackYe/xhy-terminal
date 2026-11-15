@@ -2,12 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
-import { validateSnapshot, buildHistory } from './core.mjs';
+import { validateSnapshot, buildHistory, periodProfit } from './core.mjs';
 
-const html = readFileSync(new URL('./wallet.html', import.meta.url), 'utf8');
-const snapshot = JSON.parse(/<script id="snapshot" type="application\/json">([\s\S]*?)<\/script>/.exec(html)[1]);
-const script = [...html.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)]
-  .find(match => !match[0].includes('application/json'))[1];
+const builtHtml = readFileSync(new URL('./wallet.html', import.meta.url), 'utf8');
+const snapshot = JSON.parse(/<script id="snapshot" type="application\/json">([\s\S]*?)<\/script>/.exec(builtHtml)[1]);
+const template = readFileSync(new URL('./wallet.template.html', import.meta.url), 'utf8');
+const core = readFileSync(new URL('./core.mjs', import.meta.url), 'utf8').replace(/^export\s+/gm, '');
+const pageHtml = data => template.replace('/* __BALANCE_CORE__ */', () => core)
+  .replace('__SNAPSHOT_JSON__', () => JSON.stringify(data).replace(/</g, '\\u003c'));
 
 class Element {
   constructor(dataset = {}) {
@@ -24,7 +26,7 @@ class Element {
 }
 
 function mount(protocol = 'http:', options = {}) {
-  const html=options.sourceHtml??readFileSync(new URL('./wallet.html',import.meta.url),'utf8');
+  const html=options.sourceHtml??pageHtml(snapshot);
   const script=[...html.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)].find(match=>!match[0].includes('application/json'))[1];
   const embeddedSnapshot=JSON.parse(/<script id="snapshot" type="application\/json">([\s\S]*?)<\/script>/.exec(html)[1]);
   const elements = new Map([...html.matchAll(/id="([^"]+)"/g)].map(match => [match[1], new Element()]));
@@ -147,7 +149,7 @@ test('wallet renders real confirmed holdings and switches currency, period and c
   const view = mount();
   const balance = (snapshot.summary.chain_stats.funded_txo_sum - snapshot.summary.chain_stats.spent_txo_sum) / 1e8;
   assert.match(view.elements.get('total-btc').innerHTML, new RegExp(balance.toFixed(8).replace('.', '\\.')));
-  assert.match(view.elements.get('quote-currency').textContent, /CNY/);
+  assert.equal(view.elements.get('quote-currency').textContent, 'BTC / USD');
   assert.ok(view.elements.get('chart').innerHTML.includes('<path'));
   await view.modes[1].emit('click');
   assert.equal(view.elements.get('quote-currency').textContent, 'BTC / USD');
@@ -160,6 +162,40 @@ test('wallet renders real confirmed holdings and switches currency, period and c
   assert.equal(view.elements.get('pnl-label').textContent, '近一周盈亏');
   await view.ranges[0].emit('click');
   assert.match(view.elements.get('chart-period').textContent, /BTC · UTC$/);
+});
+
+test('wallet shows independent dollar and yuan P&L for each period, with BTC prices kept in dollars', async () => {
+  const end=Math.floor(Date.parse(snapshot.fetchedAt)/1000),start=end-7*86400;
+  const tx={txid:'1'.repeat(64),time:start-86400,height:1,received:100_000_000,spent:0,delta:100_000_000,fee:0};
+  const data={version:1,address:snapshot.address,fetchedAt:snapshot.fetchedAt,
+    summary:{address:snapshot.address,chain_stats:{tx_count:1,funded_txo_sum:100_000_000,spent_txo_sum:0},mempool_stats:{tx_count:0,funded_txo_sum:0,spent_txo_sum:0}},
+    transactions:[tx],pending:[],prices:[{time:tx.time,USD:100}],quote:{time:end,USD:110},sources:{},
+    fx:{rates:[{date:new Date((start-86400)*1000).toISOString().slice(0,10),rate:7},{date:new Date((end-86400)*1000).toISOString().slice(0,10),rate:6}]}};
+  const view=mount('http:',{sourceHtml:pageHtml(data)});
+  view.elements.get('pnl-period').value='7';await view.elements.get('pnl-period').emit('change');
+  assert.equal(view.elements.get('daily-pnl').textContent,'+$10.00');
+  assert.equal(view.elements.get('daily-pnl').className,'positive');
+  assert.equal(view.elements.get('daily-pnl-cny').textContent,'−¥40.00');
+  assert.match(view.elements.get('daily-pnl-cny').className,/negative/);
+  assert.notEqual(periodProfit(data,'CNY','7').value,periodProfit(data,'USD','7').value*6,'yuan P&L retains the historical FX effect');
+  for(const button of view.modes){
+    await button.emit('click');
+    assert.equal(view.elements.get('daily-pnl').textContent,'+$10.00');
+    assert.equal(view.elements.get('daily-pnl-cny').textContent,'−¥40.00');
+    assert.equal(view.elements.get('quote-price').textContent,'$110.00');
+    assert.equal(view.elements.get('quote-currency').textContent,'BTC / USD');
+  }
+  delete data.fx;
+  const missingFx=mount('http:',{sourceHtml:pageHtml(data)});
+  missingFx.elements.get('pnl-period').value='7';await missingFx.elements.get('pnl-period').emit('change');
+  assert.equal(missingFx.elements.get('daily-pnl').textContent,'+$10.00');
+  assert.equal(missingFx.elements.get('daily-pnl-cny').textContent,'—');
+  assert.match(missingFx.elements.get('pnl-note').textContent,/人民币：缺少/);
+  data.quote.USD=100;
+  const flat=mount('http:',{sourceHtml:pageHtml(data)});
+  flat.elements.get('pnl-period').value='7';await flat.elements.get('pnl-period').emit('change');
+  assert.equal(flat.elements.get('daily-pnl').textContent,'$0.00');
+  assert.equal(flat.elements.get('daily-pnl').className,'');
 });
 
 test('wallet refresh uses only fixed local proxy resources and preserves valid data through failure then recovers', async () => {

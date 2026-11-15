@@ -54,7 +54,7 @@
   <div id="service-notice" class="notice service-notice" role="status" hidden><span id="service-notice-text"></span><button type="button" class="notice-action" data-start-services>启动服务</button></div>
   <section id="overview-view" class="board" aria-label="总览">
     <article class="card card-wallet" style="--i:0" aria-labelledby="wallet-title">
-      <div class="card-head"><h2 id="wallet-title">加密资产</h2><span class="card-meta">USD</span><span class="module-status" id="wallet-status" data-status="loading"><span class="status-dot" aria-hidden="true"></span><span>读取中</span></span><a class="card-link" href="#wallet" aria-label="查看加密钱包"><span>钱包</span><span class="card-arrow" aria-hidden="true">→</span></a></div>
+      <div class="card-head"><h2 id="wallet-title">加密资产</h2><span class="card-meta">USD / CNY</span><span class="module-status" id="wallet-status" data-status="loading"><span class="status-dot" aria-hidden="true"></span><span>读取中</span></span><a class="card-link" href="#wallet" aria-label="查看加密钱包"><span>钱包</span><span class="card-arrow" aria-hidden="true">→</span></a></div>
       <div class="metric-row">
         <div class="primary-metric"><span class="currency-prefix">$</span><span id="wallet-usd">—</span></div>
         <p class="metric-context" id="wallet-cny"></p>
@@ -62,10 +62,10 @@
       <dl class="stat-grid">
         <div><dt id="wallet-btc-label">BTC 持仓</dt><dd><span id="wallet-btc">—</span><small>BTC</small></dd></div>
         <div title="剩余持仓成本 ÷ 实际 BTC 总持有，包含非买卖数量调整"><dt>持仓摊薄成本 · USDT</dt><dd><span id="wallet-avg-cost">—</span></dd></div>
-        <div><dt>BTC 浮盈 · USDT</dt><dd><span id="wallet-unrealized">—</span><small id="wallet-return"></small></dd></div>
-        <div id="wallet-total-cell"><dt>累计盈亏 · USDT</dt><dd><span id="wallet-total-profit">—</span><small id="wallet-total-return"></small></dd></div>
+        <div id="wallet-unrealized-cell"><dt>BTC 浮盈</dt><dd class="pnl-money"><span class="pnl-primary"><span id="wallet-unrealized">—</span><small id="wallet-return"></small></span><span id="wallet-unrealized-cny" class="pnl-secondary">—</span></dd></div>
+        <div id="wallet-total-cell"><dt>累计盈亏</dt><dd class="pnl-money"><span class="pnl-primary"><span id="wallet-total-profit">—</span><small id="wallet-total-return"></small></span><span id="wallet-total-profit-cny" class="pnl-secondary">—</span></dd></div>
       </dl>
-      <div class="section-label"><span>BTC 余额走势 · <span id="wallet-trend-span">30 天</span></span><span class="trend-change" id="wallet-price-change" title="北京时间今日的价格变动盈亏：持有的 BTC × 今日价格变化，买入与转账不计入">今日价格盈亏<strong id="wallet-price-change-value">—</strong></span></div>
+      <div class="section-label wallet-trend-label"><span>BTC 余额走势 · <span id="wallet-trend-span">30 天</span></span><span class="trend-change" id="wallet-price-change" title="北京时间今日的价格变动盈亏：持有的 BTC × 今日价格变化，买入与转账不计入；人民币含汇率变化"><span>今日价格盈亏</span><span class="pnl-money"><strong id="wallet-price-change-value">—</strong><span id="wallet-price-change-value-cny" class="pnl-secondary">—</span></span></span></div>
       <div class="sparkline wallet-trend" id="wallet-trend" role="img" aria-label="近 30 天 BTC 余额市值走势" data-empty="true"><svg viewBox="0 0 300 80" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="trend-fill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity=".16"/><stop offset="1" stop-color="currentColor" stop-opacity="0"/></linearGradient></defs><path class="spark-area" fill="url(#trend-fill)"/><path class="spark-line" vector-effect="non-scaling-stroke"/></svg><span class="spark-caption" id="wallet-trend-scale" aria-hidden="true"></span></div>
       <div class="section-label"><span>存放位置</span><span id="wallet-location-note"></span></div>
       <div class="location-split" id="wallet-locations" aria-hidden="true"></div>

@@ -216,8 +216,8 @@
     // its height however many coins there are; the row's tooltip lists them.
     const sorted = [...assets].sort((a, b) => Number(b.usd_value) - Number(a.usd_value));
     const visible = sorted.length > 4 ? [...sorted.slice(0, 3), { ccy: "#other", label: `其他 ${sorted.length - 3} 种`, usd_value: sorted.slice(3).reduce((sum, asset) => sum + Number(asset.usd_value), 0), members: sorted.slice(3) }] : sorted;
-    renderPnl(wallet.pnl);
-    renderTotalProfit(wallet.totalProfit);
+    renderPnl(wallet.pnl, wallet.conversionQuotes?.usd_cny);
+    renderTotalProfit(wallet.totalProfit, wallet.conversionQuotes?.usd_cny);
     renderTrend(wallet.trend, wallet.status);
     renderPriceChange(wallet.priceChange, wallet.status);
     renderGoal(wallet.btcHoldings);
@@ -284,25 +284,59 @@
     text(id, finite(value) ? `${signed(value)}${suffix}` : empty);
   }
 
-  function renderPnl(pnl) {
+  // A sub-cent result that rounds to zero has neither a sign nor a gain/loss
+  // colour. Normalize each currency separately, without changing the ledger.
+  const pnlMoneyValue = (value) => finite(value) ? Math.abs(Number(value)) < .005 ? 0 : Number(value) : null;
+  const signedMoney = (value, symbol) => {
+    const amount = pnlMoneyValue(value);
+    return amount === null ? "—" : `${amount > 0 ? "+" : amount < 0 ? "−" : ""}${symbol}${fixed(Math.abs(amount))}`;
+  };
+  const cnyRate = (value) => {
+    if (typeof value !== "number" && (typeof value !== "string" || !/^\+?(?:\d+(?:\.\d*)?|\.\d+)$/.test(value))) return null;
+    return finite(value) && Number(value) > 0 ? Number(value) : null;
+  };
+  function ledgerCny(value, usdCny) {
+    const rate = cnyRate(usdCny);
+    const converted = finite(value) && rate !== null ? Number(value) * rate : null;
+    return finite(converted) ? converted : null;
+  }
+
+  // Each line keeps its own sign: today's CNY result also includes FX moves.
+  function renderPnlMoney(id, usd, cny) {
+    for (const [key, value, symbol, baseClass] of [[id, usd, "$", ""], [`${id}-cny`, cny, "¥", "pnl-secondary"]]) {
+      const amount = pnlMoneyValue(value);
+      const element = $(key), className = [baseClass, tone(amount)].filter(Boolean).join(" ");
+      if (element.className !== className) element.className = className;
+      text(key, signedMoney(amount, symbol));
+    }
+  }
+
+  function ledgerCurrencyNote(usdCny) {
+    return `盈亏账本以 USDT 计量，美元金额按 1 USDT ≈ 1 USD 估算；${cnyRate(usdCny) !== null ? "人民币按当前美元兑人民币汇率换算。" : "美元兑人民币汇率暂不可用，人民币金额暂缺。"}`;
+  }
+
+  function renderPnl(pnl, usdCny) {
     const metrics = pnl && typeof pnl === "object" ? pnl : {};
     text("wallet-avg-cost", fixed(metrics.averageCost));
-    signedCell("wallet-unrealized", metrics.unrealized);
+    renderPnlMoney("wallet-unrealized", metrics.unrealized, ledgerCny(metrics.unrealized, usdCny));
     signedCell("wallet-return", metrics.returnPct, "%", "");
+    const cell = $("wallet-unrealized-cell"), title = ledgerCurrencyNote(usdCny);
+    if (cell.title !== title) cell.title = title;
   }
 
   // Lifetime result of the whole crypto portfolio: market value plus everything
   // withdrawn minus everything put in (realized and unrealized together).
-  function renderTotalProfit(total) {
+  function renderTotalProfit(total, usdCny) {
     const data = total && typeof total === "object" ? total : {};
     const profit = finite(data.profit_usdt) ? Number(data.profit_usdt) : null;
     const contributed = finite(data.contributed_usdt) ? Number(data.contributed_usdt) : null;
-    signedCell("wallet-total-profit", profit);
+    renderPnlMoney("wallet-total-profit", profit, ledgerCny(profit, usdCny));
     signedCell("wallet-total-return", profit !== null && contributed > 0 ? (profit / contributed * 100).toFixed(2) : null, "%", "");
     const cell = $("wallet-total-cell");
-    const title = profit === null
+    const detail = profit === null
       ? (typeof data.reason === "string" && data.reason ? data.reason : local ? "本机终端不核算累计盈亏，请在云端终端查看。" : "累计盈亏需要已核对的投入、提出记录。")
       : `当前市值 ${fixed(data.market_value_usdt)} + 已提出 ${fixed(data.withdrawn_usdt)} − 累计投入 ${fixed(data.contributed_usdt)}（USDT）`;
+    const title = `${detail}${detail.endsWith("。") ? "" : "。"}${ledgerCurrencyNote(usdCny)}`;
     if (cell.title !== title) cell.title = title;
   }
 
@@ -347,16 +381,14 @@
 
   // Today's price-change profit (Beijing day): the BTC held × today's price
   // move. Buys and transfers change the balance but are not counted.
-  const signedMoney = (value, symbol) => `${value > 0 ? "+" : value < 0 ? "−" : ""}${symbol}${fixed(Math.abs(value))}`;
   function renderPriceChange(change, status) {
     const data = change && typeof change === "object" ? change : {};
     const usd = finite(data.usd) ? Number(data.usd) : null;
-    const value = $("wallet-price-change-value");
-    const className = tone(usd);
-    if (value.className !== className) value.className = className;
-    text("wallet-price-change-value", usd === null ? "—" : signedMoney(usd, "$"));
+    const cny = finite(data.cny) ? Number(data.cny) : null;
+    renderPnlMoney("wallet-price-change-value", usd, cny);
     const parts = ["北京时间今日的价格变动盈亏：持有的 BTC × 今日价格变化，买入与转账不计入。"];
-    if (usd !== null && finite(data.cny)) parts.push(`人民币 ${signedMoney(Number(data.cny), "¥")}（含汇率变化）。`);
+    if (cny !== null) parts.push(`人民币 ${signedMoney(cny, "¥")}（含汇率变化）。`);
+    else parts.push("人民币价格变动盈亏暂缺。");
     if (usd === null) parts.push(typeof data.reason === "string" && data.reason ? data.reason : status === "offline" ? "钱包服务暂未连接。" : local ? "本机终端在钱包页查看价格变动盈亏。" : "余额历史还没覆盖今天。");
     const holder = $("wallet-price-change"), title = parts.join("");
     if (holder.title !== title) holder.title = title;
