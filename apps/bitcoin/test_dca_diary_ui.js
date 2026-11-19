@@ -74,20 +74,26 @@ async function check(name, fn) { await fn(); checks++; console.log('OK ' + name)
     for(const bad of [{...distribution,bucket_usdt:'5000'},{...distribution,bucket_usdt:'1000'},{...distribution,bins:[{from:'60000',to:'63000',btc:'1'}]},{...distribution,bins:[{from:'60000',to:'62000',btc:'-1'}]},{...distribution,bins:[...distribution.bins,...distribution.bins]},{...distribution,unpriced_btc:null}])assert.equal(api.priceDistribution(bad),null);
   });
 
-  await check('six orange levels measure what went in against the usual daily buy, so bigger days keep getting deeper', () => {
+  await check('fixed USDT bands distinguish 50, 100 and 200 while preserving low amounts and handling missing prices', () => {
     // Cents of USDT and satoshis: a usual 20 USDT day, then 8, 12, 40, 99.50 and 320 USDT days.
     const days = new Map([[1, { btc: 25000, usdt: 2000 }], [2, { btc: 25000, usdt: 2000 }], [3, { btc: 25000, usdt: 2000 }], [4, { btc: 50000, usdt: 4000 }], [5, { btc: 125000, usdt: 9950 }], [6, { btc: 400000, usdt: 32000 }], [7, { btc: 10000, usdt: 800 }]]);
     const measure = api.scale(days);
-    assert.equal(measure.unit, 'usdt'); assert.equal(measure.usual, 2000);
-    assert.deepEqual(measure.limits, [1000, 1800, 3000, 6000, 12000]);
-    assert.deepEqual([7, 1, 4, 5, 6].map(key => api.level(days.get(key), measure)), [1, 3, 4, 5, 6], '8 → 1, the usual 20 → 3, 40 → 4, 99.50 → 5, 320 → 6');
+    assert.equal(measure.unit, 'usdt');
+    assert.deepEqual([7, 1, 4, 5, 6].map(key => api.level(days.get(key), measure)), [1, 3, 4, 5, 7]);
+    const highSpendingHistory = new Map([[1, { btc: 1250000, usdt: 100000 }]]);
+    const highSpendingScale = api.scale(highSpendingHistory);
+    for (const [cents, expected] of [[4999, 4], [5000, 5], [9999, 5], [10000, 6], [19999, 6], [20000, 7], [39999, 7], [40000, 8]]) {
+      const day = { btc: 25000, usdt: cents };
+      assert.equal(api.level(day, measure), expected);
+      assert.equal(api.level(day, highSpendingScale), expected, 'history changes never recolor a known amount');
+    }
     assert.equal(api.level({ btc: 15000, usdt: 1200 }, measure), 2);
     assert.equal(api.level(undefined, measure), 0); assert.equal(api.level({ btc: 0, usdt: 0 }, measure), 0);
     assert.equal(api.level({ btc: 50000, usdt: null }, measure), 4, 'an unpriced day is valued at the median price paid');
     const btcOnly = api.scale(new Map([[1, { btc: 100, usdt: null }], [2, { btc: 200, usdt: null }], [3, { btc: 300, usdt: null }]]));
     assert.equal(btcOnly.unit, 'btc'); assert.equal(btcOnly.usual, 200); assert.equal(api.level({ btc: 1300, usdt: null }, btcOnly), 6);
     assert.equal(api.scale(new Map()), null); assert.equal(api.level({ btc: 5, usdt: null }, null), 3);
-    assert.equal(api.legendText(measure), '颜色越深，当天投入越多（USDT）：10 以下 · 10–18 · 18–30 · 30–60 · 60–120 · 120 以上');
+    assert.equal(api.legendText(measure), '当日投入（USDT）：<10 · 10–<18 · 18–<30 · 30–<50 · 50–<100 · 100–<200 · 200–<400 · ≥400');
   });
 
   await check('近一年 is 53 whole weeks ending this week; a year covers its own days only', () => {
@@ -142,14 +148,16 @@ async function check(name, fn) { await fn(); checks++; console.log('OK ' + name)
     assert.equal((built.html.match(/class="dca-weekday"/g) || []).length, 7);
     const early = api.gridHtml(api.bounds('2024', model), model, limits).html;
     assert.match(early, /class="dca-cell is-before" data-level="0" data-date="2024-12-13"/);
-    assert.match(early, /class="dca-cell" data-level="6" data-date="2024-12-14"/, 'the 320 USDT first day is the deepest orange');
+    assert.match(early, /class="dca-cell" data-level="7" data-date="2024-12-14"/, 'the 320 USDT day has the same band in the yearly view');
     assert.match(built.html, /class="dca-cell" data-level="3" data-date="2026-11-07"/, 'a usual 20 USDT day sits in the middle');
   });
 
-  await check('the stylesheet deepens through bitcoin orange in both themes and pins the weekday labels', () => {
-    assert.match(css, /--dca-4:#f7931a;--dca-5:#d17208;--dca-6:#9a4c04/);
-    assert.match(css, /body\.dark :is\(\.dca-diary,\.dca-records\)[^{]*\{[^}]*--dca-5:#f7931a;--dca-6:#ffad47/, 'on a dark page the biggest days are the brightest');
-    for (const level of [5, 6]) { assert.match(css, new RegExp('\\.dca-cell\\[data-level="' + level + '"\\]')); }
+  await check('the stylesheet covers high amounts in each theme and pins the weekday labels', () => {
+    for (const palette of [css.match(/\.dca-diary,\.dca-records \{([^}]+)\}/)[1], css.match(/body\.dark :is\(\.dca-diary,\.dca-records\)[^{]*\{([^}]+)\}/)[1]]) {
+      const colors = [...palette.matchAll(/--dca-([5-8]):\s*(#[0-9a-f]{6})/gi)].map(([, , color]) => color);
+      assert.equal(new Set(colors).size, 4, '50, 100, 200 and 400 USDT use distinct colors in each theme');
+    }
+    for (const level of [5, 6, 7, 8]) { assert.match(css, new RegExp('\\.dca-cell\\[data-level="' + level + '"\\]')); }
     assert.match(css, /\.dca-diary-open\{/);
     assert.match(css, /\.dca-weekday\{[^}]*position:sticky/); assert.match(css, /\.dca-cell\.is-outside\{visibility:hidden\}/);
   });

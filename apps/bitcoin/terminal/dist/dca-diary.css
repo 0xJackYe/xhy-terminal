@@ -1,10 +1,28 @@
-/* 定投日记: a GitHub-style board of what went in each day. Level 0 is an
-   empty day; levels 1-6 deepen through bitcoin orange (#f7931a) as the day's
-   buy grows past the usual one (level 3). On a dark page "deeper" means
-   brighter, as on GitHub. */
-.dca-diary,.dca-records{--dca-0:var(--soft,#eeece7);--dca-1:#fde4c6;--dca-2:#fbc98d;--dca-3:#f9ae53;--dca-4:#f7931a;--dca-5:#d17208;--dca-6:#9a4c04}
+/* Level 0 is an empty day. Higher spending moves from orange to deeper
+   reds in light mode and brighter amber in dark mode. */
+.dca-diary,.dca-records {
+  --dca-0: var(--soft,#eeece7);
+  --dca-1: #fde4c6;
+  --dca-2: #fbc98d;
+  --dca-3: #f9ae53;
+  --dca-4: #f7931a;
+  --dca-5: #d17208;
+  --dca-6: #ad4118;
+  --dca-7: #802437;
+  --dca-8: #4f152e;
+}
 .dca-diary{position:relative;padding:23px 25px;margin-top:16px;--dca-surface:var(--card,#fff);--dca-cell:7px;--dca-gap:2px;cursor:pointer}
-body.dark :is(.dca-diary,.dca-records),html[data-xhy-theme="dark"] :is(.dca-diary,.dca-records){--dca-0:var(--soft,#262622);--dca-1:#3d2a12;--dca-2:#5c3d14;--dca-3:#8a5716;--dca-4:#b86f16;--dca-5:#f7931a;--dca-6:#ffad47}
+body.dark :is(.dca-diary,.dca-records),html[data-xhy-theme="dark"] :is(.dca-diary,.dca-records) {
+  --dca-0: var(--soft,#262622);
+  --dca-1: #3d2a12;
+  --dca-2: #5c3d14;
+  --dca-3: #8a5716;
+  --dca-4: #b86f16;
+  --dca-5: #f7931a;
+  --dca-6: #ffb252;
+  --dca-7: #ffd173;
+  --dca-8: #fff0ae;
+}
 .dca-diary-heading{display:flex;align-items:center;justify-content:space-between;gap:8px 16px;flex-wrap:wrap}
 .dca-diary-heading>div:first-child{display:flex;align-items:baseline;gap:4px 10px;flex-wrap:wrap;min-width:0}
 .dca-diary-heading h2{margin:0;font-size:22px}
@@ -28,6 +46,8 @@ body.dark :is(.dca-diary,.dca-records),html[data-xhy-theme="dark"] :is(.dca-diar
 .dca-cell[data-level="4"],.dca-diary-legend i[data-level="4"]{background:var(--dca-4)}
 .dca-cell[data-level="5"],.dca-diary-legend i[data-level="5"]{background:var(--dca-5)}
 .dca-cell[data-level="6"],.dca-diary-legend i[data-level="6"]{background:var(--dca-6)}
+.dca-cell[data-level="7"],.dca-diary-legend i[data-level="7"]{background:var(--dca-7)}
+.dca-cell[data-level="8"],.dca-diary-legend i[data-level="8"]{background:var(--dca-8)}
 .dca-cell.is-outside{visibility:hidden}
 .dca-cell.is-before{opacity:.4}
 .dca-cell.is-gap{background:repeating-linear-gradient(135deg,var(--dca-0) 0 2px,transparent 2px 4px)}
