@@ -146,12 +146,12 @@
     return dateFormat(includeDate ? "stamp-date" : "stamp", "zh-CN", { timeZone: zone, ...(includeDate ? { month: "2-digit", day: "2-digit" } : {}), hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }).format(date);
   }
 
-  // Header clocks. Denver follows its daylight-saving changes (UTC−6 in
-  // summer, UTC−7 in winter); New Delhi stays at UTC+5:30.
+  // IANA zones let Intl apply local daylight-saving rules to the header clocks.
   const clocks = [
     { id: "denver-clock", zone: workZone, name: "丹佛时间 · 工作时区" },
     { id: "clock", zone, name: "北京时间" },
     { id: "gmt-clock", zone: "UTC", name: "格林尼治时间" },
+    { id: "central-europe-clock", zone: "Europe/Berlin", name: "欧洲中部时间" },
     { id: "delhi-clock", zone: "Asia/Kolkata", name: "新德里时间" },
   ];
   let titledMinute = -1;
