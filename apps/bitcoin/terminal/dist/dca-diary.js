@@ -114,23 +114,23 @@
       error:typeof data.error === 'string' && data.error ? data.error.slice(0,200) : null,asOf:typeof data.as_of === 'string' ? data.as_of : null};
   }
 
-  // Six orange levels for what went in that day, in USDT, measured against
-  // the usual daily buy (the median buying day): under half of it is the
-  // palest, the usual buy sits in the middle (level 3), and bigger days keep
-  // getting deeper up to six times the usual and beyond. Every buying day
-  // since the start sets the scale, so a day keeps its colour whichever range
-  // is shown. A day bought without a USDT price is valued at the median price
-  // of the priced days; with no priced day at all, BTC amounts are compared.
-  const STEPS = [.5,.9,1.5,3,6];
+  // Fixed USDT bands keep the same amount the same colour across views and
+  // over time. If a day has no USDT cost, use the median known price. If the
+  // entire ledger lacks prices, compare BTC amounts against the usual buy.
+  const USDT_LIMITS = [10, 18, 30, 50, 100, 200, 400].map(amount => amount * 100);
+  const BTC_STEPS = [.5, .9, 1.5, 3, 6];
   function scale(days) {
     const list = [...days.values()].filter(day => day.btc > 0);
     if (!list.length) return null;
     const median = values => values.sort((a,b) => a-b)[Math.floor((values.length-1)/2)];
     const prices = list.filter(day => day.usdt !== null && day.usdt > 0).map(day => day.usdt/day.btc);
-    const price = prices.length ? median(prices) : null;
-    let unit = 'usdt', value = day => day.usdt !== null ? day.usdt : Math.round(day.btc*price), usual = price === null ? 0 : median(list.map(value));
-    if (!(usual > 0)) { unit = 'btc';value = day => day.btc;usual = median(list.map(value)); }
-    return {unit,usual,value,limits:STEPS.map(step => usual*step)};
+    if (prices.length) {
+      const price = median(prices);
+      const value = day => day.usdt ?? Math.round(day.btc * price);
+      return {unit:'usdt', value, limits:USDT_LIMITS};
+    }
+    const usual = median(list.map(day => day.btc));
+    return {unit:'btc', usual, value:day => day.btc, limits:BTC_STEPS.map(step => usual * step)};
   }
   function level(day, measure) {
     if (!day || !(day.btc > 0)) return 0;
@@ -138,12 +138,16 @@
     const amount = measure.value(day);
     return 1+measure.limits.filter(limit => amount >= limit).length;
   }
-  // The legend's hover text gives the bounds in whole USDT.
+  // The legend uses the same band boundaries as the calendar.
   function legendText(measure) {
-    if (!measure) return '颜色越深，当天投入越多';
-    if (measure.unit === 'btc') return '颜色越深，当天买入的 BTC 越多；通常一天的买入量为中间色';
-    const cut = measure.limits.map(limit => grouped(Math.round(limit/100)));
-    return '颜色越深，当天投入越多（USDT）：'+cut[0]+' 以下 · '+cut[0]+'–'+cut[1]+' · '+cut[1]+'–'+cut[2]+' · '+cut[2]+'–'+cut[3]+' · '+cut[3]+'–'+cut[4]+' · '+cut[4]+' 以上';
+    if (measure?.unit === 'btc') return '按当日买入 BTC 数量分档，相对通常买入量比较';
+    const cut = USDT_LIMITS.map(limit => grouped(limit / 100));
+    const bands = [`<${cut[0]}`, ...cut.slice(1).map((upper, index) => `${cut[index]}–<${upper}`), `≥${cut.at(-1)}`];
+    return `当日投入（USDT）：${bands.join(' · ')}`;
+  }
+  function legendSwatches(limits) {
+    const swatches = Array.from({length:limits.length + 2}, (_, level) => `<i data-level="${level}" aria-hidden="true"></i>`);
+    return `少${swatches.join('')}多`;
   }
 
   // 近一年 (the 53 weeks ending this week) or one calendar year.
@@ -242,7 +246,7 @@
   }
 
   const MARKUP = '<div class="dca-diary-heading"><div><h2 id="dcaDiaryTitle"><button id="dcaDiaryOpen" class="dca-diary-open" type="button" title="查看日 K 线与买入标记" aria-haspopup="dialog">定投日记</button></h2><small id="dcaDiarySince" class="dca-diary-since"></small></div><div id="dcaDiaryRange" class="dca-diary-range" role="group" aria-label="定投日记范围"></div></div>'+
-    '<div class="dca-diary-meta"><p id="dcaDiarySummary" class="dca-diary-summary" title="按北京时间计日"></p><span id="dcaDiaryLegend" class="dca-diary-legend" title="颜色越深，当天投入越多" aria-hidden="true">少<i data-level="0"></i><i data-level="1"></i><i data-level="2"></i><i data-level="3"></i><i data-level="4"></i><i data-level="5"></i><i data-level="6"></i>多</span></div>'+
+    '<div class="dca-diary-meta"><p id="dcaDiarySummary" class="dca-diary-summary" title="按北京时间计日"></p><span id="dcaDiaryLegend" class="dca-diary-legend" role="img"></span></div>'+
     '<div id="dcaDiaryScroll" class="dca-diary-scroll"><div id="dcaDiaryGrid" class="dca-diary-grid" role="img" tabindex="0"></div></div>'+
     '<p id="dcaDiaryMessage" class="dca-diary-message" role="status" hidden></p>'+
     '<div id="dcaDiaryTip" class="dca-diary-tip" role="tooltip" hidden><strong></strong><span></span></div><span id="dcaDiaryLive" class="dca-diary-live" aria-live="polite"></span>'+
@@ -275,7 +279,13 @@
       if (rangeNode.innerHTML !== buttons) rangeNode.innerHTML = buttons;
       view = bounds(range,data);
       const measure = scale(data.days), signature = [range,data.today,data.start,data.coverage,measure && measure.limits.join(','),[...data.days].map(([time,day]) => time+':'+day.btc+':'+day.usdt).join(';')].join('|');
-      node('dcaDiaryLegend').title = legendText(measure);
+      const legend = node('dcaDiaryLegend'), caption = legendText(measure);
+      const swatches = legendSwatches(measure?.limits ?? USDT_LIMITS);
+      if (legend.innerHTML !== swatches) legend.innerHTML = swatches;
+      if (legend.title !== caption) {
+        legend.title = caption;
+        legend.setAttribute('aria-label', caption);
+      }
       if (signature !== drawn) {
         const built = gridHtml(view,data,measure);
         grid.style.setProperty('--weeks',String(built.weeks));grid.innerHTML = built.html;drawn = signature;focused = null;hideTip();
@@ -391,5 +401,5 @@
     const controller = {refresh:load,destroy,select:value => { range = String(value);render(); },open:openRecords,close:closeRecords};
     panel.__dcaDiaryController = controller;render();if (active()) load();return controller;
   }
-  return {START,REFRESH_MS,STEPS,parseDate,formatDate,beijingToday,weekday,monday,units,btcText,usdtText,exactText,exactSummary,priceDistribution,normalize,scale,level,legendText,ranges,bounds,stats,cellState,describe,gridHtml,records,priceText,recordsSummary,recordRows,mount};
+  return {START,REFRESH_MS,parseDate,formatDate,beijingToday,weekday,monday,units,btcText,usdtText,exactText,exactSummary,priceDistribution,normalize,scale,level,legendText,ranges,bounds,stats,cellState,describe,gridHtml,records,priceText,recordsSummary,recordRows,mount};
 });
