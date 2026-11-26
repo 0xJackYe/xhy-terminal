@@ -9,6 +9,7 @@ import copy
 import datetime as dt
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation, localcontext
 import hashlib
+from itertools import groupby
 import re
 import threading
 import time
@@ -256,25 +257,61 @@ SATOSHI, CENT = Decimal('0.00000001'), Decimal('0.01')
 BUY_PRICE_BUCKET_USDT = Decimal(2000)
 
 
+def _holding_cost_history(trades):
+    """Replay the spot inventory book at each Beijing trade day's close."""
+    history = []
+    with localcontext() as context:
+        # Match btc_pnl_service.compute_position's ledger order and precision.
+        context.prec = 96
+        inventory = cost = Decimal(0)
+        try:
+            trades.sort(key=lambda fill: (fill[0], int(integer(fill[2].get('bill_id', '0')))))
+            for date, fills in groupby(trades, key=lambda fill: fill[1]):
+                for _, _, row, quantity in fills:
+                    if row['side'] == 'buy':
+                        if quantity <= 0 or row.get('quote_ccy') != 'USDT':
+                            return []
+                        paid = +number(row['quote_amount'])
+                        if paid < 0:
+                            return []
+                        inventory += quantity
+                        cost += paid
+                    else:
+                        sold = -quantity
+                        if sold <= 0 or sold > inventory:
+                            return []
+                        removed_cost = cost if sold == inventory else cost * sold / inventory
+                        cost -= removed_cost
+                        inventory -= sold
+                history.append([date, text(cost / inventory) if inventory else None])
+        except (KeyError, CostValidationError):
+            return []
+    return history
+
+
 def dca_diary(records, coverage_start_ms=None, start=DCA_DIARY_START):
     """定投日记: the BTC bought on each Beijing day, net of BTC fees, as the
     ledger counts it, from the first purchase on 2024-12-14.  A recorded buy
     before that date moves the start back rather than being hidden.  This
     local ledger has no minute rates, so a day with a fill priced in another
     currency leaves its USDT value unknown instead of counting it as zero.
-    Sales are not purchases and are left out."""
-    days, price_bins = {}, {}
+    Sales only contribute to the end-of-day spot holding cost history."""
+    days, price_bins, trades = {}, {}, []
+    replayable = True
     with localcontext() as context:
         context.prec = 256
         priced_btc = unpriced_btc = Decimal(0)
         for row in records or []:
-            if not isinstance(row, dict) or row.get('side') != 'buy':
+            if not isinstance(row, dict) or row.get('side') not in ('buy', 'sell'):
                 continue
             try:
                 btc, at = number(row['btc_net']), millis(row['at_ms'])
             except (KeyError, CostValidationError):
+                replayable = False
                 continue
-            if btc <= 0:
+            date = iso(at)[:10]
+            trades.append((at, date, row, btc))
+            if row['side'] != 'buy' or btc <= 0:
                 continue
             # The merged adapter has already converted available historical
             # quote rates. Otherwise a non-USDT price remains unpriced here.
@@ -289,7 +326,7 @@ def dca_diary(records, coverage_start_ms=None, start=DCA_DIARY_START):
                 priced_btc += btc
             except (KeyError, CostValidationError):
                 unpriced_btc += btc
-            day = days.setdefault(iso(at)[:10], {'btc': Decimal(0), 'usdt': Decimal(0), 'priced': True, 'buys': 0})
+            day = days.setdefault(date, {'btc': Decimal(0), 'usdt': Decimal(0), 'priced': True, 'buys': 0})
             day['btc'] += btc
             day['buys'] += 1
             try:
@@ -334,6 +371,7 @@ def dca_diary(records, coverage_start_ms=None, start=DCA_DIARY_START):
             coverage = None
         return {'start_date': first if first and first < start else start, 'first_buy_date': first,
                 'coverage_start_date': coverage, 'fields': list(DCA_FIELDS), 'days': listed,
+                'holding_cost_history': _holding_cost_history(trades) if replayable else [],
                 'totals': {'days': len(listed), 'buys': buys, 'btc': text(total_btc.quantize(SATOSHI, ROUND_HALF_UP)),
                            'usdt': text(total_usdt.quantize(CENT, ROUND_HALF_UP)) if priced else None},
                 'exact_totals': exact({'days': len(listed), 'buys': buys, 'btc': total_btc,

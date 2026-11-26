@@ -5,7 +5,7 @@
 })(typeof window!=='undefined'?window:globalThis,function(){
   'use strict';
   const START='2024-07-01',DAY=86400000,REFRESH_MS=5000,TIMEOUT_MS=25000;
-  const AVERAGE_LABELS={all:'累计买入均价',7:'买入 MA7',30:'买入 MA30',90:'买入 MA90'};
+  const AVERAGE_LABELS={all:'历史现货持仓均价',7:'持仓 MA7',30:'持仓 MA30',90:'持仓 MA90'};
   const AVERAGE_FORMAT=new Intl.NumberFormat('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
   function dateTime(value){
     if(typeof value!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(value))return null;
@@ -104,7 +104,7 @@
   }
   const MARKUP='<div id="dcaCandleSheet" class="dca-candle-sheet" hidden><section id="dcaCandleDialog" class="dca-candle-dialog" role="dialog" aria-modal="true" aria-labelledby="dcaCandleTitle" tabindex="-1">'+
     '<header class="dca-candle-head"><div><h3 id="dcaCandleTitle">BTC 定投日 K 线</h3><p>BTC / USDT · 北京时间 UTC+8</p></div><div class="dca-candle-state"><i id="dcaCandleDot"></i><span id="dcaCandleState" role="status">读取行情中</span></div><button id="dcaCandleClose" type="button" aria-label="关闭定投 K 线">×</button></header>'+
-    '<div class="dca-candle-toolbar"><div id="dcaCandleRanges" class="dca-candle-controls" role="group" aria-label="K 线显示范围"><button type="button" data-view="year">近一年</button><button type="button" data-view="all">全部</button><button type="button" data-view="first">首笔买入</button><button type="button" data-view="latest">最新</button></div><div class="dca-candle-jump"><label for="dcaCandleDate">跳转</label><input id="dcaCandleDate" type="date" min="2024-07-01" aria-label="跳转到北京时间日期"><button id="dcaCandleJump" type="button">前往</button></div><div class="dca-candle-tools"><div class="dca-candle-controls" role="group" aria-label="买入指标"><button id="dcaCandleProfile" type="button" aria-pressed="false">成交量分布</button><button id="dcaCandleVolume" type="button" aria-pressed="false" title="按北京时间汇总每天买入的 BTC 净到账量">成交量</button><select id="dcaCandleAverageWindow" class="dca-candle-average-window" aria-label="买入均价均线周期" title="累计或按最近 N 个北京时间自然日计算买入均价" disabled><option value="all" selected>买入均线 · 累计</option><option value="7">买入 MA7</option><option value="30">买入 MA30</option><option value="90">买入 MA90</option><option value="">关闭买入均线</option></select></div><div class="dca-candle-controls" role="group" aria-label="K 线缩放"><button id="dcaCandleZoomOut" type="button" aria-label="缩小 K 线">−</button><button id="dcaCandleZoomIn" type="button" aria-label="放大 K 线">＋</button></div></div></div>'+
+    '<div class="dca-candle-toolbar"><div id="dcaCandleRanges" class="dca-candle-controls" role="group" aria-label="K 线显示范围"><button type="button" data-view="year">近一年</button><button type="button" data-view="all">全部</button><button type="button" data-view="first">首笔买入</button><button type="button" data-view="latest">最新</button></div><div class="dca-candle-jump"><label for="dcaCandleDate">跳转</label><input id="dcaCandleDate" type="date" min="2024-07-01" aria-label="跳转到北京时间日期"><button id="dcaCandleJump" type="button">前往</button></div><div class="dca-candle-tools"><div class="dca-candle-controls" role="group" aria-label="买入指标"><button id="dcaCandleProfile" type="button" aria-pressed="false">成交量分布</button><button id="dcaCandleVolume" type="button" aria-pressed="false" title="按北京时间汇总每天买入的 BTC 净到账量">成交量</button><select id="dcaCandleAverageWindow" class="dca-candle-average-window" aria-label="持仓均价均线周期" title="历史现货持仓均价及其 7、30、90 日均线" disabled><option value="all" selected>持仓均线 · 历史</option><option value="7">持仓 MA7</option><option value="30">持仓 MA30</option><option value="90">持仓 MA90</option><option value="">关闭持仓均线</option></select></div><div class="dca-candle-controls" role="group" aria-label="K 线缩放"><button id="dcaCandleZoomOut" type="button" aria-label="缩小 K 线">−</button><button id="dcaCandleZoomIn" type="button" aria-label="放大 K 线">＋</button></div></div></div>'+
     '<div class="dca-candle-readout"><strong id="dcaCandleDay">日 K · 2024-07-01 起</strong><span id="dcaCandleOHLC">开 —　高 —　低 —　收 —</span><span id="dcaCandleCost" class="dca-candle-cost" role="status">持仓均价待核对</span><span id="dcaCandleAverage" class="dca-candle-average" hidden></span><span id="dcaCandleBuy">B 表示当天有买入</span></div>'+
     '<div id="dcaCandleStage" class="dca-candle-stage"><div id="dcaCandleChart" class="dca-candle-chart" role="img" aria-label="北京时间 BTC 每日 K 线及买入标记" tabindex="0"></div><div id="dcaCandleEmpty" class="dca-candle-empty">正在同步 2024 年 7 月起的每日行情…</div><div id="dcaCandleTip" class="dca-candle-tip" role="tooltip" hidden><span id="dcaCandleTipBTC"></span><small id="dcaCandleTipUSDT" hidden></small><small id="dcaCandleTipPrice"></small></div></div>'+
     '<footer class="dca-candle-footer"><span id="dcaCandleCoverage">滚轮缩放 · 拖动平移 · 悬停查看买入量与均价</span><span id="dcaCandleIndicatorNote" hidden></span><a href="https://www.tradingview.com/" target="_blank" rel="noopener noreferrer">Charts by TradingView</a></footer></section></div>';
@@ -119,7 +119,7 @@
     let opened=false,disposed=false,chart=null,series=null,markers=null,data=null,model=null,buys=new Map(),timer=null,read=null,sequence=0,initial=true,selection=null,opener=null,resizeObserver=null,themeObserver=null,needsHistory=false,inspectedDate=null;
     let cost=null,costLine=null,costController=null,unsubscribeCost=null;
     let indicators=null,profileVisible=false,dailyVisible=false;
-    let averageWindow='all',averageBuys=new Map();
+    let averageWindow='all';
     const averageSelect=node('dcaCandleAverageWindow');
     const active=()=>opened&&!disposed&&!document.hidden;
     const stop=()=>{if(timer!==null)clearTimer(timer);timer=null;};
@@ -140,8 +140,8 @@
       const value=Number.isFinite(price)?AVERAGE_FORMAT.format(price)+' USDT':'—';
       const stale=model?.status==='stale' && Number.isFinite(price);
       caption.textContent=AVERAGE_LABELS[averageWindow]+' '+value+(stale?' · 缓存':'');
-      const period=averageWindow==='all'?'截至该日的已收录买入':'截至该日（含）的最近 '+averageWindow+' 个北京时间自然日';
-      caption.title=period+' · 实付 USDT ÷ 净买入 BTC。区间无买入或买入成本缺失时留空。';
+      const period=averageWindow==='all'?'截至该日的现货持仓均价':'最近 '+averageWindow+' 个北京时间自然日的每日现货持仓均价平均值';
+      caption.title=period+'。日均价按剩余移动加权成本 ÷ 账本剩余 BTC 计算。无持仓或成本缺失时留空。';
     }
     function changeAverage(){
       if(averageSelect.disabled)return;
@@ -152,7 +152,7 @@
       drawAverage();
     }
     function updateIndicators(){
-      indicators?.update({buys,averageBuys,candles:data?.candles||[],distribution:model?.buyPriceDistribution||null});
+      indicators?.update({buys,holdingCosts:model?.holdingCosts,candles:data?.candles||[],distribution:model?.buyPriceDistribution||null});
       indicatorNotes();
       drawAverage();
     }
@@ -294,12 +294,6 @@
     function updateBuys(next){
       model=next;
       buys=purchases(model);
-      // Prefer exact ledger values, including purchases smaller than a satoshi
-      // after rounding. Keep the rounded-diary fallback for older snapshots.
-      averageBuys=new Map(buys);
-      if(model?.exactPurchases instanceof Map){
-        for(const [date,buy] of model.exactPurchases)averageBuys.set(date,buy);
-      }
       drawMarkers();
       updateIndicators();
       hideTip();

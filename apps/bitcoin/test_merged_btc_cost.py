@@ -8,6 +8,7 @@ import threading
 import unittest
 
 from btc_cost_tracker import dca_diary, iso, summarize
+from btc_pnl_service import compute_position
 from merged_btc_cost import BinanceBTCTracker, MergedBTCCostTracker
 from okx_wallet_service import OKXVault
 
@@ -239,9 +240,12 @@ class MergedCostTests(unittest.TestCase):
         result = self.merged.read_public()
         self.assertEqual(result['summary']['net_invested_usdt'], '201.101')
         self.assertEqual(result['today']['buy_spent_usdt'], '201.101')
-        self.assertEqual(self.merged.read_dca_diary()['days'][0][2], '201.1')
+        diary = self.merged.read_dca_diary()
+        self.assertEqual(diary['days'][0][2], '201.1')
         ledger = self.merged.accounting_snapshot()['ledger']
         self.assertEqual(ledger['records'][-1]['quote_ccy'], 'USDC', 'Accounting retains original quote')
+        position = compute_position(ledger['records'], '0.002', '120000', {('USDC', at // 60000 * 60000): '1.01'})
+        self.assertEqual(diary['holding_cost_history'], [['2026-11-09', position['metrics']['spot_average_cost']]])
 
     def test_display_price_converts_with_its_quote_for_profile_bins_without_mutating_ledger(self):
         at = NOW - 10000
@@ -263,7 +267,9 @@ class MergedCostTests(unittest.TestCase):
         result = self.merged.read_public()
         self.assertEqual(result['summary']['unpriced_currencies'], ['USDC'])
         self.assertIsNone(result['today']['buy_spent_usdt'])
-        self.assertIsNone(self.merged.read_dca_diary()['days'][0][2])
+        diary = self.merged.read_dca_diary()
+        self.assertIsNone(diary['days'][0][2])
+        self.assertEqual(diary['holding_cost_history'], [])
 
     def test_bad_rate_or_reused_bill_does_not_publish_new_book(self):
         self.factory.rates = minute_rate('USDC', NOW - 10000)

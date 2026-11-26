@@ -376,22 +376,23 @@ async function dcaDiaryPublic(env){
   const base={status:cost.status,connection_id:connection,venues:Array.isArray(cost.venues)?cost.venues:['okx'],as_of:cost.last_success_at??null,today:beijingDate(Date.now()),timezone:'Asia/Shanghai',error:cost.error??null};
   const [book,meta,cached]=await Promise.all([getFinanceSnapshot(env,'cost_book'),getFinanceSnapshot(env,'cost_meta'),getFinanceSnapshot(env,'dca_diary')]);
   const strip=value=>{const {key,connection:_,...rest}=value;return rest;};
-  if(!connection||!cost.summary||!book||!meta?.complete){
-    if(connection&&cost.summary&&cached?.connection===connection)return {...base,status:'stale',...strip(cached)};
+  if(!connection||!cost.summary||!book||!meta?.complete||typeof meta.identity!=='string'||meta.identity.slice(0,24)!==connection){
+    if(connection&&cost.summary&&cached?.connection===connection)return {...base,status:'stale',...strip(cached),holding_cost_history:[]};
     return {...base,status:cost.status==='loading'?'loading':'unavailable',error:cost.error||publicMessages.needs_history,...dcaDiary([])};
   }
-  const key=['exact-summary-v5',connection,book.trade_count,book.last_bill_id,book.binance_included===true,book.excluded_binance||0,meta.coverage_start_ms].join('|');
+  const key=['exact-summary-v6',connection,book.trade_count,book.last_at_ms,book.last_bill_id,book.inventory,book.cost,book.binance_included===true,book.excluded_binance||0,meta.coverage_start_ms].join('|');
   if(cached?.key===key&&cached.connection===connection)return {...base,...strip(cached)};
   const rows=(await env.DB.prepare('SELECT record_json FROM finance_trades ORDER BY at_ms, length(bill_id), bill_id').all()).results||[];
   // A sync may append fills after this request reads the published cost book.
   // Only use that book's watermark, so an in-flight buy cannot leak into its diary.
   const watermark={at_ms:book.last_at_ms,bill_id:book.last_bill_id};
-  const records=rows.map(row=>JSON.parse(row.record_json)).filter(row=>(!isBinance(row)||book.binance_included===true)&&compareTrades(row,watermark)<=0);
-  if(records.length!==book.trade_count){
-    if(cached?.connection===connection)return {...base,status:'stale',error:'成交账本正在核对，保留上次定投记录。',...strip(cached)};
+  let records;
+  try{records=rows.map(row=>JSON.parse(row.record_json)).filter(row=>(!isBinance(row)||book.binance_included===true)&&compareTrades(row,watermark)<=0);}catch{/* wait for a complete ledger read */}
+  if(!records||records.length!==book.trade_count){
+    if(cached?.connection===connection)return {...base,status:'stale',error:'成交账本正在核对，保留上次定投记录。',...strip(cached),holding_cost_history:[]};
     return {...base,status:'loading',error:'成交账本正在核对。',...dcaDiary([])};
   }
-  const diary={key,connection,...dcaDiary(records,{rates:await getFinanceSnapshot(env,'historical_rates',{}),coverageStartMs:meta.coverage_start_ms})};
+  const diary={key,connection,...dcaDiary(records,{rates:await getFinanceSnapshot(env,'historical_rates',{}),coverageStartMs:meta.coverage_start_ms,publishedBook:book})};
   // The cache is only a shortcut: a failed write still serves the diary.
   try{await putStatement(env,'dca_diary',diary,Date.now()).run();}catch{/* rebuilt on the next read */}
   return {...base,...strip(diary)};
@@ -399,7 +400,7 @@ async function dcaDiaryPublic(env){
 async function cachedPublic(env,key){
   const current=await activeOKX(env),snapshot=await getFinanceSnapshot(env,key),status=await getFinanceSnapshot(env,'sync_status');
   const okx=key==='okx'?snapshot:await getFinanceSnapshot(env,'okx');
-  if(!current.configured||okx?.connection_id!==current.connection){
+  if(!current.configured||okx?.connection_id!==current.connection||key==='btc_cost'&&snapshot?.connection_id!==current.connection){
     if(key==='okx')return emptyOKX(current.connection,current.configured);
     if(key==='btc_cost')return emptyCost(current.connection);
     if(key==='btc_pnl')return emptyPnL(current.connection);

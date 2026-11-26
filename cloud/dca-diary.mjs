@@ -1,4 +1,4 @@
-import {D,dec,txt,beijingDate,rateFor} from './cost-book.mjs';
+import {D,dec,txt,beijingDate,buildCostBook,rateFor} from './cost-book.mjs';
 
 // 定投日记 (the DCA diary): the BTC bought on each Beijing day, from the same
 // trades as the cost book. It starts on the owner's first purchase,
@@ -10,11 +10,24 @@ export const DCA_DIARY_START='2024-12-14';
 export const DCA_FIELDS=['date','btc','usdt','buys'];
 const BUY_PRICE_BUCKET_USDT=new D(2000);
 
-export function dcaDiary(rows,{rates={},start=DCA_DIARY_START,coverageStartMs=null}={}){
+function holdingCostHistory(trades,rates,publishedBook){
+  const history=[];
+  try{
+    const book=buildCostBook(trades,rates,(day,average)=>history.push([day,average]));
+    if(publishedBook&&(book.trade_count!==publishedBook.trade_count||book.last_at_ms!==publishedBook.last_at_ms||book.last_bill_id!==publishedBook.last_bill_id||!dec(book.cost).eq(publishedBook.cost)||!dec(book.inventory).eq(publishedBook.inventory)))return [];
+    return history;
+  }catch{
+    // An invalid trade or a missing buy rate makes the complete replay unverified.
+    return [];
+  }
+}
+
+export function dcaDiary(rows,{rates={},start=DCA_DIARY_START,coverageStartMs=null,publishedBook=null}={}){
+  const trades=Array.isArray(rows)?rows:[];
   const days=new Map(),priceBins=new Map();let pricedBTC=new D(0),unpricedBTC=new D(0);
-  for(const row of Array.isArray(rows)?rows:[]){
+  for(const row of trades){
     if(row?.side!=='buy'||!Number.isSafeInteger(row.at_ms))continue;
-    let btc;try{btc=dec(row.btc_net);}catch{continue;}
+    let date,btc;try{date=beijingDate(row.at_ms);btc=dec(row.btc_net);}catch{continue;}
     if(!btc.gt(0))continue;
     // Group actual execution prices, not each day's average or a candle price.
     // The quantity remains net of BTC fees, matching the diary and cost book.
@@ -23,7 +36,7 @@ export function dcaDiary(rows,{rates={},start=DCA_DIARY_START,coverageStartMs=nu
       const from=price.div(BUY_PRICE_BUCKET_USDT).floor().mul(BUY_PRICE_BUCKET_USDT),key=txt(from);
       priceBins.set(key,(priceBins.get(key)||new D(0)).add(btc));pricedBTC=pricedBTC.add(btc);
     }catch{unpricedBTC=unpricedBTC.add(btc);}
-    const date=beijingDate(row.at_ms),day=days.get(date)||{btc:new D(0),usdt:new D(0),priced:true,buys:0};
+    const day=days.get(date)||{btc:new D(0),usdt:new D(0),priced:true,buys:0};
     day.btc=day.btc.add(btc);day.buys++;
     // A fill without its minute rate leaves that day's USDT value unknown
     // rather than counting it as zero.
@@ -47,7 +60,7 @@ export function dcaDiary(rows,{rates={},start=DCA_DIARY_START,coverageStartMs=nu
     average_buy_price:period.priced&&period.btc.gt(0)?txt(period.usdt.div(period.btc)):null});
   return {start_date:first&&first<start?first:start,first_buy_date:first,
     coverage_start_date:Number.isSafeInteger(coverageStartMs)?beijingDate(coverageStartMs):null,
-    fields:DCA_FIELDS,days:list,
+    fields:DCA_FIELDS,days:list,holding_cost_history:holdingCostHistory(trades,rates,publishedBook),
     totals:{days:list.length,buys,btc:txt(btc.toDecimalPlaces(8)),usdt:priced?txt(usdt.toDecimalPlaces(2)):null},
     exact_totals:exact({days:list.length,buys,btc,usdt,priced}),
     exact_periods:Object.fromEntries([...periods].map(([year,period])=>[year,exact(period)])),

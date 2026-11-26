@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { dcaDiary, DCA_DIARY_START, DCA_FIELDS } from '../dca-diary.mjs';
+import { buildCostBook, positionView } from '../cost-book.mjs';
 
 const at = text => Date.parse(text);
 let next = 1;
@@ -32,6 +33,37 @@ test('days count the BTC received after fees, value other quotes at the fill min
   assert.equal(diary.first_buy_date, '2025-03-02');
 });
 
+test('holding cost closes each Beijing trade day, includes sale-only days and resets after a full exit', () => {
+  const thirdAt='2024-12-15T16:00:00Z',reentryAt='2024-12-17T16:00:00Z';
+  const first=fill('buy','1','100','2024-12-14T15:00:00Z');
+  const second=fill('buy','1','200','2024-12-14T15:59:59Z');
+  const sell=fill('sell','-1','600','2024-12-14T16:00:00Z',{ccy:'USDC'});
+  const third=fill('buy','1','300',thirdAt,{ccy:'USDC',venue:'binance'});
+  const exit=fill('sell','-2','900','2024-12-16T16:00:00Z');
+  const reentry={...fill('buy','0.4995','0.999',reentryAt,{ccy:'ETH'}),btc_gross:'0.5',fee_btc:'-0.0005'};
+  const trades=[exit,third,first,reentry,second,sell];
+  const rates={[minuteKey('USDC',thirdAt)]:{close:'0.9'},[minuteKey('ETH',reentryAt)]:{close:'1500'}};
+  const publishedBook=buildCostBook(trades,rates);
+  const diary=dcaDiary(trades,{rates,publishedBook});
+  assert.deepEqual(diary.holding_cost_history,[['2024-12-14','150'],['2024-12-15','150'],['2024-12-16','210'],['2024-12-17',null],['2024-12-18','3000']]);
+  assert.deepEqual(diary.days.map(([day])=>day),['2024-12-14','2024-12-16','2024-12-18']);
+  const {metrics}=positionView(publishedBook,'2','3300',{},null,at(reentryAt),'account');
+  assert.equal(diary.holding_cost_history.at(-1)[1],metrics.spot_average_cost);
+  assert.notEqual(metrics.average_cost,metrics.spot_average_cost);
+  assert.deepEqual(dcaDiary(trades,{rates,publishedBook:{...publishedBook,cost:'1'}}).holding_cost_history,[]);
+});
+
+test('unverified holding history does not carry the last known cost across invalid trades', () => {
+  const first=fill('buy','1','100','2025-04-30T01:00:00Z');
+  const unknown=fill('buy','0.001','90','2025-05-01T01:00:00Z',{ccy:'FDUSD'});
+  const next=fill('buy','0.0002','20','2025-05-02T01:00:00Z');
+  const missingRate=dcaDiary([first,unknown,next]);
+  assert.equal(missingRate.days.length,3);
+  assert.deepEqual(missingRate.holding_cost_history,[]);
+  const oversell=fill('sell','-2','200','2025-05-01T01:00:00Z');
+  assert.deepEqual(dcaDiary([first,oversell,next]).holding_cost_history,[]);
+});
+
 test('a buy without its minute rate leaves only that day\'s USDT unknown, never zero', () => {
   const diary = dcaDiary([fill('buy', '0.001', '90', '2025-05-01T01:00:00Z', { ccy: 'FDUSD' }), fill('buy', '0.0002', '20', '2025-05-02T01:00:00Z')]);
   assert.deepEqual(diary.days, [['2025-05-01', '0.001', null, 1], ['2025-05-02', '0.0002', '20', 1]]);
@@ -42,11 +74,12 @@ test('amounts are rounded to satoshis and cents; malformed rows are skipped', ()
   const diary = dcaDiary([
     fill('buy', '0.000123456789', '20.005', '2025-06-01T01:00:00Z'),
     { ...fill('buy', '0.1', '1', '2025-06-01T02:00:00Z'), at_ms: 1.5 },
+    { ...fill('buy', '0.1', '1', '2025-06-01T02:00:00Z'), at_ms: Number.MIN_SAFE_INTEGER },
     { ...fill('buy', 'nope', '1', '2025-06-01T03:00:00Z') },
     { ...fill('buy', '0', '1', '2025-06-01T04:00:00Z') },
     { ...fill('transfer', '0.1', '1', '2025-06-01T05:00:00Z') }, null, 'row']);
   assert.deepEqual(diary.days, [['2025-06-01', '0.00012346', '20.01', 1]]);
-  assert.deepEqual(dcaDiary(null), { start_date: '2024-12-14', first_buy_date: null, coverage_start_date: null, fields: DCA_FIELDS, days: [], totals: { days: 0, buys: 0, btc: '0', usdt: '0' },
+  assert.deepEqual(dcaDiary(null), { start_date: '2024-12-14', first_buy_date: null, coverage_start_date: null, fields: DCA_FIELDS, days: [], holding_cost_history: [], totals: { days: 0, buys: 0, btc: '0', usdt: '0' },
     exact_totals: { days: 0, buys: 0, btc: '0', usdt: '0', average_buy_price: null }, exact_periods: {}, exact_days: {},
     buy_price_distribution: { bucket_usdt: '2000', priced_btc: '0', unpriced_btc: '0', bins: [] } });
 });
