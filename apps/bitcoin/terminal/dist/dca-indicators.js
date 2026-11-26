@@ -5,6 +5,8 @@
 })(typeof window!=='undefined'?window:globalThis,function(){
   'use strict';
   const PROFILE_PREFIX='buy-profile-';
+  const DAY_MS=86400000,AVERAGE_COLOR='#916122';
+  const AVERAGE_WINDOWS=new Set(['all','7','30','90']);
   const decimal=value=>typeof value==='string'&&value.length<=512&&/^\d+(?:\.\d+)?$/.test(value);
   function dateKey(value){
     if(typeof value!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(value))return null;
@@ -33,6 +35,90 @@
       rows.push(Number.isFinite(value)&&value>=0&&value<=1e12?{time,value}:{time});
     }
     return rows.sort((a,b)=>a.time.localeCompare(b.time));
+  }
+  function decimalUnits(value){
+    if(!decimal(value))return null;
+    const [whole,fraction='']=value.split('.');
+    return {units:BigInt(whole+fraction),places:fraction.length};
+  }
+  function averagePurchases(buys){
+    const rows=[];let places=0;
+    for(const [date,buy] of buys){
+      if(!dateKey(date))continue;
+      const usdt=decimalUnits(buy?.usdt),btc=decimalUnits(buy?.btc),day=Date.parse(date+'T00:00:00Z');
+      if(!usdt||!btc||btc.units===0n){rows.push({day,known:false});continue;}
+      places=Math.max(places,usdt.places,btc.places);
+      rows.push({day,known:true,usdt,btc});
+    }
+    const scale=amount=>amount.units*10n**BigInt(places-amount.places);
+    return rows.sort((a,b)=>a.day-b.day).map(row=>row.known?{...row,usdt:scale(row.usdt),btc:scale(row.btc)}:row);
+  }
+  function chartPrice(usdt,btc){
+    if(btc===0n)return null;
+    // Keep both sums exact. Round the final ratio to Number's precision
+    // without converting potentially large integer accumulators to Number.
+    const places=17+btc.toString().length-usdt.toString().length;
+    const numerator=places<0?usdt:usdt*10n**BigInt(places);
+    const denominator=places<0?btc*10n**BigInt(-places):btc;
+    const price=Number(((numerator+denominator/2n)/denominator)+'e'+(-places));
+    return Number.isFinite(price)?price:null;
+  }
+  function averageRows(buys,times,window){
+    const purchases=averagePurchases(buys),duration=window==='all'?Infinity:(Number(window)-1)*DAY_MS;
+    const rows=[];let first=0,next=0,unknown=0,usdt=0n,btc=0n,price=null,lastTime='';
+    for(const time of times){
+      if(!dateKey(time)||time<=lastTime)continue;
+      lastTime=time;
+      const day=Date.parse(time+'T00:00:00Z'),start=day-duration;
+      let changed=false;
+      while(next<purchases.length&&purchases[next].day<=day){
+        const buy=purchases[next++];changed=true;
+        if(buy.known){usdt+=buy.usdt;btc+=buy.btc;}else unknown++;
+      }
+      while(first<next&&purchases[first].day<start){
+        const buy=purchases[first++];changed=true;
+        if(buy.known){usdt-=buy.usdt;btc-=buy.btc;}else unknown--;
+      }
+      if(changed)price=unknown?null:chartPrice(usdt,btc);
+      rows.push(price===null?{time}:{time,value:price});
+    }
+    return rows;
+  }
+  // LineSeries connects the points on each side of whitespace. Use the native
+  // series for scaling and draw the disjoint runs on the same pane when needed.
+  class DisjointAverageLine{
+    constructor(){this.rows=[];this.color=AVERAGE_COLOR;this.views=[{zOrder:()=>'normal',renderer:()=>this}];}
+    attached({chart,series,requestUpdate}){this.chart=chart;this.series=series;this.requestUpdate=requestUpdate;}
+    detached(){this.chart=null;this.series=null;this.requestUpdate=null;this.rows=[];}
+    paneViews(){return this.views;}
+    setData(rows){this.rows=rows;this.requestUpdate?.();}
+    setColor(color){this.color=color;this.requestUpdate?.();}
+    draw(target){
+      const scale=this.chart?.timeScale(),range=scale?.getVisibleLogicalRange();
+      if(!range||!this.series)return;
+      // Rows share the candle series' dates and logical indexes. Include one
+      // point on either side so continuing segments reach the pane edges.
+      const from=Math.max(0,Math.floor(range.from)-1),to=Math.min(this.rows.length-1,Math.ceil(range.to)+1);
+      target.useMediaCoordinateSpace(({context:ctx})=>{
+        ctx.save();try{
+          ctx.strokeStyle=this.color;ctx.lineWidth=2;ctx.lineJoin='round';ctx.setLineDash([]);ctx.beginPath();
+          let previous=null,length=0;
+          const finishRun=()=>{
+            if(length===1){ctx.moveTo(previous.x-1,previous.y);ctx.lineTo(previous.x+1,previous.y);}
+            previous=null;length=0;
+          };
+          for(let index=from;index<=to;index++){
+            const row=this.rows[index];
+            if(row.value===undefined){finishRun();continue;}
+            const x=scale.timeToCoordinate(row.time),y=this.series.priceToCoordinate(row.value);
+            if(!Number.isFinite(x)||!Number.isFinite(y)){finishRun();continue;}
+            if(previous){ctx.lineTo(x,previous.y);ctx.lineTo(x,y);}else ctx.moveTo(x,y);
+            previous={x,y};length++;
+          }
+          finishRun();ctx.stroke();
+        }finally{ctx.restore();}
+      });
+    }
   }
   class BuyPriceProfile{
     constructor(){this.rows=[];this.items=[];this.color='#a98773';this.views=[{zOrder:()=>'bottom',renderer:()=>this}];}
@@ -68,14 +154,65 @@
   function create({chart,series,lib}={}){
     if(!chart||!series||!lib||typeof chart.addSeries!=='function'||typeof series.attachPrimitive!=='function')return null;
     const profile=new BuyPriceProfile();let profileVisible=false,dailyVisible=false,daily=null,destroyed=false,profileSignature='',dailySignature='',dailyData=[],profileData=[];
-    let colors={profile:'#a98773',volume:'#a98773'};
+    const averageStroke=new DisjointAverageLine();
+    let average=null,averageWindow=null,averageGaps=false,averageSignature='',averageValues=new Map(),latestBuys=new Map(),latestCandles=[];
+    let colors={profile:'#a98773',volume:'#a98773',average:AVERAGE_COLOR};
     function retainRange(action){const scale=chart.timeScale(),range=scale.getVisibleLogicalRange();action();if(range)scale.setVisibleLogicalRange(range);}
-    function update({buys,candles,distribution}={}){
+    function updateAverage(){
+      if(!averageWindow)return;
+      const times=latestCandles.map(row=>row?.time);
+      const signature=JSON.stringify([averageWindow,times,[...latestBuys].map(([date,buy])=>[date,buy?.usdt,buy?.btc])]);
+      if(signature===averageSignature)return;
+      averageSignature=signature;
+      const rows=averageRows(latestBuys,times,averageWindow);
+      averageValues.clear();let first=-1,last=-1;
+      rows.forEach((row,index)=>{
+        if(row.value===undefined)return;
+        if(first<0)first=index;
+        last=index;averageValues.set(row.time,row.value);
+      });
+      if(!average&&!averageValues.size)return;
+      const gaps=averageValues.size>0&&last-first+1>averageValues.size;
+      retainRange(()=>{
+        if(!average){
+          const priceScaleId=(typeof series.options==='function'?series.options().priceScaleId:null)??'right';
+          average=chart.addSeries(lib.LineSeries,{priceScaleId,color:colors.average,lineStyle:lib.LineStyle?.Solid??0,lineWidth:2,lineType:lib.LineType?.WithSteps??1,lineVisible:!gaps,lastValueVisible:false,priceLineVisible:false,baseLineVisible:false,crosshairMarkerVisible:false},0);
+        }else if(gaps!==averageGaps)average.applyOptions({lineVisible:!gaps});
+        if(gaps){
+          averageStroke.setData(rows);
+          if(!averageGaps)series.attachPrimitive(averageStroke);
+        }else if(averageGaps)series.detachPrimitive(averageStroke);
+        averageGaps=gaps;
+        average.setData(averageValues.size?rows.map(row=>({...row})):[]);
+      });
+    }
+    function removeAverage(){
+      if(averageGaps){series.detachPrimitive(averageStroke);averageGaps=false;}
+      if(average){chart.removeSeries(average);average=null;}
+    }
+    function setAverageWindow(window){
+      if(destroyed)return null;
+      const next=lib.LineSeries&&AVERAGE_WINDOWS.has(window)?window:null;
+      if(next===averageWindow)return averageWindow;
+      averageWindow=next;
+      if(next)updateAverage();
+      else{
+        averageSignature='';averageValues.clear();
+        if(average)retainRange(removeAverage);
+      }
+      return averageWindow;
+    }
+    function averageAt(time){
+      if(time&&Number.isInteger(time.year)&&Number.isInteger(time.month)&&Number.isInteger(time.day))time=String(time.year).padStart(4,'0')+'-'+String(time.month).padStart(2,'0')+'-'+String(time.day).padStart(2,'0');
+      return averageValues.get(time)??null;
+    }
+    function update({buys,averageBuys=buys,candles,distribution}={}){
       if(destroyed)return;
       const rows=profileRows(distribution),signature=JSON.stringify(rows.map(({from,to,btc})=>[from,to,btc]));
       if(signature!==profileSignature){profileSignature=signature;profileData=rows;profile.setData(rows);}
       const next=dailyRows(buys,candles),nextSignature=JSON.stringify(next);
       if(nextSignature!==dailySignature){dailySignature=nextSignature;dailyData=next;if(daily)retainRange(()=>daily.setData(next.map(row=>({...row}))));}
+      latestBuys=averageBuys instanceof Map?averageBuys:new Map();latestCandles=Array.isArray(candles)?candles:[];updateAverage();
     }
     function setProfileVisible(visible){
       if(destroyed)return false;visible=!!visible;if(visible===profileVisible)return profileVisible;
@@ -99,14 +236,16 @@
     }
     function theme(next={}){
       if(destroyed)return;colors={...colors,...next};profile.setColor(colors.profile);daily?.applyOptions({color:colors.volume});
+      averageStroke.setColor(colors.average);average?.applyOptions({color:colors.average});
     }
     function getProfileBin(id){
       if(!profileVisible||typeof id!=='string')return null;const row=profileData.find(row=>row.id===id);return row?{from:row.from,to:row.to,btc:row.btc}:null;
     }
     function destroy(){
       if(destroyed)return;if(daily){chart.removeSeries(daily);daily=null;}if(profileVisible)series.detachPrimitive(profile);profileData=[];dailyData=[];profile.rows=[];profile.items=[];profileVisible=false;dailyVisible=false;destroyed=true;
+      removeAverage();averageValues.clear();latestBuys=new Map();latestCandles=[];
     }
-    return {update,setProfileVisible,setDailyVisible,theme,getProfileBin,destroy};
+    return {update,setProfileVisible,setDailyVisible,setAverageWindow,averageAt,theme,getProfileBin,destroy};
   }
   return {PROFILE_PREFIX,profileRows,dailyRows,BuyPriceProfile,create};
 });
