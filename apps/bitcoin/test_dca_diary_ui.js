@@ -74,6 +74,27 @@ async function check(name, fn) { await fn(); checks++; console.log('OK ' + name)
     for(const bad of [{...distribution,bucket_usdt:'5000'},{...distribution,bucket_usdt:'1000'},{...distribution,bins:[{from:'60000',to:'63000',btc:'1'}]},{...distribution,bins:[{from:'60000',to:'62000',btc:'-1'}]},{...distribution,bins:[...distribution.bins,...distribution.bins]},{...distribution,unpriced_btc:null}])assert.equal(api.priceDistribution(bad),null);
   });
 
+  await check('exact purchases keep sub-satoshi buys and unknown costs for the chart', () => {
+    const model = api.normalize({...DIARY, days:[...DIARY.days, ['2024-12-16','0','0',1]], exact_days:{
+      '2024-12-14':{btc:'0.005200891234',usdt:'320.004456'},
+      '2024-12-15':{btc:'0.00019461',usdt:null},
+      '2024-12-16':{btc:'0.000000004',usdt:'0.00032'},
+      '2026-11-06':{btc:'0.0002'},
+      '2025-02-29':{btc:'0.1',usdt:'1'},
+      '2025-03-01':{btc:'0.000',usdt:'1'},
+      '2025-03-02':{btc:'-0.1',usdt:'1'},
+      '2025-03-03':null,
+    }});
+    assert.deepEqual(model.exactPurchases, new Map([
+      ['2024-12-14',{btc:'0.005200891234',usdt:'320.004456'}],
+      ['2024-12-15',{btc:'0.00019461',usdt:null}],
+      ['2024-12-16',{btc:'0.000000004',usdt:'0.00032'}],
+      ['2026-11-06',{btc:'0.0002',usdt:null}],
+    ]));
+    assert.equal(model.days.has(D('2024-12-16')), false);
+    assert.equal(api.normalize(DIARY).exactPurchases.size, 0);
+  });
+
   await check('fixed USDT bands distinguish 50, 100 and 200 while preserving low amounts and handling missing prices', () => {
     // Cents of USDT and satoshis: a usual 20 USDT day, then 8, 12, 40, 99.50 and 320 USDT days.
     const days = new Map([[1, { btc: 25000, usdt: 2000 }], [2, { btc: 25000, usdt: 2000 }], [3, { btc: 25000, usdt: 2000 }], [4, { btc: 50000, usdt: 4000 }], [5, { btc: 125000, usdt: 9950 }], [6, { btc: 400000, usdt: 32000 }], [7, { btc: 10000, usdt: 800 }]]);

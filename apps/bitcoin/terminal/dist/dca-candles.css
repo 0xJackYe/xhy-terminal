@@ -11,6 +11,35 @@
 .dca-candle-readout{display:flex;flex:none;align-items:baseline;gap:5px 16px;flex-wrap:wrap;padding:10px 0;min-height:38px;font:11px var(--mono,monospace);font-variant-numeric:tabular-nums}.dca-candle-readout strong{font-weight:500}.dca-candle-readout>span{color:var(--muted)}#dcaCandleBuy{margin-left:auto;color:var(--accent)}
 .dca-candle-readout>.dca-candle-cost{color:var(--dca-cost);white-space:nowrap}.dca-candle-cost::before{content:"";display:inline-block;width:16px;margin-right:5px;border-top:1px dashed currentColor;vertical-align:middle}
 html[data-xhy-theme] body .dca-candle-readout>.dca-candle-cost{color:var(--dca-cost)!important}
+.dca-candle-sheet { --dca-average: #7048a7; }
+body.dark .dca-candle-sheet, html[data-xhy-theme="dark"] .dca-candle-sheet { --dca-average: #c3a5ff; }
+.dca-candle-average-window {
+  min-height: 29px;
+  max-width: 100%;
+  padding: 4px 6px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--soft);
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+}
+.dca-candle-average-window:disabled { opacity: .4; }
+.dca-candle-readout > .dca-candle-average,
+html[data-xhy-theme] body .dca-candle-readout > .dca-candle-average { color: var(--dca-average) !important; white-space: nowrap; }
+.dca-candle-average::before {
+  content: "";
+  display: inline-block;
+  width: 16px;
+  margin-right: 5px;
+  border-top: 2px solid currentColor;
+  vertical-align: middle;
+}
+@media (max-width: 700px) {
+  .dca-candle-tools { flex-wrap: wrap; min-width: 0; gap: 5px; }
+  .dca-candle-tools > .dca-candle-controls:first-child { flex-wrap: wrap; }
+  .dca-candle-average-window { font-size: 10px; }
+}
 .dca-candle-stage{position:relative;flex:1 1 auto;min-height:100px;min-width:0;overflow:hidden}.dca-candle-chart{position:absolute;inset:0;min-height:0;min-width:0;touch-action:none}.dca-candle-chart:focus-visible{outline:1px solid var(--accent);outline-offset:-2px}.dca-candle-empty{position:absolute;inset:0;display:grid;place-items:center;padding:20px;color:var(--muted);font-size:12px;text-align:center;pointer-events:none}
 .dca-candle-tip{position:absolute;z-index:3;min-width:120px;max-width:calc(100% - 16px);padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--text);box-shadow:0 8px 28px -8px rgb(0 0 0 / .3);pointer-events:none;line-height:1.45;font-variant-numeric:tabular-nums}.dca-candle-tip span{display:block;font:600 17px var(--mono,monospace);line-height:1.5}.dca-candle-tip small{display:block;color:var(--muted);font:13px var(--mono,monospace);line-height:1.5}
 .dca-candle-footer{display:flex;flex:none;justify-content:space-between;align-items:center;gap:5px 12px;flex-wrap:wrap;padding-top:9px;font-size:10px;line-height:1.5;color:var(--muted)}.dca-candle-footer a{color:var(--muted);text-decoration:none;white-space:nowrap}.dca-candle-footer a:hover{text-decoration:underline}

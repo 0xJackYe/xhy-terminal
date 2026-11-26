@@ -13,7 +13,7 @@
   // 定投日记: one square per Beijing day since the first purchase on
   // 2024-12-14, like a GitHub contribution graph. The more that went in that
   // day, the deeper its orange; its heading opens the daily candlestick chart.
-  const START = '2024-12-14', DAY = 86400000, REFRESH_MS = 30000, REQUEST_TIMEOUT_MS = 15000;
+  const START = '2024-12-14', DAY = 86400000, REFRESH_MS = 30000, REQUEST_TIMEOUT_MS = 15000, MAX_DAYS = 20000;
   const WEEKDAYS = ['周一','周二','周三','周四','周五','周六','周日'];
   const DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
@@ -84,7 +84,7 @@
     const at = name => fields.indexOf(name), date = at('date'), btc = at('btc'), usdt = at('usdt'), buys = at('buys');
     if (date < 0 || btc < 0 || !Array.isArray(data.days)) return null;
     const days = new Map();
-    for (const row of data.days.slice(0,20000)) {
+    for (const row of data.days.slice(0,MAX_DAYS)) {
       if (!Array.isArray(row)) continue;
       const time = parseDate(row[date]), amount = units(row[btc],8);
       if (time === null || amount === null || amount <= 0) continue;
@@ -92,12 +92,17 @@
       const old = days.get(time);
       days.set(time,old ? {btc:old.btc+amount,usdt:old.usdt === null || cost === null ? null : old.usdt+cost,buys:old.buys === null || count === null ? null : old.buys+count} : {btc:amount,usdt:cost,buys:count});
     }
-    // Exact per-day fills feed B-marker tooltips; the heatmap keeps its existing units.
+    // A positive exact purchase can round to zero in the heatmap's satoshis.
+    const exactPurchases = new Map();
     if (data.exact_days && typeof data.exact_days === 'object' && !Array.isArray(data.exact_days)) {
-      for (const [date,exact] of Object.entries(data.exact_days)) {
-        const day = days.get(parseDate(date));if (!day || !exact || typeof exact !== 'object') continue;
-        if (decimalAmount(exact.btc)) day.exactBTC = exact.btc;
-        if (exact.usdt === null || decimalAmount(exact.usdt)) day.exactUSDT = exact.usdt;
+      for (const [date,exact] of Object.entries(data.exact_days).slice(0,MAX_DAYS)) {
+        const time = parseDate(date);
+        if (time === null || !exact || typeof exact !== 'object' || Array.isArray(exact)) continue;
+        const exactBTC = decimalAmount(exact.btc) ? exact.btc : null, exactUSDT = decimalAmount(exact.usdt) ? exact.usdt : null;
+        if (exactBTC !== null && /[1-9]/.test(exactBTC)) exactPurchases.set(date,{btc:exactBTC,usdt:exactUSDT});
+        const day = days.get(time);if (!day) continue;
+        if (exactBTC !== null) day.exactBTC = exactBTC;
+        if (exact.usdt === null || exactUSDT !== null) day.exactUSDT = exactUSDT;
       }
     }
     const first = days.size ? Math.min(...days.keys()) : null, fixed = parseDate(START);
@@ -109,7 +114,7 @@
       }
     }
     return {status:data.status,connectionId:typeof data.connection_id === 'string' ? data.connection_id : null,days,first,start:first !== null ? Math.min(start,first) : start,coverage:parseDate(data.coverage_start_date),today:parseDate(data.today),
-      exactTotals:exactSummary(data.exact_totals),exactPeriods:periods,buyPriceDistribution:priceDistribution(data.buy_price_distribution),
+      exactPurchases,exactTotals:exactSummary(data.exact_totals),exactPeriods:periods,buyPriceDistribution:priceDistribution(data.buy_price_distribution),
       venues:Array.isArray(data.venues) ? data.venues.filter(item => item === 'okx' || item === 'binance') : [],
       error:typeof data.error === 'string' && data.error ? data.error.slice(0,200) : null,asOf:typeof data.as_of === 'string' ? data.as_of : null};
   }
