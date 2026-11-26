@@ -75,6 +75,19 @@
     }
     return {bucket_usdt:'2000',priced_btc:value.priced_btc,unpriced_btc:value.unpriced_btc,bins};
   }
+  function holdingCostHistory(rows) {
+    const history = new Map();
+    if (!Array.isArray(rows) || rows.length > MAX_DAYS) return history;
+    for (const row of rows) {
+      if (!Array.isArray(row) || row.length !== 2) return new Map();
+      const [date, raw] = row;
+      if (parseDate(date) === null || history.has(date)) return new Map();
+      const price = raw === null ? null : decimalAmount(raw) ? Number(raw) : NaN;
+      if (price !== null && (!Number.isFinite(price) || price > 1e12)) return new Map();
+      history.set(date, price);
+    }
+    return history;
+  }
 
   // The server's view, checked field by field; anything malformed is dropped
   // rather than drawn.
@@ -92,14 +105,12 @@
       const old = days.get(time);
       days.set(time,old ? {btc:old.btc+amount,usdt:old.usdt === null || cost === null ? null : old.usdt+cost,buys:old.buys === null || count === null ? null : old.buys+count} : {btc:amount,usdt:cost,buys:count});
     }
-    // A positive exact purchase can round to zero in the heatmap's satoshis.
-    const exactPurchases = new Map();
+    // Exact per-day fills feed the B-marker tooltip.
     if (data.exact_days && typeof data.exact_days === 'object' && !Array.isArray(data.exact_days)) {
       for (const [date,exact] of Object.entries(data.exact_days).slice(0,MAX_DAYS)) {
         const time = parseDate(date);
         if (time === null || !exact || typeof exact !== 'object' || Array.isArray(exact)) continue;
         const exactBTC = decimalAmount(exact.btc) ? exact.btc : null, exactUSDT = decimalAmount(exact.usdt) ? exact.usdt : null;
-        if (exactBTC !== null && /[1-9]/.test(exactBTC)) exactPurchases.set(date,{btc:exactBTC,usdt:exactUSDT});
         const day = days.get(time);if (!day) continue;
         if (exactBTC !== null) day.exactBTC = exactBTC;
         if (exact.usdt === null || exactUSDT !== null) day.exactUSDT = exactUSDT;
@@ -114,7 +125,7 @@
       }
     }
     return {status:data.status,connectionId:typeof data.connection_id === 'string' ? data.connection_id : null,days,first,start:first !== null ? Math.min(start,first) : start,coverage:parseDate(data.coverage_start_date),today:parseDate(data.today),
-      exactPurchases,exactTotals:exactSummary(data.exact_totals),exactPeriods:periods,buyPriceDistribution:priceDistribution(data.buy_price_distribution),
+      holdingCosts:holdingCostHistory(data.holding_cost_history),exactTotals:exactSummary(data.exact_totals),exactPeriods:periods,buyPriceDistribution:priceDistribution(data.buy_price_distribution),
       venues:Array.isArray(data.venues) ? data.venues.filter(item => item === 'okx' || item === 'binance') : [],
       error:typeof data.error === 'string' && data.error ? data.error.slice(0,200) : null,asOf:typeof data.as_of === 'string' ? data.as_of : null};
   }

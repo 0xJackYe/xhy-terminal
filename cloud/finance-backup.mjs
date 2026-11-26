@@ -71,7 +71,10 @@ function staleSnapshot(key,source,saved){
     for(const period of Object.values(value.pnl))if(object(period)){period.stale=true;period.status='stale';period.reason=note;}
     if(usable('btc_pnl',value.lifetime_pnl))value.lifetime_pnl=staleSnapshot('btc_pnl',value.lifetime_pnl,saved);
   }
-  if(key==='dca_diary'){delete value.key;delete value.connection;}
+  if(key==='dca_diary'){
+    delete value.key;delete value.connection;
+    if(!Array.isArray(value.holding_cost_history))value.holding_cost_history=[];
+  }
   return value;
 }
 

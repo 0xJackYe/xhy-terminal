@@ -74,25 +74,15 @@ async function check(name, fn) { await fn(); checks++; console.log('OK ' + name)
     for(const bad of [{...distribution,bucket_usdt:'5000'},{...distribution,bucket_usdt:'1000'},{...distribution,bins:[{from:'60000',to:'63000',btc:'1'}]},{...distribution,bins:[{from:'60000',to:'62000',btc:'-1'}]},{...distribution,bins:[...distribution.bins,...distribution.bins]},{...distribution,unpriced_btc:null}])assert.equal(api.priceDistribution(bad),null);
   });
 
-  await check('exact purchases keep sub-satoshi buys and unknown costs for the chart', () => {
-    const model = api.normalize({...DIARY, days:[...DIARY.days, ['2024-12-16','0','0',1]], exact_days:{
-      '2024-12-14':{btc:'0.005200891234',usdt:'320.004456'},
-      '2024-12-15':{btc:'0.00019461',usdt:null},
-      '2024-12-16':{btc:'0.000000004',usdt:'0.00032'},
-      '2026-11-06':{btc:'0.0002'},
-      '2025-02-29':{btc:'0.1',usdt:'1'},
-      '2025-03-01':{btc:'0.000',usdt:'1'},
-      '2025-03-02':{btc:'-0.1',usdt:'1'},
-      '2025-03-03':null,
-    }});
-    assert.deepEqual(model.exactPurchases, new Map([
-      ['2024-12-14',{btc:'0.005200891234',usdt:'320.004456'}],
-      ['2024-12-15',{btc:'0.00019461',usdt:null}],
-      ['2024-12-16',{btc:'0.000000004',usdt:'0.00032'}],
-      ['2026-11-06',{btc:'0.0002',usdt:null}],
-    ]));
-    assert.equal(model.days.has(D('2024-12-16')), false);
-    assert.equal(api.normalize(DIARY).exactPurchases.size, 0);
+  await check('holding history accepts sell-only and flat days and rejects malformed sequences', () => {
+    const history = [['2024-12-14','77563.2212'],['2024-12-17',null],['2024-12-19','80001.4102']];
+    const model = api.normalize({...DIARY,holding_cost_history:history});
+    assert.deepEqual(model.holdingCosts,new Map([['2024-12-14',77563.2212],['2024-12-17',null],['2024-12-19',80001.4102]]));
+    assert.equal(model.days.has(D('2024-12-17')),false,'sell-only day does not become a buy marker');
+    assert.equal(api.normalize(DIARY).holdingCosts.size,0);
+    for(const bad of [[history[0],history[0]],[['2025-02-30','1']],[['2024-12-14','NaN']],[['2024-12-14','-1']]]){
+      assert.equal(api.normalize({...DIARY,holding_cost_history:bad}).holdingCosts.size,0);
+    }
   });
 
   await check('fixed USDT bands distinguish 50, 100 and 200 while preserving low amounts and handling missing prices', () => {

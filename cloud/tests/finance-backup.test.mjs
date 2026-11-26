@@ -49,7 +49,7 @@ test('a private dated snapshot restores every supported view, marks it stale and
   }
   const combined=await readFinanceBackup(f.env,'combined');assert.equal(combined.totals.btc,'0.1');assert.equal(combined.lifetime_pnl.status,'stale');assert.equal(combined.sources[0].status,'stale');assert.equal(combined.pnl.today.status,'stale');
   assert.deepEqual(combined.history,[{timestamp:AT,btc:'0.1',usd:'5990',cny:'41930'}]);assert.equal('transfer_connection'in combined,false);assert.doesNotMatch(JSON.stringify(combined),/private-withdrawal-id|private-fingerprint/);
-  const diary=await readFinanceBackup(f.env,'dca_diary');assert.equal(diary.status,'stale');assert.deepEqual(diary.days,source.dca_diary.days);assert.equal('key'in diary,false);assert.equal('connection'in diary,false);
+  const diary=await readFinanceBackup(f.env,'dca_diary');assert.equal(diary.status,'stale');assert.deepEqual(diary.days,source.dca_diary.days);assert.deepEqual(diary.holding_cost_history,[]);assert.equal('key'in diary,false);assert.equal('connection'in diary,false);
   assert.equal(source.combined.stale,false,'input is not mutated');
 });
 

@@ -36,51 +36,46 @@
     }
     return rows.sort((a,b)=>a.time.localeCompare(b.time));
   }
-  function decimalUnits(value){
-    if(!decimal(value))return null;
-    const [whole,fraction='']=value.split('.');
-    return {units:BigInt(whole+fraction),places:fraction.length};
+  // Integrate the cost from one trade-day close up to the next. Two cursors
+  // give the sum and covered days in a rolling window, even if candles omit dates.
+  function costIntegral(changes){
+    let index=0, previous=changes[0]?.day??0, value=null, sum=0, knownDays=0;
+    return end=>{
+      while(index<changes.length&&changes[index].day<end){
+        const change=changes[index++];
+        const days=change.day-previous;
+        if(value!==null){sum+=value*days;knownDays+=days;}
+        previous=change.day;
+        value=change.value;
+      }
+      const days=value===null?0:end-previous;
+      return {sum:sum+(value??0)*days,days:knownDays+days};
+    };
   }
-  function averagePurchases(buys){
-    const rows=[];let places=0;
-    for(const [date,buy] of buys){
-      if(!dateKey(date))continue;
-      const usdt=decimalUnits(buy?.usdt),btc=decimalUnits(buy?.btc),day=Date.parse(date+'T00:00:00Z');
-      if(!usdt||!btc||btc.units===0n){rows.push({day,known:false});continue;}
-      places=Math.max(places,usdt.places,btc.places);
-      rows.push({day,known:true,usdt,btc});
+
+  function averageRows(costs,times,window){
+    const changes=[];
+    for(const [time,value] of costs){
+      if(!dateKey(time)||value!==null&&(!Number.isFinite(value)||value<0||value>1e12))continue;
+      changes.push({day:Date.parse(time+'T00:00:00Z')/DAY_MS,value});
     }
-    const scale=amount=>amount.units*10n**BigInt(places-amount.places);
-    return rows.sort((a,b)=>a.day-b.day).map(row=>row.known?{...row,usdt:scale(row.usdt),btc:scale(row.btc)}:row);
-  }
-  function chartPrice(usdt,btc){
-    if(btc===0n)return null;
-    // Keep both sums exact. Round the final ratio to Number's precision
-    // without converting potentially large integer accumulators to Number.
-    const places=17+btc.toString().length-usdt.toString().length;
-    const numerator=places<0?usdt:usdt*10n**BigInt(places);
-    const denominator=places<0?btc*10n**BigInt(-places):btc;
-    const price=Number(((numerator+denominator/2n)/denominator)+'e'+(-places));
-    return Number.isFinite(price)?price:null;
-  }
-  function averageRows(buys,times,window){
-    const purchases=averagePurchases(buys),duration=window==='all'?Infinity:(Number(window)-1)*DAY_MS;
-    const rows=[];let first=0,next=0,unknown=0,usdt=0n,btc=0n,price=null,lastTime='';
+    changes.sort((a,b)=>a.day-b.day);
+    const to=costIntegral(changes),from=costIntegral(changes),period=Number(window);
+    const rows=[];
+    let index=0,current=null,lastTime='';
     for(const time of times){
       if(!dateKey(time)||time<=lastTime)continue;
       lastTime=time;
-      const day=Date.parse(time+'T00:00:00Z'),start=day-duration;
-      let changed=false;
-      while(next<purchases.length&&purchases[next].day<=day){
-        const buy=purchases[next++];changed=true;
-        if(buy.known){usdt+=buy.usdt;btc+=buy.btc;}else unknown++;
+      const day=Date.parse(time+'T00:00:00Z')/DAY_MS;
+      let value=null;
+      if(window==='all'){
+        while(index<changes.length&&changes[index].day<=day)current=changes[index++].value;
+        value=current;
+      }else{
+        const end=to(day+1),start=from(day+1-period);
+        if(end.days-start.days===period)value=(end.sum-start.sum)/period;
       }
-      while(first<next&&purchases[first].day<start){
-        const buy=purchases[first++];changed=true;
-        if(buy.known){usdt-=buy.usdt;btc-=buy.btc;}else unknown--;
-      }
-      if(changed)price=unknown?null:chartPrice(usdt,btc);
-      rows.push(price===null?{time}:{time,value:price});
+      rows.push(value===null?{time}:{time,value});
     }
     return rows;
   }
@@ -155,16 +150,16 @@
     if(!chart||!series||!lib||typeof chart.addSeries!=='function'||typeof series.attachPrimitive!=='function')return null;
     const profile=new BuyPriceProfile();let profileVisible=false,dailyVisible=false,daily=null,destroyed=false,profileSignature='',dailySignature='',dailyData=[],profileData=[];
     const averageStroke=new DisjointAverageLine();
-    let average=null,averageWindow=null,averageGaps=false,averageSignature='',averageValues=new Map(),latestBuys=new Map(),latestCandles=[];
+    let average=null,averageWindow=null,averageGaps=false,averageSignature='',averageValues=new Map(),latestCosts=new Map(),latestCandles=[];
     let colors={profile:'#a98773',volume:'#a98773',average:AVERAGE_COLOR};
     function retainRange(action){const scale=chart.timeScale(),range=scale.getVisibleLogicalRange();action();if(range)scale.setVisibleLogicalRange(range);}
     function updateAverage(){
       if(!averageWindow)return;
       const times=latestCandles.map(row=>row?.time);
-      const signature=JSON.stringify([averageWindow,times,[...latestBuys].map(([date,buy])=>[date,buy?.usdt,buy?.btc])]);
+      const signature=JSON.stringify([averageWindow,times,[...latestCosts]]);
       if(signature===averageSignature)return;
       averageSignature=signature;
-      const rows=averageRows(latestBuys,times,averageWindow);
+      const rows=averageRows(latestCosts,times,averageWindow);
       averageValues.clear();let first=-1,last=-1;
       rows.forEach((row,index)=>{
         if(row.value===undefined)return;
@@ -206,13 +201,13 @@
       if(time&&Number.isInteger(time.year)&&Number.isInteger(time.month)&&Number.isInteger(time.day))time=String(time.year).padStart(4,'0')+'-'+String(time.month).padStart(2,'0')+'-'+String(time.day).padStart(2,'0');
       return averageValues.get(time)??null;
     }
-    function update({buys,averageBuys=buys,candles,distribution}={}){
+    function update({buys,holdingCosts,candles,distribution}={}){
       if(destroyed)return;
       const rows=profileRows(distribution),signature=JSON.stringify(rows.map(({from,to,btc})=>[from,to,btc]));
       if(signature!==profileSignature){profileSignature=signature;profileData=rows;profile.setData(rows);}
       const next=dailyRows(buys,candles),nextSignature=JSON.stringify(next);
       if(nextSignature!==dailySignature){dailySignature=nextSignature;dailyData=next;if(daily)retainRange(()=>daily.setData(next.map(row=>({...row}))));}
-      latestBuys=averageBuys instanceof Map?averageBuys:new Map();latestCandles=Array.isArray(candles)?candles:[];updateAverage();
+      latestCosts=holdingCosts instanceof Map?holdingCosts:new Map();latestCandles=Array.isArray(candles)?candles:[];updateAverage();
     }
     function setProfileVisible(visible){
       if(destroyed)return false;visible=!!visible;if(visible===profileVisible)return profileVisible;
@@ -243,7 +238,7 @@
     }
     function destroy(){
       if(destroyed)return;if(daily){chart.removeSeries(daily);daily=null;}if(profileVisible)series.detachPrimitive(profile);profileData=[];dailyData=[];profile.rows=[];profile.items=[];profileVisible=false;dailyVisible=false;destroyed=true;
-      removeAverage();averageValues.clear();latestBuys=new Map();latestCandles=[];
+      removeAverage();averageValues.clear();latestCosts=new Map();latestCandles=[];
     }
     return {update,setProfileVisible,setDailyVisible,setAverageWindow,averageAt,theme,getProfileBin,destroy};
   }

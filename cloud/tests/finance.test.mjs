@@ -336,6 +336,8 @@ test('the wallet price-change profit for today follows the price on the BTC held
 });
 test('the DCA diary lists each Beijing day of buys from the same trades as the cost book and rebuilds only when the book changes',async()=>{
   const f=await fixture();await syncFinance(f.env,{fetch:f.fetcher,now:()=>NOW,force:true});
+  const prepare=f.DB.prepare.bind(f.DB);let tradeReads=0;
+  f.DB.prepare=sql=>{if(sql.startsWith('SELECT record_json FROM finance_trades ORDER BY'))tradeReads++;return prepare(sql);};
   const read=async()=>{const r=await handleFinance(new Request('https://x.pages.dev/api/wallet/btc-dca-diary'),f.env,{});assert.equal(r.status,200);assert.equal(r.headers.get('cache-control'),'no-store');return r.json();};
   const day=ms=>new Date(ms+28800000).toISOString().slice(0,10);
   const body=await read(),buy=original[0];
@@ -347,29 +349,41 @@ test('the DCA diary lists each Beijing day of buys from the same trades as the c
   assert.deepEqual(body.days.map(([d,btc,usdt,buys])=>[d,Number(btc),Number(usdt),buys]),[...expected].sort().map(([d,v])=>[d,...v]));
   assert.equal(body.totals.btc,'2.5');assert.equal(body.totals.buys,2);assert.equal(body.start_date,'2024-12-14');
   assert.equal(body.exact_totals.btc,'2.5');assert.equal(body.exact_totals.usdt,'260');assert.equal(body.exact_totals.average_buy_price,'104');
+  assert.equal(body.holding_cost_history.at(-1)[1],f.DB.get('btc_pnl').metrics.spot_average_cost);
+  assert.deepEqual((await read()).holding_cost_history,body.holding_cost_history);
+  assert.equal(tradeReads,1);
   assert.equal(body.coverage_start_date,day(NOW-86400000));assert.equal('key' in body||'connection' in body,false);
   // A deployment must rebuild an old rounded-only cache even without a new fill.
   const legacy=structuredClone(f.DB.get('dca_diary'));legacy.key=legacy.key.replace(/^exact-summary-v\d+\|/,'');delete legacy.exact_totals;delete legacy.exact_periods;f.DB.set('dca_diary',legacy);
   assert.equal((await read()).exact_totals.average_buy_price,'104');
   // A v3 cache must acquire execution-price bins even if the ledger has not changed.
-  const noProfile=structuredClone(f.DB.get('dca_diary'));noProfile.key=noProfile.key.replace(/^exact-summary-v5\|/,'exact-summary-v3|');delete noProfile.buy_price_distribution;f.DB.set('dca_diary',noProfile);
+  const noProfile=structuredClone(f.DB.get('dca_diary'));noProfile.key=noProfile.key.replace(/^exact-summary-v6\|/,'exact-summary-v3|');delete noProfile.buy_price_distribution;f.DB.set('dca_diary',noProfile);
   assert.equal((await read()).buy_price_distribution.priced_btc,'2.5');
   // A v4 cache must rebuild its 5000-USDT bins without waiting for a new trade.
-  const oldProfile=structuredClone(f.DB.get('dca_diary'));oldProfile.key=oldProfile.key.replace(/^exact-summary-v5\|/,'exact-summary-v4|');
+  const oldProfile=structuredClone(f.DB.get('dca_diary'));oldProfile.key=oldProfile.key.replace(/^exact-summary-v6\|/,'exact-summary-v4|');
   oldProfile.buy_price_distribution={bucket_usdt:'5000',priced_btc:'2.5',unpriced_btc:'0',bins:[{from:'0',to:'5000',btc:'2.5'}]};f.DB.set('dca_diary',oldProfile);
   const refreshed=await read();assert.equal(refreshed.buy_price_distribution.bucket_usdt,'2000');
   assert.deepEqual(refreshed.buy_price_distribution.bins,[{from:'0',to:'2000',btc:'2.5'}]);
-  assert.deepEqual(refreshed.exact_totals,body.exact_totals);assert.ok(f.DB.get('dca_diary').key.startsWith('exact-summary-v5|'));
+  assert.deepEqual(refreshed.exact_totals,body.exact_totals);
+  const oldHoldingCost=structuredClone(f.DB.get('dca_diary'));oldHoldingCost.key=oldHoldingCost.key.replace(/^exact-summary-v6\|/,'exact-summary-v5|');
+  delete oldHoldingCost.holding_cost_history;f.DB.set('dca_diary',oldHoldingCost);
+  assert.deepEqual((await read()).holding_cost_history,body.holding_cost_history);
+  assert.ok(f.DB.get('dca_diary').key.startsWith('exact-summary-v6|'));
   // Cached against the book: a stray row is ignored until the book changes.
   const cached=f.DB.get('dca_diary');assert.ok(cached.key.includes('|3|'));
   const binanceRow={...original[0],id:'binance-spot:BTCUSDT:9',bill_id:'90',counter_bill_id:'91',at_ms:NOW-30000,btc_net:'0.25',btc_gross:'0.25',quote_amount:'30',quote_gross:'30',venue:'binance'};
   f.DB.trades.set(binanceRow.id,{id:binanceRow.id,bill_id:binanceRow.bill_id,at_ms:binanceRow.at_ms,record_json:JSON.stringify(binanceRow)});
-  assert.equal((await read()).totals.btc,'2.5');
+  assert.deepEqual((await read()).holding_cost_history,body.holding_cost_history);
   // Binance fills count only once the cost book includes them.
   const book=f.DB.get('cost_book');f.DB.set('cost_book',{...book,excluded_binance:1});
-  assert.equal((await read()).totals.btc,'2.5','a Binance fill outside the book stays out of the diary');
-  f.DB.set('cost_book',{...book,trade_count:4,last_at_ms:binanceRow.at_ms,last_bill_id:binanceRow.bill_id,binance_included:true,excluded_binance:0});
-  assert.equal((await read()).totals.btc,'2.75');
+  const excluded=await read();assert.equal(excluded.totals.btc,'2.5','a Binance fill outside the book stays out of the diary');
+  assert.deepEqual(excluded.holding_cost_history,body.holding_cost_history);
+  const merged={...appendCostBook(book,[binanceRow]),binance_included:true,excluded_binance:0};
+  f.DB.set('cost_book',merged);
+  const included=await read();assert.equal(included.totals.btc,'2.75');
+  assert.equal(included.holding_cost_history.at(-1)[1],positionView(merged,'17','120',null,null,NOW,'account').metrics.spot_average_cost);
+  f.DB.set('cost_book',{...merged,cost:'1'});
+  assert.deepEqual((await read()).holding_cost_history,[]);
 });
 test('the diary excludes unpublished concurrent fills until the matching cost book is published',async()=>{
   const f=await fixture();await syncFinance(f.env,{fetch:f.fetcher,now:()=>NOW,force:true});
@@ -377,9 +391,11 @@ test('the diary excludes unpublished concurrent fills until the matching cost bo
   const late=trade('buy','0.1','12',9,NOW-1000);
   f.DB.trades.set(late.id,{id:late.id,bill_id:late.bill_id,at_ms:late.at_ms,record_json:JSON.stringify(late)});
   // First read has no cache: it must still match the earlier published book.
-  assert.equal((await read()).exact_totals.btc,'2.5');
+  const before=await read();assert.equal(before.exact_totals.btc,'2.5');
+  assert.equal(before.holding_cost_history.at(-1)[1],f.DB.get('btc_pnl').metrics.spot_average_cost);
   f.DB.set('cost_book',appendCostBook(f.DB.get('cost_book'),[late]));
-  assert.equal((await read()).exact_totals.btc,'2.6');
+  const after=await read();assert.equal(after.exact_totals.btc,'2.6');
+  assert.notEqual(after.holding_cost_history.at(-1)[1],before.holding_cost_history.at(-1)[1]);
 });
 test('an incomplete diary read retains its dated cache rather than publishing mismatched totals',async()=>{
   const f=await fixture();await syncFinance(f.env,{fetch:f.fetcher,now:()=>NOW,force:true});
@@ -387,7 +403,12 @@ test('an incomplete diary read retains its dated cache rather than publishing mi
   const previous=await read(),book=f.DB.get('cost_book');
   f.DB.set('cost_book',{...book,trade_count:book.trade_count+1});
   const stale=await read();assert.equal(stale.status,'stale');assert.deepEqual(stale.exact_totals,previous.exact_totals);
+  assert.deepEqual(stale.holding_cost_history,[]);
   f.DB.kv.delete('dca_diary');const loading=await read();assert.equal(loading.status,'loading');assert.deepEqual(loading.days,[]);
+  assert.deepEqual(loading.holding_cost_history,[]);
+  const [id,row]=f.DB.trades.entries().next().value;
+  f.DB.set('cost_book',book);f.DB.trades.set(id,{...row,record_json:'{'});
+  assert.deepEqual((await read()).holding_cost_history,[]);
 });
 test('the DCA diary is empty, never invented, without a verified ledger or OKX connection',async()=>{
   const f=await fixture();await syncFinance(f.env,{fetch:f.fetcher,now:()=>NOW,force:true});
@@ -396,8 +417,18 @@ test('the DCA diary is empty, never invented, without a verified ledger or OKX c
   let body=await read();assert.equal(body.status,'unavailable');assert.deepEqual(body.days,[]);assert.equal(body.totals.btc,'0');assert.ok(body.error);
   // A diary built earlier for the same account is shown as stale rather than dropped.
   f.DB.set('cost_meta',meta);await read();f.DB.set('cost_meta',{...meta,complete:false});
-  body=await read();assert.equal(body.status,'stale');assert.equal(body.days.length>0,true);
-  f.DB.kv.delete('okx');body=await read();assert.equal(body.status,'unavailable');assert.deepEqual(body.days,[]);
+  body=await read();assert.equal(body.status,'stale');assert.equal(body.days.length>0,true);assert.deepEqual(body.holding_cost_history,[]);
+  f.DB.kv.delete('okx');body=await read();assert.equal(body.status,'unavailable');assert.deepEqual(body.days,[]);assert.deepEqual(body.holding_cost_history,[]);
   assert.equal((await handleFinance(new Request('https://x.pages.dev/api/wallet/btc-dca-diary?all=1'),f.env,{})).status,400);
   assert.equal((await handleFinance(new Request('https://x.pages.dev/api/wallet/btc-dca-diary',{method:'POST'}),f.env,{})).status,405);
+});
+test('the DCA holding history only uses the ledger and cache belonging to the active OKX account',async()=>{
+  const f=await fixture();await syncFinance(f.env,{fetch:f.fetcher,now:()=>NOW,force:true});
+  const read=async()=>(await handleFinance(new Request('https://x.pages.dev/api/wallet/btc-dca-diary'),f.env,{})).json();
+  const before=await read();assert.ok(before.holding_cost_history.length);
+  const changed={...OKX,api_key:'different-okx-fixture'},connection=(await connectionIdentity(changed)).slice(0,24);
+  f.env.OKX_API_KEY=changed.api_key;f.DB.set('okx',{...f.DB.get('okx'),connection_id:connection});
+  const oldSnapshot=await read();assert.equal(oldSnapshot.connection_id,connection);assert.deepEqual(oldSnapshot.holding_cost_history,[]);
+  f.DB.set('btc_cost',{...f.DB.get('btc_cost'),connection_id:connection});
+  const oldLedger=await read();assert.equal(oldLedger.connection_id,connection);assert.deepEqual(oldLedger.holding_cost_history,[]);
 });

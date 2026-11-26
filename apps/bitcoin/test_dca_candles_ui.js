@@ -36,8 +36,7 @@ function harness(options={}){
   const indicator={updates:[],themes:[],created:0,update(value){this.updates.push(value);},theme(value){this.themes.push(value);},setProfileVisible(value){return this.profile=!!value;},setDailyVisible(value){return this.daily=!!value;},getProfileBin(id){return this.profile?this.updates.at(-1)?.distribution?.bins.find(row=>'buy-profile-'+row.from===id)||null:null;},destroy(){this.destroyed=true;}};
   indicator.setAverageWindow=function(window){this.averageWindow=window;return window;};
   indicator.averageAt=function(date){
-    const buy=this.updates.at(-1)?.averageBuys.get(date);
-    return this.averageWindow && buy?.usdt ? Number(buy.usdt)/Number(buy.btc) : null;
+    return this.averageWindow ? this.updates.at(-1)?.holdingCosts?.get(date)??null : null;
   };
   const series={sets:[],updates:[],options:[],priceLines:[],removedLines:[],createPriceLine(value){const line={options:{...value},applyOptions(next){this.options={...this.options,...next};}};this.priceLines.push(line);return line;},removePriceLine(line){this.removedLines.push(line);},setData(value){this.sets.push(value);if(options.mutateInput)for(const row of value){const [year,month,day]=row.time.split('-').map(Number);row.time={year,month,day};}},update(value){this.updates.push(value);},applyOptions(value){this.options.push(value);},priceToCoordinate:()=>200,
     attachPrimitive(primitive){marker.primitive=primitive;const set=primitive.setMarkers.bind(primitive);primitive.setMarkers=value=>{marker.sets.push(value);set(value);};primitive.attached({chart,series,requestUpdate:()=>primitive.updateAllViews()});},detachPrimitive(primitive){marker.detached=true;primitive.detached();}};
@@ -143,26 +142,26 @@ let count=0;async function check(name,fn){await fn();count++;console.log('OK '+n
     await h.click('dcaCandleProfile');assert.equal(h.indicator.profile,false);assert.equal(h.indicator.daily,true);h.controller.destroy();assert.equal(h.indicator.destroyed,true);
     const source=fs.readFileSync('./terminal/dist/dca-candles.js','utf8');assert.ok(source.indexOf('id="dcaCandleProfile"')<source.indexOf('id="dcaCandleZoomOut"'));assert.ok(source.indexOf('id="dcaCandleVolume"')<source.indexOf('id="dcaCandleZoomOut"'));
   });
-  await check('average selector enables cumulative by default, reads the hovered date, and accepts exact ledger-only purchases',async()=>{
+  await check('average selector reads historical holding cost, including days without buys',async()=>{
     const h=harness({indicators:true}),model=buys();
-    model.exactPurchases=new Map([['2026-11-09',{btc:'0.000000004',usdt:'0.00032'}]]);
+    model.holdingCosts=new Map([['2026-11-09',80000]]);
     h.controller.open(model);await h.settle();
     const selector=h.node('dcaCandleAverageWindow'),caption=h.node('dcaCandleAverage');
     assert.equal(selector.disabled,false);assert.equal(h.indicator.averageWindow,'all');assert.equal(caption.hidden,false);
     assert.equal(h.indicator.updates.at(-1).buys.has('2026-11-09'),false);
-    assert.deepEqual(h.indicator.updates.at(-1).averageBuys.get('2026-11-09'),{btc:'0.000000004',usdt:'0.00032'});
+    assert.equal(h.indicator.updates.at(-1).holdingCosts.get('2026-11-09'),80000);
     h.chart.crosshair({time:'2026-11-09',point:{x:100,y:100}});
-    assert.equal(caption.textContent,'累计买入均价 80,000.00 USDT');
+    assert.equal(caption.textContent,'历史现货持仓均价 80,000.00 USDT');
     const visibleRange=h.range();
     for(const value of ['7','30','90']){
       selector.value=value;await selector.fire('change');
       assert.equal(h.indicator.averageWindow,value);
-      assert.equal(caption.textContent,'买入 MA'+value+' 80,000.00 USDT');
+      assert.equal(caption.textContent,'持仓 MA'+value+' 80,000.00 USDT');
       assert.match(caption.title,new RegExp('最近 '+value+' 个北京时间自然日'));
     }
     assert.deepEqual(h.range(),visibleRange);assert.equal(h.requests.length,1);
     h.controller.updateBuys({connectionId:'account-b',days:new Map()});
-    assert.equal(caption.textContent,'买入 MA90 —');
+    assert.equal(caption.textContent,'持仓 MA90 —');
     selector.value='';await selector.fire('change');
     assert.equal(h.indicator.averageWindow,null);assert.equal(caption.hidden,true);
     h.controller.destroy();assert.equal(selector.listeners.change.length,0);
