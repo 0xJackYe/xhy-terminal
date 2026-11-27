@@ -5,7 +5,6 @@ const api=require('./terminal/dist/dca-candles.js');
 const DAY=86400000,D=date=>Date.parse(date+'T00:00:00Z'),NOW=D('2026-11-11')+3600000;
 const rows=Array.from({length:Math.round((D('2026-11-11')-D(api.START))/DAY)+1},(_,i)=>({time:new Date(D(api.START)+i*DAY).toISOString().slice(0,10),open:String(100+i),high:String(105+i),low:String(98+i),close:String(101+i),volume:'12.4'}));
 const SNAPSHOT={status:'fresh',timezone:'Asia/Shanghai',symbol:'BTCUSDT',interval:'1d',start_date:api.START,as_of:new Date(NOW).toISOString(),source:'Binance Spot',coverage_complete:true,candles:rows};
-const HOLDING={status:'fresh',currency:'USDT',method:'moving_weighted_average',connection_id:'account-a',as_of:new Date(NOW).toISOString(),metrics:{average_cost:'78605.97123456789',holdings_btc:'0.08353034',historical_average_buy_price:'79700.5',spot_average_cost:'78930.7'}};
 function buys(){return {connectionId:'account-a',days:new Map([[D('2024-12-14'),{btc:100000,usdt:2000,buys:2,exactBTC:'0.0010000049',exactUSDT:'20.005501'}],[D('2026-11-10'),{btc:200000,usdt:10000,buys:1}]])};}
 const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return {promise,resolve,reject};};
 const settle=async()=>{for(let i=0;i<8;i++)await new Promise(setImmediate);};
@@ -38,13 +37,13 @@ function harness(options={}){
   indicator.averageAt=function(date){
     return this.averageWindow ? this.updates.at(-1)?.holdingCosts?.get(date)??null : null;
   };
-  const series={sets:[],updates:[],options:[],priceLines:[],removedLines:[],createPriceLine(value){const line={options:{...value},applyOptions(next){this.options={...this.options,...next};}};this.priceLines.push(line);return line;},removePriceLine(line){this.removedLines.push(line);},setData(value){this.sets.push(value);if(options.mutateInput)for(const row of value){const [year,month,day]=row.time.split('-').map(Number);row.time={year,month,day};}},update(value){this.updates.push(value);},applyOptions(value){this.options.push(value);},priceToCoordinate:()=>200,
+  const series={sets:[],updates:[],options:[],createPriceLine(){assert.fail('The candle series must not add a second cost reference line');},setData(value){this.sets.push(value);if(options.mutateInput)for(const row of value){const [year,month,day]=row.time.split('-').map(Number);row.time={year,month,day};}},update(value){this.updates.push(value);},applyOptions(value){this.options.push(value);},priceToCoordinate:()=>200,
     attachPrimitive(primitive){marker.primitive=primitive;const set=primitive.setMarkers.bind(primitive);primitive.setMarkers=value=>{marker.sets.push(value);set(value);};primitive.attached({chart,series,requestUpdate:()=>primitive.updateAllViews()});},detachPrimitive(primitive){marker.detached=true;primitive.detached();}};
   const chart={options:[],applyOptions(value){this.options.push(value);},addSeries:()=>series,timeScale:()=>scale,panes:()=>[{getHeight:()=>300},{getHeight:()=>90}],subscribeCrosshairMove(fn){this.crosshair=fn;},subscribeClick(fn){this.click=fn;},remove(){this.removed=true;}};
   const library={CandlestickSeries:{type:'candlestick'},LineSeries:{type:'line'},createChart(node,config){chartCount++;chart.config=config;return chart;}};
   const setTimeout=(fn,delay)=>{const id=++nextTimer;timers.set(id,{fn,delay});return id;},clearTimeout=id=>timers.delete(id);
   async function fetch(url,init){requests.push({url,init});let value=responses.length?responses.shift():SNAPSHOT;value=await value;if(value instanceof Error)throw value;return {ok:!value.http_status||value.http_status<400,headers:{get:name=>name==='Date'?options.serverDate||null:null},json:async()=>value};}
-  const args={root,document,fetch,setTimeout,clearTimeout,now:()=>NOW,charts:options.noLibrary?{}:library,costSource:options.costSource,indicators:options.indicators?{create(){indicator.created++;return indicator;}}:null},controller=api.mount(args);
+  const args={root,document,fetch,setTimeout,clearTimeout,now:()=>NOW,charts:options.noLibrary?{}:library,indicators:options.indicators?{create(){indicator.created++;return indicator;}}:null},controller=api.mount(args);
   async function tick(delay=api.REFRESH_MS){const next=[...timers].find(([,value])=>value.delay===delay);assert.ok(next,'Expected timer '+delay);timers.delete(next[0]);next[1].fn();await settle();}
   async function click(id,view){const button=nodes.get(id)||{id,dataset:{}};if(view)button.dataset.view=view;await nodes.get('dcaCandleSheet').fire('click',{target:{closest:()=>button}});}
   return {root,document,node:id=>nodes.get(id),nodes,timers,requests,responses,chart,series,marker,indicator,rangeCalls,range:()=>range,colors,observers,opener,controller,args,tick,click,settle,chartCount:()=>chartCount};
@@ -85,39 +84,15 @@ let count=0;async function check(name,fn){await fn();count++;console.log('OK '+n
     assert.equal(h.node('dcaCandleSheet').parentElement,h.document.body);assert.equal(h.node('dcaCandleEmpty').hidden,true);assert.match(h.node('dcaCandleState').textContent,/实时同步/);
     assert.equal(api.mount(h.args),h.controller);h.controller.destroy();
   });
-  await check('holding cost reuses the wallet average, not historical buys or remaining spot average',()=>{
-    assert.equal(api.holdingCost(HOLDING).exact,HOLDING.metrics.average_cost);
-    for(const value of [null,{...HOLDING,status:'unavailable'},{...HOLDING,currency:'CNY'},{...HOLDING,method:'buy_average'},{...HOLDING,metrics:{...HOLDING.metrics,holdings_btc:'0'}},{...HOLDING,metrics:{...HOLDING.metrics,average_cost:null}},{...HOLDING,metrics:{...HOLDING.metrics,average_cost:'Infinity'}},{...HOLDING,metrics:{...HOLDING.metrics,average_cost:'-1'}}])assert.equal(api.holdingCost(value),null);
-  });
-  await check('the holding cost line shares wallet refreshes, preserves zoom and clears invalid accounts',async()=>{
-    const subscribers=new Set(),provider={subscribeLifetime(fn){subscribers.add(fn);fn(HOLDING);return()=>subscribers.delete(fn);}},h=harness({costSource:()=>provider});
-    assert.equal(subscribers.size,0);h.controller.open(buys());await h.settle();assert.equal(subscribers.size,1);assert.equal(h.series.priceLines.length,1);
-    const line=h.series.priceLines[0];assert.equal(line.options.price,Number(HOLDING.metrics.average_cost));assert.equal(line.options.title,'持仓均价');assert.equal(line.options.lineStyle,2);assert.equal(h.node('dcaCandleCost').textContent,'持仓均价 78,605.97 USDT');assert.equal(h.requests.length,1,'cost is shared without another API request');
-    h.chart.timeScale().setVisibleLogicalRange({from:10,to:50});const next={...HOLDING,status:'stale',metrics:{...HOLDING.metrics,average_cost:'78000.125'}};for(const fn of subscribers)fn(next);
-    assert.equal(h.series.priceLines.length,1);assert.equal(line.options.price,78000.125);assert.match(line.options.title,/缓存/);assert.equal(h.node('dcaCandleCost').textContent,'持仓均价 78,000.13 USDT · 缓存');assert.deepEqual(h.range(),{from:10,to:50});
-    for(const fn of subscribers)fn({...HOLDING,connection_id:'account-b',metrics:{average_cost:null,holdings_btc:'0'}});assert.equal(h.series.removedLines[0],line);assert.equal(h.node('dcaCandleCost').textContent,'持仓均价待核对');
-    for(const fn of subscribers)fn({...HOLDING,connection_id:'account-b',metrics:{...HOLDING.metrics,average_cost:'65000'}});assert.equal(h.series.priceLines.at(-1).options.price,65000);
-    h.colors['--dca-cost']='#94b4ff';h.observers[1].fn();assert.equal(h.series.priceLines.at(-1).options.color,'#94b4ff');assert.equal(h.series.priceLines.at(-1).options.axisLabelColor,'#3e63a8');assert.equal(h.series.priceLines.at(-1).options.axisLabelTextColor,'#fff');
-    h.controller.close();for(const fn of subscribers)fn(null);assert.equal(h.node('dcaCandleCost').textContent,'持仓均价待核对');h.controller.destroy();assert.equal(subscribers.size,0);
-  });
-  await check('a replaced wallet controller releases its old cost subscription and replays the new cost',async()=>{
-    let source,oldCallback,oldReleased=0;const first={subscribeLifetime(fn){oldCallback=fn;fn(HOLDING);return()=>oldReleased++;}},second={subscribeLifetime(fn){fn({...HOLDING,connection_id:'account-b',metrics:{...HOLDING.metrics,average_cost:'72000'}});return()=>{};}};
-    source=first;const h=harness({costSource:()=>source});h.controller.open(buys());await h.settle();h.controller.close();source=second;h.controller.open(buys());await h.settle();assert.equal(oldReleased,1);assert.equal(h.series.priceLines.at(-1).options.price,72000);oldCallback(HOLDING);assert.equal(h.series.priceLines.at(-1).options.price,72000);const lastCaption=h.node('dcaCandleCost').textContent;h.controller.destroy();oldCallback(HOLDING);assert.equal(h.node('dcaCandleCost').textContent,lastCaption);
-  });
-  await check('daily average divides unrounded USDT by net BTC and rounds the weighted price once',()=>{
-    assert.equal(api.dailyBuyPrice('110','0.0021'),'52,380.95');
-    assert.equal(api.dailyBuyPrice('20.005501','0.0010000049'),'20,005.40');
-    assert.equal(api.dailyBuyPrice('1.005','1'),'1.01');assert.equal(api.dailyBuyPrice('9007199254740993.995','1'),'9,007,199,254,740,994.00');
-    for(const [cash,btc]of [[null,'1'],['10','0'],['-10','1'],['10','NaN'],['1'.repeat(513),'1']])assert.equal(api.dailyBuyPrice(cash,btc),'—');
-  });
-  await check('ordinary candles and B hover show exact BTC, USDT spending and weighted daily average',async()=>{
+  await check('ordinary candles and B hover show BTC and USDT spending only',async()=>{
     const h=harness(),model=buys();model.days.set(D('2026-11-11'),{btc:123,usdt:null,buys:1});h.controller.open(model);await h.settle();
     h.chart.crosshair({time:{year:2024,month:12,day:14},hoveredObjectId:'buy-2024-12-14',point:{x:240,y:320}});
-    assert.equal(h.node('dcaCandleTip').hidden,false);assert.equal(h.node('dcaCandleTipBTC').textContent,'0.00100000');assert.equal(h.node('dcaCandleTipPrice').textContent,'20,005.40');
-    assert.equal(h.node('dcaCandleTipUSDT').textContent,'20.01 USDT');assert.equal(h.node('dcaCandleTipUSDT').hidden,false);
-    for(const id of ['dcaCandleTipBTC','dcaCandleTipPrice'])assert.match(h.node(id).textContent,/^[\d,.]+$/);
-    h.chart.crosshair({time:'2026-11-10',point:{x:420,y:200}});assert.equal(h.node('dcaCandleTipBTC').textContent,'0.00200000');assert.equal(h.node('dcaCandleTipPrice').textContent,'50,000.00');assert.equal(h.node('dcaCandleTipUSDT').textContent,'100.00 USDT');
-    h.chart.crosshair({time:'2026-11-11',hoveredObjectId:'buy-2026-11-11',point:{x:800,y:420}});assert.equal(h.node('dcaCandleTipPrice').textContent,'—');assert.equal(h.node('dcaCandleTipUSDT').textContent,'— USDT');
+    assert.equal(h.node('dcaCandleTip').hidden,false);assert.equal(h.node('dcaCandleTipBTC').textContent,'0.00100000');
+    assert.equal(h.node('dcaCandleTipDetail').textContent,'20.01 USDT');
+    assert.equal(h.node('dcaCandleTip').attrs['aria-label'],'BTC 买入量及 USDT 买入金额：0.00100000，20.01 USDT');
+    assert.equal(h.document.getElementById('dcaCandleTipPrice'),null);
+    h.chart.crosshair({time:'2026-11-10',point:{x:420,y:200}});assert.equal(h.node('dcaCandleTipBTC').textContent,'0.00200000');assert.equal(h.node('dcaCandleTipDetail').textContent,'100.00 USDT');
+    h.chart.crosshair({time:'2026-11-11',hoveredObjectId:'buy-2026-11-11',point:{x:800,y:420}});assert.equal(h.node('dcaCandleTipDetail').textContent,'— USDT');
     h.chart.crosshair({time:'2024-07-01',point:{x:5,y:6}});assert.equal(h.node('dcaCandleTip').hidden,true);h.controller.destroy();
   });
   await check('overlapping adjacent B badges cannot replace the crosshair day in either pane',async()=>{
@@ -125,10 +100,10 @@ let count=0;async function check(name,fn){await fn();count++;console.log('OK '+n
     for(const paneIndex of [0,1]){
       h.chart.crosshair({time:{year:2026,month:11,day:11},hoveredObjectId:'buy-2026-11-10',paneIndex,point:{x:800,y:30}});
       assert.equal(h.node('dcaCandleDay').textContent,'2026-11-11 · 北京时间');assert.equal(h.node('dcaCandleBuy').textContent,'B 当日买入 210.00 USDT');
-      assert.equal(h.node('dcaCandleTipBTC').textContent,'0.00300000');assert.equal(h.node('dcaCandleTipUSDT').textContent,'210.00 USDT');assert.equal(h.node('dcaCandleTipPrice').textContent,'70,000.00');assert.equal(h.marker.primitive.hovered,'2026-11-11');
+      assert.equal(h.node('dcaCandleTipBTC').textContent,'0.00300000');assert.equal(h.node('dcaCandleTipDetail').textContent,'210.00 USDT');assert.equal(h.marker.primitive.hovered,'2026-11-11');
     }
     h.chart.crosshair({time:'2024-07-01',hoveredObjectId:'buy-2026-11-10',point:{x:5,y:20}});assert.equal(h.node('dcaCandleDay').textContent,'2024-07-01 · 北京时间');assert.equal(h.node('dcaCandleTip').hidden,true);
-    h.chart.crosshair({hoveredObjectId:'buy-2026-11-10',point:{x:800,y:20}});assert.equal(h.node('dcaCandleTipUSDT').textContent,'100.00 USDT');
+    h.chart.crosshair({hoveredObjectId:'buy-2026-11-10',point:{x:800,y:20}});assert.equal(h.node('dcaCandleTipDetail').textContent,'100.00 USDT');
     h.chart.crosshair({time:'2026-11-12',point:{x:850,y:20}});assert.equal(h.node('dcaCandleTip').hidden,true,'missing candles never reuse the last day');h.controller.destroy();
   });
   await check('indicator switches share exact buy data, are independent and clear on account change',async()=>{
@@ -136,8 +111,8 @@ let count=0;async function check(name,fn){await fn();count++;console.log('OK '+n
     h.controller.open(model);await h.settle();assert.equal(h.indicator.created,1);assert.equal(h.indicator.profile,undefined);assert.equal(h.indicator.daily,undefined);assert.equal(h.indicator.updates.at(-1).distribution,distribution);assert.equal(h.indicator.updates.at(-1).buys.get('2024-12-14').btc,'0.0010000049');
     await h.click('dcaCandleProfile');assert.equal(h.node('dcaCandleProfile').attrs['aria-pressed'],'true');assert.equal(h.indicator.daily,undefined);
     await h.click('dcaCandleVolume');assert.equal(h.node('dcaCandleVolume').attrs['aria-pressed'],'true');assert.equal(h.indicator.profile,true);
-    h.chart.crosshair({time:'2026-11-10',paneIndex:1,point:{x:420,y:20}});assert.ok(Number.parseInt(h.node('dcaCandleTip').style.top)>=300,'volume pane tooltip stays beside its own pane');assert.equal(h.node('dcaCandleTipUSDT').textContent,'100.00 USDT');
-    h.chart.crosshair({hoveredObjectId:'buy-profile-60000',point:{x:10,y:100}});assert.equal(h.node('dcaCandleTipBTC').textContent,'0.00300000');assert.equal(h.node('dcaCandleTipPrice').textContent,'60,000–62,000');assert.equal(h.node('dcaCandleTipUSDT').hidden,true);assert.equal(h.node('dcaCandleTipUSDT').textContent,'');
+    h.chart.crosshair({time:'2026-11-10',paneIndex:1,point:{x:420,y:20}});assert.ok(Number.parseInt(h.node('dcaCandleTip').style.top)>=300,'volume pane tooltip stays beside its own pane');assert.equal(h.node('dcaCandleTipDetail').textContent,'100.00 USDT');
+    h.chart.crosshair({hoveredObjectId:'buy-profile-60000',point:{x:10,y:100}});assert.equal(h.node('dcaCandleTipBTC').textContent,'0.00300000');assert.equal(h.node('dcaCandleTipDetail').textContent,'60,000–62,000');
     h.controller.updateBuys({connectionId:'new-account',days:new Map()});assert.equal(h.indicator.updates.at(-1).buys.size,0);assert.equal(h.indicator.updates.at(-1).distribution,null);assert.match(h.node('dcaCandleIndicatorNote').textContent,/待同步/);
     await h.click('dcaCandleProfile');assert.equal(h.indicator.profile,false);assert.equal(h.indicator.daily,true);h.controller.destroy();assert.equal(h.indicator.destroyed,true);
     const source=fs.readFileSync('./terminal/dist/dca-candles.js','utf8');assert.ok(source.indexOf('id="dcaCandleProfile"')<source.indexOf('id="dcaCandleZoomOut"'));assert.ok(source.indexOf('id="dcaCandleVolume"')<source.indexOf('id="dcaCandleZoomOut"'));
@@ -148,6 +123,7 @@ let count=0;async function check(name,fn){await fn();count++;console.log('OK '+n
     h.controller.open(model);await h.settle();
     const selector=h.node('dcaCandleAverageWindow'),caption=h.node('dcaCandleAverage');
     assert.equal(selector.disabled,false);assert.equal(h.indicator.averageWindow,'all');assert.equal(caption.hidden,false);
+    assert.equal(h.document.getElementById('dcaCandleCost'),null);
     assert.equal(h.indicator.updates.at(-1).buys.has('2026-11-09'),false);
     assert.equal(h.indicator.updates.at(-1).holdingCosts.get('2026-11-09'),80000);
     h.chart.crosshair({time:'2026-11-09',point:{x:100,y:100}});
